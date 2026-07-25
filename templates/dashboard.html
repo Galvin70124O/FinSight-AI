@@ -1,0 +1,151 @@
+{% extends 'base.html' %}
+{% block content %}
+<section class="dashboard-shell">
+  <section class="hero-panel">
+    <div class="hero-copy">
+      <p class="eyebrow">Good Evening</p>
+      <h1>Your finances are moving with intention.</h1>
+      <p>Monitor balance, spending momentum, and AI-guided next steps from one premium command center.</p>
+      <div class="hero-insight">
+        <span>AI insight</span>
+        <strong>{{ payload.insight }}</strong>
+      </div>
+    </div>
+    <a class="action-button" href="{{ url_for('main.upload') }}">Import transactions</a>
+  </section>
+
+  <section class="kpi-grid" aria-label="Financial metrics">
+    <div class="kpi-item">
+      <span class="kpi-label">Balance</span>
+      <strong data-counter="{{ payload.metrics.current_balance }}" data-prefix="$" data-decimals="2">$0.00</strong>
+    </div>
+    <div class="kpi-item">
+      <span class="kpi-label">Income</span>
+      <strong data-counter="{{ payload.metrics.total_income }}" data-prefix="$" data-decimals="2">$0.00</strong>
+    </div>
+    <div class="kpi-item">
+      <span class="kpi-label">Expenses</span>
+      <strong data-counter="{{ payload.metrics.total_expense }}" data-prefix="$" data-decimals="2">$0.00</strong>
+    </div>
+    <div class="kpi-item">
+      <span class="kpi-label">Savings Rate</span>
+      <strong data-counter="{{ payload.metrics.savings_rate }}" data-suffix="%" data-decimals="1">0%</strong>
+    </div>
+    <div class="kpi-item">
+      <span class="kpi-label">Financial Health</span>
+      <strong data-counter="{{ payload.metrics.health_score }}" data-suffix="/100" data-decimals="0">0/100</strong>
+    </div>
+  </section>
+
+  <section class="content-grid">
+    <article class="panel chart-panel" id="analytics">
+      <div class="panel-head">
+        <div>
+          <p class="section-label">Spending trend</p>
+          <h2>Monthly momentum</h2>
+        </div>
+        <div class="segmented" role="tablist" aria-label="Time range">
+          <button class="seg-btn active" type="button" data-range="month">Month</button>
+          <button class="seg-btn" type="button" data-range="quarter">Quarter</button>
+          <button class="seg-btn" type="button" data-range="year">Year</button>
+        </div>
+      </div>
+      <div class="chart-shell">{{ payload.charts.monthly_expense|safe }}</div>
+      <p class="panel-foot">Interactive trend view with a smoother path for cash-flow planning.</p>
+    </article>
+
+    <aside class="panel insight-panel" id="insights">
+      <div class="panel-head compact-head">
+        <div>
+          <p class="section-label">AI insights</p>
+          <h2>Recommendations</h2>
+        </div>
+      </div>
+      <div class="bubble-stack">
+        <div class="bubble">
+          <span class="bubble-title">AI detected</span>
+          <p>{{ payload.insight }}</p>
+        </div>
+        <div class="bubble accent">
+          <span class="bubble-title">Recommendation</span>
+          <p>Cook at home twice this week to save approximately ${{ "%.2f"|format(payload.ml.expense_prediction.predicted_expense * 0.03) }}.</p>
+        </div>
+        <div class="bubble subtle">
+          <span class="bubble-title">Prediction</span>
+          <p>Expected spending next month: ${{ "%.2f"|format(payload.ml.expense_prediction.predicted_expense) }}.</p>
+        </div>
+      </div>
+      <div class="insight-stats">
+        <div><span>Average spend</span><strong>${{ "%.2f"|format(payload.summary.average_spending) }}</strong></div>
+        <div><span>Top category</span><strong>{{ payload.summary.highest_spending_category }}</strong></div>
+        <div><span>Flagged signals</span><strong>{{ payload.ml.anomaly_count }}</strong></div>
+      </div>
+    </aside>
+  </section>
+
+  <section class="content-grid lower-grid">
+    <article class="panel" id="reports">
+      <div class="panel-head">
+        <div>
+          <p class="section-label">Expense categories</p>
+          <h2>Category mix</h2>
+        </div>
+      </div>
+      <div class="chart-shell compact-chart">{{ payload.charts.category_pie|safe }}</div>
+    </article>
+
+    <article class="panel" id="transactions">
+      <div class="panel-head table-head">
+        <div>
+          <p class="section-label">Recent activity</p>
+          <h2>Transactions</h2>
+        </div>
+        <div class="table-controls">
+          <select id="sortSelect" class="table-select">
+            <option value="date-desc">Newest</option>
+            <option value="date-asc">Oldest</option>
+            <option value="amount-desc">Highest</option>
+            <option value="amount-asc">Lowest</option>
+          </select>
+          <div class="filter-group">
+            <button class="filter-chip active" type="button" data-filter="all">All</button>
+            <button class="filter-chip" type="button" data-filter="Expense">Expense</button>
+            <button class="filter-chip" type="button" data-filter="Income">Income</button>
+          </div>
+        </div>
+      </div>
+
+      {% if payload.recent_transactions %}
+      <div class="table-wrapper">
+        <table class="transaction-table" id="transactionsTable">
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Category</th>
+              <th>Type</th>
+              <th>Amount</th>
+              <th>Description</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for tx in payload.recent_transactions %}
+            <tr data-type="{{ tx['Type'] }}" data-date="{{ tx['Date'] }}" data-amount="{{ tx['Amount'] }}" data-category="{{ tx['Category'] }}">
+              <td>{{ tx['Date'] }}</td>
+              <td>{{ tx['Category'] }}</td>
+              <td><span class="tx-badge {{ 'expense' if tx['Type'] == 'Expense' else 'income' }}">{{ tx['Type'] }}</span></td>
+              <td class="amount-cell {{ 'expense' if tx['Type'] == 'Expense' else 'income' }}">${{ "%.2f"|format(tx['Amount']) }}</td>
+              <td>{{ tx['Description'] }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <div class="empty-state">
+        <p>No transactions have been imported yet. Upload your CSV to start generating insights.</p>
+      </div>
+      {% endif %}
+    </article>
+  </section>
+</section>
+{% endblock %}
