@@ -1,0 +1,46 @@
+{% extends 'base.html' %}
+{% block content %}
+<section class="landing-shell">
+  <section class="hero-panel landing-hero">
+    <div class="hero-copy">
+      <p class="eyebrow">Fintech-grade intelligence</p>
+      <h1>Turn every transaction into strategic foresight.</h1>
+      <p>FinSight AI gives operators, founders, and households a calm way to understand cash flow, uncover hidden spend, and act with confidence.</p>
+      <div class="cta-group">
+        <a class="action-button" href="{{ url_for('auth.register') }}">Get started</a>
+        <a class="ghost-button" href="{{ url_for('auth.login') }}">Sign in</a>
+      </div>
+      <div class="hero-badges">
+        <span>AI insights</span>
+        <span>Secure imports</span>
+        <span>Instant analytics</span>
+      </div>
+    </div>
+    <div class="hero-visual">
+      <div class="visual-stack">
+        <div class="visual-pill">Live forecast</div>
+        <div class="visual-card">
+          <p>Projected next month</p>
+          <strong>$48,500</strong>
+          <span>+12% from last cycle</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="feature-row">
+    <article class="feature-card">
+      <h3>Forecast with confidence</h3>
+      <p>See upcoming expenses and track monthly trends before they become a surprise.</p>
+    </article>
+    <article class="feature-card">
+      <h3>Own your cash flow</h3>
+      <p>Organize income, expenses, and savings in one polished operating view.</p>
+    </article>
+    <article class="feature-card">
+      <h3>Elevated experience</h3>
+      <p>Premium visuals, thoughtful motion, and responsive workflows for every screen size.</p>
+    </article>
+  </section>
+</section>
+{% endblock %}

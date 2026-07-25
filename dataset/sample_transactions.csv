@@ -1,0 +1,16 @@
+Date,Category,Amount,Type,Description
+2024-01-03,Salary,5200,Income,January payroll
+2024-01-04,Groceries,142,Expense,Weekly groceries
+2024-01-05,Utilities,86,Expense,Electricity bill
+2024-01-07,Entertainment,64,Expense,Streaming subscriptions
+2024-01-09,Transport,38,Expense,Metro pass
+2024-02-02,Salary,5200,Income,February payroll
+2024-02-03,Groceries,151,Expense,Weekly groceries
+2024-02-06,Utilities,92,Expense,Internet bill
+2024-02-12,Entertainment,71,Expense,Concert tickets
+2024-02-14,Transport,41,Expense,Gas refill
+2024-03-01,Salary,5400,Income,March payroll
+2024-03-04,Groceries,164,Expense,Weekly groceries
+2024-03-05,Utilities,89,Expense,Water bill
+2024-03-11,Entertainment,88,Expense,Weekend dining
+2024-03-14,Transport,47,Expense,Taxi ride

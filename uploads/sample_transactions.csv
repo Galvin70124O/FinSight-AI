@@ -1,0 +1,13 @@
+Date,Category,Amount,Type,Description
+2026-07-01,Salary,50000,Income,Monthly salary
+2026-07-02,Food,350,Expense,Lunch
+2026-07-03,Transport,120,Expense,Metro ticket
+2026-07-04,Shopping,2500,Expense,Clothes
+2026-07-05,Entertainment,800,Expense,Movie
+2026-07-06,Bills,1800,Expense,Electricity bill
+2026-07-07,Healthcare,950,Expense,Medicine
+2026-07-08,Education,1500,Expense,Online course
+2026-07-09,Freelance,8000,Income,Website project
+2026-07-10,Travel,2200,Expense,Weekend trip
+2026-07-11,Food,420,Expense,Dinner
+2026-07-12,Shopping,1400,Expense,Groceries
