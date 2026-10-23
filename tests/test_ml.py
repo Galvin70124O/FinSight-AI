@@ -75,11 +75,18 @@ def test_anomaly_with_zero_mad_uses_fifty_percent_rule():
     rows = [tx(f"2025-0{m}-01", "Rent", 22000) for m in range(1, 7)]
     rows.append(tx("2025-07-01", "Rent", 30000))  # +36%: not flagged
     rows.append(tx("2025-08-01", "Rent", 44000))  # +100%: flagged
-    rows.append(tx("2025-09-01", "Rent", 8000))   # -64%: flagged
+    rows.append(tx("2025-09-01", "Rent", 8000))   # -64%: lower, never flagged
 
     flagged = detect_anomalies(pd.DataFrame(rows))
 
-    assert sorted(f["amount"] for f in flagged) == [8000.0, 44000.0]
+    assert [f["amount"] for f in flagged] == [44000.0]
+
+
+def test_lower_than_usual_amounts_are_not_flagged():
+    amounts = [600, 650, 700, 620, 680, 640, 20]
+    rows = [tx(f"2025-01-{d:02d}", "Dining", a) for d, a in zip(range(1, 8), amounts)]
+
+    assert detect_anomalies(pd.DataFrame(rows)) == []
 
 
 def test_anomaly_skips_small_categories():

@@ -110,10 +110,10 @@ guide.
 
 **Unusual transactions.** Each expense is compared with the median of its own
 category, scaled by the median absolute deviation (MAD). This is the
-"modified z-score"; anything above 3.5 is flagged, whether higher or lower
-than usual. If every amount in a category is identical (rent, a fixed
-subscription), MAD is 0, and an amount is flagged only if it differs from the
-usual one by more than 50%. Categories with fewer than 4 expenses are skipped
+"modified z-score"; an expense is flagged when it scores above 3.5, i.e. it is
+much higher than usual. Lower-than-usual amounts are never flagged. If every
+amount in a category is identical (rent, a fixed subscription), MAD is 0, and
+an amount is flagged only if it is more than 50% above the usual one. Categories with fewer than 4 expenses are skipped
 because there is no "usual" yet. Income is never flagged.
 
 **Health score (0–100).** Calculated in one place, `ml/health_score.py`, and
