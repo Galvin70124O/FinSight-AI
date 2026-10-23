@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+
+# Local data: never commit databases, uploads or trained models
+instance/*
+!instance/README.md
+*.db
+*.sqlite3
+uploads/
+trained_models/
+*.pkl
+
+# Secrets and editor files
+.env
+.vscode/
+.idea/
+.DS_Store
+*.log
