@@ -21,7 +21,6 @@ def create_app(test_config: dict | None = None) -> Flask:
     app.logger.setLevel(logging.INFO)
 
     os.makedirs(app.instance_path, exist_ok=True)
-    os.makedirs(app.config["TRAINED_MODELS_DIR"], exist_ok=True)
 
     app.jinja_env.filters["inr"] = format_inr
     csrf.init_app(app)

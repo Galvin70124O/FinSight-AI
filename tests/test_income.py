@@ -2,11 +2,6 @@ import pandas as pd
 
 from utils import build_dashboard_payload
 
-ML_STUB = {
-    "expense_prediction": type("Exp", (), {"next_month": "N/A", "predicted_expense": 0.0, "confidence": 0.0})(),
-    "health_score": type("Health", (), {"score": 0, "label": "-"})(),
-    "anomaly_count": 0,
-}
 
 ROWS = [
     {"Date": "2024-12-01", "Category": "Salary", "Amount": 80000.0, "Type": "Income", "Description": "Salary"},
@@ -20,7 +15,7 @@ ROWS = [
 
 def payload(app, rows=ROWS):
     with app.app_context():
-        return build_dashboard_payload(pd.DataFrame(rows), ml_results=ML_STUB)
+        return build_dashboard_payload(pd.DataFrame(rows))
 
 
 def test_income_totals_balance_and_savings_rate(app):

@@ -10,7 +10,7 @@ def count(db, user_id):
 
 def test_fresh_database_starts_empty(tmp_path):
     db_path = tmp_path / "fresh.db"
-    app = create_app({"TESTING": True, "DATABASE_PATH": str(db_path), "TRAINED_MODELS_DIR": str(tmp_path / "m")})
+    app = create_app({"TESTING": True, "DATABASE_PATH": str(db_path)})
 
     conn = sqlite3.connect(db_path)
     assert conn.execute("SELECT COUNT(*) FROM users").fetchone()[0] == 0

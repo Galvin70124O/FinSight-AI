@@ -8,8 +8,8 @@ from flask import Blueprint, current_app, flash, redirect, render_template, requ
 from werkzeug.utils import secure_filename
 
 from database import get_db
-from ml.pipeline import run_ml_pipeline
-from models import get_user_transactions, save_transactions
+from ml.pipeline import INSIGHTS_VERSION, compute_insights
+from models import get_cached_insights, get_user_transactions, save_insights, save_transactions
 from utils import CSVValidationError, allowed_file, build_dashboard_payload, clean_transaction_dataframe, read_uploaded_csv, validate_uploaded_csv
 
 main_bp = Blueprint("main", __name__)
@@ -50,14 +50,25 @@ def _transactions_frame(rows: list[dict[str, object]]) -> pd.DataFrame:
     )
 
 
+def refresh_insights(db, user_id: int) -> dict:
+    """Recompute and cache one user's insights. Call whenever their transactions change."""
+    insights = compute_insights(_transactions_frame(get_user_transactions(db, user_id)))
+    save_insights(db, user_id, insights)
+    return insights
+
+
 @main_bp.route("/dashboard")
 def dashboard():
     """Render the main dashboard for authenticated users."""
     db = get_db()
     transactions = get_user_transactions(db, session["user_id"])
     df = _transactions_frame(transactions)
-    ml_results = run_ml_pipeline(df, current_app.config["TRAINED_MODELS_DIR"]) if not df.empty else None
-    payload = build_dashboard_payload(df, ml_results=ml_results)
+    # Insights are computed on import and cached per user; recompute only if
+    # they are missing or were saved in an older format.
+    insights = get_cached_insights(db, session["user_id"])
+    if insights is None or insights.get("version") != INSIGHTS_VERSION:
+        insights = refresh_insights(db, session["user_id"])
+    payload = build_dashboard_payload(df, insights)
 
     return render_template("dashboard.html", payload=payload, transactions=transactions)
 
@@ -67,7 +78,9 @@ def load_demo_data():
     """Import the bundled sample transactions into the current user's account only."""
     demo_path = os.path.join(current_app.config["DATASET_DIR"], "sample_transactions.csv")
     cleaned_df = clean_transaction_dataframe(pd.read_csv(demo_path))
-    saved_rows = save_transactions(get_db(), session["user_id"], cleaned_df, source_file="demo_data")
+    db = get_db()
+    saved_rows = save_transactions(db, session["user_id"], cleaned_df, source_file="demo_data")
+    refresh_insights(db, session["user_id"])
     flash(f"Loaded {saved_rows} demo transaction(s).", "success")
     return redirect(url_for("main.dashboard"))
 
@@ -96,7 +109,9 @@ def upload():
             df = read_uploaded_csv(file.stream)
             validate_uploaded_csv(df)
             cleaned_df = clean_transaction_dataframe(df)
-            saved_rows = save_transactions(get_db(), session["user_id"], cleaned_df, source_file=filename)
+            db = get_db()
+            saved_rows = save_transactions(db, session["user_id"], cleaned_df, source_file=filename)
+            refresh_insights(db, session["user_id"])
         except CSVValidationError as exc:
             flash(str(exc), "danger")
             return redirect(url_for("main.upload"))

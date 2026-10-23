@@ -10,7 +10,7 @@ Date,Category,Amount,Type,Description
 2024-09-13,Dining,1531,Expense,Food delivery
 2024-09-16,Transport,298,Expense,Auto rickshaw
 2024-09-18,Groceries,3133,Expense,Weekly groceries
-2024-09-20,Entertainment,199,Expense,Streaming subscription
+2024-09-20,Entertainment,499,Expense,Streaming subscription
 2024-09-22,Shopping,2976,Expense,Household items
 2024-09-23,Transport,548,Expense,Metro card top-up
 2024-09-25,Groceries,1898,Expense,Weekly groceries
@@ -45,7 +45,7 @@ Date,Category,Amount,Type,Description
 2024-11-14,Healthcare,692,Expense,Pharmacy
 2024-11-16,Transport,310,Expense,Cab ride
 2024-11-18,Groceries,2393,Expense,Weekly groceries
-2024-11-20,Entertainment,649,Expense,Streaming subscription
+2024-11-20,Entertainment,499,Expense,Streaming subscription
 2024-11-22,Shopping,3539,Expense,Books
 2024-11-23,Transport,407,Expense,Cab ride
 2024-11-25,Groceries,2658,Expense,Weekly groceries
@@ -129,7 +129,7 @@ Date,Category,Amount,Type,Description
 2025-04-13,Dining,682,Expense,Dinner out
 2025-04-16,Transport,376,Expense,Auto rickshaw
 2025-04-18,Groceries,2246,Expense,Weekly groceries
-2025-04-20,Entertainment,649,Expense,Streaming subscription
+2025-04-20,Entertainment,499,Expense,Streaming subscription
 2025-04-22,Shopping,2338,Expense,Clothes
 2025-04-23,Transport,450,Expense,Auto rickshaw
 2025-04-25,Groceries,2388,Expense,Weekly groceries

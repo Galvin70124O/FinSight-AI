@@ -26,7 +26,6 @@ class Config:
     IS_PRODUCTION = IS_PRODUCTION
     DATABASE_PATH = os.environ.get("DATABASE_PATH", os.path.join(BASE_DIR, "instance", "finsight_ai.db"))
     DATABASE_URL = os.environ.get("DATABASE_URL", "")
-    TRAINED_MODELS_DIR = os.path.join(BASE_DIR, "trained_models")
     DATASET_DIR = os.path.join(BASE_DIR, "dataset")
     MAX_CONTENT_LENGTH = 2 * 1024 * 1024
     ALLOWED_EXTENSIONS = {"csv"}

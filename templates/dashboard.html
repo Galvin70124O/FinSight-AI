@@ -37,11 +37,15 @@
     </div>
     <div class="kpi-item">
       <span class="kpi-label">Savings Rate</span>
-      <strong data-counter="{{ payload.metrics.savings_rate }}" data-suffix="%" data-decimals="1">0%</strong>
+      <strong data-counter="{{ payload.metrics.savings_rate }}" data-suffix="%" data-decimals="1">{{ payload.metrics.savings_rate }}%</strong>
     </div>
     <div class="kpi-item">
       <span class="kpi-label">Financial Health</span>
-      <strong data-counter="{{ payload.metrics.health_score }}" data-suffix="/100" data-decimals="0">0/100</strong>
+      {% if payload.metrics.health_score is not none %}
+      <strong data-counter="{{ payload.metrics.health_score }}" data-suffix="/100" data-decimals="0">{{ payload.metrics.health_score|round|int }}/100</strong>
+      {% else %}
+      <strong>&mdash;</strong>
+      {% endif %}
     </div>
   </section>
 
@@ -69,30 +73,35 @@
           <h2>Recommendations</h2>
         </div>
       </div>
+      {% set forecast = payload.insights.forecast %}
+      {% set tip = payload.insights.tip %}
       <div class="bubble-stack">
-        {% if payload.ml.message %}
-        <div class="bubble subtle">
-          <span class="bubble-title">ML status</span>
-          <p>{{ payload.ml.message }}</p>
-        </div>
-        {% endif %}
         <div class="bubble">
-          <span class="bubble-title">AI detected</span>
+          <span class="bubble-title">Summary</span>
           <p>{{ payload.insight }}</p>
         </div>
+        {% if tip %}
         <div class="bubble accent">
-          <span class="bubble-title">Recommendation</span>
-          <p>Cook at home twice this week to save approximately {{ (payload.ml.expense_prediction.predicted_expense * 0.03)|inr }}.</p>
+          <span class="bubble-title">Tip</span>
+          <p>{{ tip.category }} is your biggest variable expense: about {{ tip.monthly_average|inr(0) }} a month ({{ tip.share }}% of spending). Trimming it by 10% would save about {{ tip.saving|inr(0) }} a month.</p>
         </div>
+        {% endif %}
+        {% if forecast %}
         <div class="bubble subtle">
-          <span class="bubble-title">Prediction</span>
-          <p>Expected spending next month: {{ payload.ml.expense_prediction.predicted_expense|inr }}.</p>
+          <span class="bubble-title">Forecast{% if forecast.low_confidence %} &middot; low confidence{% endif %}</span>
+          {% if forecast.enough_data %}
+          <p>Expected spending in {{ forecast.month }}: about {{ forecast.predicted|inr(0) }}, likely between {{ forecast.low|inr(0) }} and {{ forecast.high|inr(0) }} (80% range).</p>
+          <p class="bubble-note">{{ forecast.message }}</p>
+          {% else %}
+          <p>{{ forecast.message }}</p>
+          {% endif %}
         </div>
+        {% endif %}
       </div>
       <div class="insight-stats">
         <div><span>Average spend</span><strong>{{ payload.summary.average_spending|inr }}</strong></div>
         <div><span>Top category</span><strong>{{ payload.summary.highest_spending_category }}</strong></div>
-        <div><span>Flagged signals</span><strong>{{ payload.ml.anomaly_count }}</strong></div>
+        <div><span>Unusual</span><strong><a href="#unusual">{{ payload.insights.anomalies|length }}</a></strong></div>
       </div>
     </aside>
   </section>
@@ -112,6 +121,62 @@
       {% endif %}
     </article>
   </section>
+
+  {% if transactions %}
+  <section class="content-grid">
+    <article class="panel" id="unusual">
+      <div class="panel-head">
+        <div>
+          <p class="section-label">Anomaly detection</p>
+          <h2>Unusual transactions</h2>
+        </div>
+      </div>
+      {% if payload.insights.anomalies %}
+      <div class="table-wrapper">
+        <table class="transaction-table">
+          <thead>
+            <tr><th>Date</th><th>Category</th><th>Amount</th><th>Usual</th><th>Description</th></tr>
+          </thead>
+          <tbody>
+            {% for item in payload.insights.anomalies %}
+            <tr>
+              <td>{{ item.date }}</td>
+              <td>{{ item.category }}</td>
+              <td class="amount-cell expense">{{ item.amount|inr }}{% if item.ratio %} <span class="muted">({{ item.ratio }}&times;)</span>{% endif %}</td>
+              <td>{{ item.typical|inr }}</td>
+              <td>{{ item.description }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <div class="empty-state"><p>Nothing unusual. Each expense is compared with the usual amount for its category (categories need at least 4 expenses).</p></div>
+      {% endif %}
+    </article>
+
+    <aside class="panel" id="health">
+      <div class="panel-head compact-head">
+        <div>
+          <p class="section-label">Financial health</p>
+          <h2>{% if payload.insights.health and payload.insights.health.score is not none %}{{ payload.insights.health.score|round|int }}/100 &middot; {{ payload.insights.health.label }}{% else %}Not available yet{% endif %}</h2>
+        </div>
+      </div>
+      {% if payload.insights.health and payload.insights.health.score is not none %}
+      <ul class="health-breakdown">
+        {% for part in payload.insights.health.components %}
+        <li>
+          <div class="health-row"><span>{{ part.name }}</span><strong>{{ part.points }} / {{ part.max_points }}</strong></div>
+          <p>{{ part.detail }}</p>
+        </li>
+        {% endfor %}
+      </ul>
+      {% else %}
+      <div class="empty-state"><p>{{ payload.insights.health.message if payload.insights.health else "Add income transactions to see your health score." }}</p></div>
+      {% endif %}
+    </aside>
+  </section>
+  {% endif %}
 
   <section class="content-grid lower-grid">
     <article class="panel" id="reports">
