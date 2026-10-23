@@ -47,6 +47,13 @@ CREATE TABLE IF NOT EXISTS transactions (
 
 CREATE INDEX IF NOT EXISTS idx_transactions_user_id ON transactions(user_id);
 CREATE INDEX IF NOT EXISTS idx_transactions_user_date ON transactions(user_id, date);
+
+CREATE TABLE IF NOT EXISTS user_insights (
+    user_id INTEGER PRIMARY KEY,
+    computed_at TEXT NOT NULL,
+    payload TEXT NOT NULL,
+    FOREIGN KEY (user_id) REFERENCES users (id)
+);
 """
 
 POSTGRES_SCHEMA = """
@@ -77,6 +84,12 @@ CREATE TABLE IF NOT EXISTS transactions (
 
 CREATE INDEX IF NOT EXISTS idx_transactions_user_id ON transactions(user_id);
 CREATE INDEX IF NOT EXISTS idx_transactions_user_date ON transactions(user_id, date);
+
+CREATE TABLE IF NOT EXISTS user_insights (
+    user_id INTEGER PRIMARY KEY REFERENCES users (id),
+    computed_at TEXT NOT NULL,
+    payload TEXT NOT NULL
+);
 """
 
 

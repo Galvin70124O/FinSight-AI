@@ -23,7 +23,6 @@ def app(tmp_path):
             "TESTING": True,
             "DATABASE_PATH": str(tmp_path / "test.db"),
             "UPLOAD_FOLDER": str(tmp_path / "uploads"),
-            "TRAINED_MODELS_DIR": str(tmp_path / "models"),
         }
     )
     yield app

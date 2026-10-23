@@ -9,8 +9,6 @@ import plotly.express as px
 import plotly.graph_objects as go
 from flask import current_app
 
-from ml.pipeline import run_ml_pipeline
-
 
 REQUIRED_COLUMNS = ["Date", "Category", "Amount", "Type", "Description"]
 logger = logging.getLogger(__name__)
@@ -59,28 +57,43 @@ def empty_dashboard_payload() -> dict[str, Any]:
             "total_expense": 0.0,
             "current_balance": 0.0,
             "savings_rate": 0.0,
-            "health_score": 0.0,
+            "health_score": None,
         },
         "recent_transactions": [],
-        "insight": "Upload a transaction file to begin generating AI insights.",
+        "insight": "Upload a transaction file to begin generating insights.",
         "charts": {},
         "summary": {
             "average_spending": 0.0,
             "highest_spending_category": "N/A",
             "monthly_spending_trend": [],
             "category_distribution": [],
+            "income_vs_expense": {"labels": [], "income": [], "expense": []},
             "chart_series": {
                 "monthly": {"labels": [], "values": [], "counts": []},
                 "quarterly": {"labels": [], "values": [], "counts": []},
                 "yearly": {"labels": [], "values": [], "counts": []},
             },
         },
-        "ml": {
-            "expense_prediction": {"next_month": "N/A", "predicted_expense": 0.0, "confidence": 0.0},
-            "health_score": {"score": 0.0, "label": "Needs Attention"},
-            "anomaly_count": 0,
-            "message": "",
-        },
+        "insights": {"forecast": None, "anomalies": [], "health": None, "tip": None},
+    }
+
+
+def spending_tip(expense_df: pd.DataFrame, months: int) -> dict[str, Any] | None:
+    """A concrete tip about the largest expense category whose amounts vary.
+
+    Categories where every payment is identical (rent, a fixed subscription)
+    are skipped because they cannot be trimmed week to week.
+    """
+    variable = [category for category, group in expense_df.groupby("Category") if group["Amount"].nunique() > 1]
+    if not variable or months < 1:
+        return None
+    totals = expense_df[expense_df["Category"].isin(variable)].groupby("Category")["Amount"].sum().sort_values(ascending=False)
+    monthly_average = float(totals.iloc[0]) / months
+    return {
+        "category": str(totals.index[0]),
+        "monthly_average": round(monthly_average, 2),
+        "share": round(float(totals.iloc[0]) / float(expense_df["Amount"].sum()) * 100, 1),
+        "saving": round(monthly_average * 0.10, 2),
     }
 
 
@@ -261,8 +274,11 @@ def series_dict(summary: pd.DataFrame) -> dict[str, list]:
     }
 
 
-def build_dashboard_payload(transactions_df: pd.DataFrame, recent_limit: int = 10, ml_results: dict[str, Any] | None = None) -> dict[str, Any]:
-    """Create layout-ready analytics for the dashboard."""
+def build_dashboard_payload(transactions_df: pd.DataFrame, insights: dict[str, Any] | None = None, recent_limit: int = 10) -> dict[str, Any]:
+    """Create layout-ready analytics for the dashboard.
+
+    ``insights`` is the cached output of ml.pipeline.compute_insights for this user.
+    """
     if transactions_df is None or transactions_df.empty:
         return empty_dashboard_payload()
 
@@ -277,7 +293,8 @@ def build_dashboard_payload(transactions_df: pd.DataFrame, recent_limit: int = 1
     total_expense = float(expense_df["Amount"].sum())
     current_balance = total_income - total_expense
     savings_rate = round((current_balance / total_income * 100), 1) if total_income else 0.0
-    health_score = round(min(max(100 - (total_expense / total_income * 100 if total_income else 0) * 1.2, 0), 100), 1)
+    insights = insights or {}
+    health = insights.get("health")
 
     # Every series spans the same months, from the first to the last transaction.
     first_month = transactions_df["Date"].min().to_period("M")
@@ -298,14 +315,14 @@ def build_dashboard_payload(transactions_df: pd.DataFrame, recent_limit: int = 1
     category_frame = category_totals.reset_index()
     category_frame.columns = ["Category", "Total"]
 
-    insight = (
-        "Your finances are strong. Keep spending disciplined and increase the share of income directed to savings."
-        if health_score >= 75
-        else "Your spending is trending higher than ideal. Consider tightening discretionary categories."
-    )
-
-    if ml_results is None:
-        ml_results = run_ml_pipeline(transactions_df, current_app.config["TRAINED_MODELS_DIR"])
+    months = len(monthly_summary)
+    if total_income:
+        insight = (
+            f"Over {months} month(s) you earned {format_inr(total_income)} and spent "
+            f"{format_inr(total_expense)}, keeping {savings_rate}% of your income."
+        )
+    else:
+        insight = f"You have recorded {format_inr(total_expense)} of spending. Add income transactions to see your savings rate."
 
     charts = {
         "monthly_expense": plot_div(
@@ -378,7 +395,7 @@ def build_dashboard_payload(transactions_df: pd.DataFrame, recent_limit: int = 1
             "total_expense": round(total_expense, 2),
             "current_balance": round(current_balance, 2),
             "savings_rate": savings_rate,
-            "health_score": health_score,
+            "health_score": health["score"] if health else None,
         },
         "recent_transactions": recent_transactions,
         "insight": insight,
@@ -399,18 +416,11 @@ def build_dashboard_payload(transactions_df: pd.DataFrame, recent_limit: int = 1
                 "yearly": series_dict(yearly_summary),
             },
         },
-        "ml": {
-            "expense_prediction": {
-                "next_month": ml_results["expense_prediction"].next_month,
-                "predicted_expense": ml_results["expense_prediction"].predicted_expense,
-                "confidence": ml_results["expense_prediction"].confidence,
-            },
-            "health_score": {
-                "score": ml_results["health_score"].score,
-                "label": ml_results["health_score"].label,
-            },
-            "anomaly_count": ml_results["anomaly_count"],
-            "message": ml_results.get("message", ""),
+        "insights": {
+            "forecast": insights.get("forecast"),
+            "anomalies": insights.get("anomalies", []),
+            "health": health,
+            "tip": spending_tip(expense_df, months),
         },
     }
 

@@ -690,3 +690,9 @@ button.ghost-button { cursor: pointer; font: inherit; }
 .cta-group form { margin: 0; }
 .logout-button { width: 100%; }
 .sidebar.is-collapsed .logout-button { padding-inline: 0.4rem; font-size: 0.75rem; }
+.bubble-note { margin-top: 0.35rem; color: var(--muted); font-size: 0.82rem; }
+.muted { color: var(--muted); font-weight: 400; }
+.insight-stats a { color: inherit; }
+.health-breakdown { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.8rem; }
+.health-breakdown p { margin: 0.2rem 0 0; color: var(--muted); font-size: 0.85rem; line-height: 1.5; }
+.health-row { display: flex; justify-content: space-between; gap: 1rem; }
