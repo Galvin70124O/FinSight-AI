@@ -9,10 +9,12 @@ from database import close_db, init_db
 from utils import CSVValidationError, seed_kaggle_transactions
 
 
-def create_app() -> Flask:
+def create_app(test_config: dict | None = None) -> Flask:
     """Application factory for FinSight AI."""
     app = Flask(__name__, instance_relative_config=True)
     app.config.from_object(Config)
+    if test_config:
+        app.config.update(test_config)
     app.logger.setLevel(logging.INFO)
 
     os.makedirs(app.instance_path, exist_ok=True)
