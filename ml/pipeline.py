@@ -9,7 +9,7 @@ from .expense_prediction import forecast_expenses
 from .health_score import calculate_health_score
 
 # Bump when the shape of the insights changes so cached results are recomputed.
-INSIGHTS_VERSION = 2
+INSIGHTS_VERSION = 3
 
 
 def compute_insights(transactions_df: pd.DataFrame) -> dict:
