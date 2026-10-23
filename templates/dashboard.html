@@ -54,16 +54,21 @@
       <div class="panel-head">
         <div>
           <p class="section-label">Spending trend</p>
-          <h2>Monthly momentum</h2>
+          <h2>Spending over time</h2>
         </div>
-        <div class="segmented" role="tablist" aria-label="Time range">
-          <button class="seg-btn active" type="button" data-range="month">Month</button>
-          <button class="seg-btn" type="button" data-range="quarter">Quarter</button>
-          <button class="seg-btn" type="button" data-range="year">Year</button>
+        {% if payload.charts.spending_views %}
+        <div class="segmented" role="group" aria-label="Time range">
+          <button class="seg-btn active" type="button" data-range="month" aria-pressed="true">Month</button>
+          <button class="seg-btn" type="button" data-range="quarter" aria-pressed="false">Quarter</button>
+          <button class="seg-btn" type="button" data-range="year" aria-pressed="false">Year</button>
         </div>
+        {% endif %}
       </div>
       <div class="chart-shell">{{ payload.charts.monthly_expense|safe }}</div>
-      <p class="panel-foot">Interactive trend view with a smoother path for cash-flow planning.</p>
+      {% if payload.charts.spending_views %}
+      <script type="application/json" id="spendingViews">{{ payload.charts.spending_views|tojson }}</script>
+      {% endif %}
+      <p class="panel-foot">Total spending per period. Hover a point for the amount and number of transactions.</p>
     </article>
 
     <aside class="panel insight-panel" id="insights">
