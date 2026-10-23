@@ -36,6 +36,6 @@ def test_spending_chart_aggregates_expenses_by_month(app):
 
     monthly = payload["summary"]["chart_series"]["monthly"]
     totals = dict(zip(monthly["labels"], monthly["values"]))
-    assert totals["Jan"] == 150.0
-    assert totals["Feb"] == 80.0
-    assert totals["Mar"] == 45.0
+    assert totals["Jan 2024"] == 150.0
+    assert totals["Feb 2024"] == 80.0
+    assert totals["Mar 2024"] == 45.0
