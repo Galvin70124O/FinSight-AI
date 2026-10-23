@@ -97,6 +97,22 @@
     </aside>
   </section>
 
+  <section class="content-grid single-grid">
+    <article class="panel chart-panel" id="cashflow">
+      <div class="panel-head">
+        <div>
+          <p class="section-label">Cash flow</p>
+          <h2>Income vs expense by month</h2>
+        </div>
+      </div>
+      {% if payload.charts.income_vs_expense %}
+      <div class="chart-shell">{{ payload.charts.income_vs_expense|safe }}</div>
+      {% else %}
+      <div class="empty-state"><p>Your monthly income and spending will appear here once you add transactions.</p></div>
+      {% endif %}
+    </article>
+  </section>
+
   <section class="content-grid lower-grid">
     <article class="panel" id="reports">
       <div class="panel-head">

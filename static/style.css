@@ -412,6 +412,7 @@ body[data-theme="light"] .topbar { background: rgba(255,255,255,0.76); }
   gap: 1rem;
 }
 .lower-grid { grid-template-columns: 1fr 1.2fr; }
+.content-grid.single-grid { grid-template-columns: 1fr; }
 .panel { padding: 1rem 1.1rem; }
 .panel-head {
   display: flex;

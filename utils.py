@@ -133,8 +133,8 @@ def normalize_transaction_columns(df: pd.DataFrame) -> pd.DataFrame:
     return normalized.rename(columns={column: rename_map[column.lower()] for column in normalized.columns if column.lower() in rename_map})
 
 
-def prepare_expense_transactions(transactions_df: pd.DataFrame) -> pd.DataFrame:
-    """Normalize and deduplicate expense transactions for analytics and charting."""
+def prepare_transactions(transactions_df: pd.DataFrame) -> pd.DataFrame:
+    """Normalize and deduplicate income and expense transactions for analytics and charting."""
     if transactions_df is None or transactions_df.empty:
         return pd.DataFrame(columns=["Date", "Category", "Amount", "Type", "Description", "Year", "Month", "Month_Number", "Day", "Day_Name", "Week", "Quarter", "Weekend"])
 
@@ -158,7 +158,7 @@ def prepare_expense_transactions(transactions_df: pd.DataFrame) -> pd.DataFrame:
 
     df = df.dropna(subset=["Date", "Category", "Amount", "Type"]).copy()
     df = df[df["Amount"] > 0].copy()
-    df = df[df["Type"].isin(["Expense"])].copy()
+    df = df[df["Type"].isin(["Income", "Expense"])].copy()
     df = df.drop_duplicates(subset=["Date", "Category", "Amount", "Type", "Description"], keep="first")
 
     if df.empty:
@@ -198,17 +198,20 @@ PERIOD_LABELS = {
 }
 
 
-def period_totals(df: pd.DataFrame, freq: str) -> pd.DataFrame:
+def period_totals(df: pd.DataFrame, freq: str, start=None, end=None) -> pd.DataFrame:
     """Sum amounts per calendar period in date order, filling empty periods with 0.
 
     Grouping by the full period (e.g. Jan 2025) keeps the same month in
-    different years apart.
+    different years apart. ``start``/``end`` widen the range so several
+    series can share one axis.
     """
-    if df.empty:
-        return pd.DataFrame(columns=["Period", "Label", "Total", "Count"])
     periods = df["Date"].dt.to_period(freq)
+    start = start if start is not None else (periods.min() if not df.empty else None)
+    end = end if end is not None else (periods.max() if not df.empty else None)
+    if start is None or end is None:
+        return pd.DataFrame(columns=["Period", "Label", "Total", "Count"])
     grouped = df.groupby(periods)["Amount"].agg(Total="sum", Count="size")
-    full_range = pd.period_range(periods.min(), periods.max(), freq=freq)
+    full_range = pd.period_range(start, end, freq=freq)
     grouped = grouped.reindex(full_range, fill_value=0)
     return pd.DataFrame({
         "Period": full_range,
@@ -226,33 +229,37 @@ def series_dict(summary: pd.DataFrame) -> dict[str, list]:
     }
 
 
-def build_dashboard_payload(transactions_df: pd.DataFrame, recent_limit: int = 5, ml_results: dict[str, Any] | None = None) -> dict[str, Any]:
+def build_dashboard_payload(transactions_df: pd.DataFrame, recent_limit: int = 10, ml_results: dict[str, Any] | None = None) -> dict[str, Any]:
     """Create layout-ready analytics for the dashboard."""
     if transactions_df is None or transactions_df.empty:
         return empty_dashboard_payload()
 
-    transactions_df = prepare_expense_transactions(transactions_df)
+    transactions_df = prepare_transactions(transactions_df)
     if transactions_df.empty:
         return empty_dashboard_payload()
 
-    expense_df = transactions_df.copy()
-    income_df = pd.DataFrame(columns=["Amount"])
+    income_df = transactions_df[transactions_df["Type"] == "Income"]
+    expense_df = transactions_df[transactions_df["Type"] == "Expense"]
 
-    total_income = float(income_df["Amount"].sum()) if not income_df.empty else 0.0
+    total_income = float(income_df["Amount"].sum())
     total_expense = float(expense_df["Amount"].sum())
     current_balance = total_income - total_expense
     savings_rate = round((current_balance / total_income * 100), 1) if total_income else 0.0
     health_score = round(min(max(100 - (total_expense / total_income * 100 if total_income else 0) * 1.2, 0), 100), 1)
 
-    monthly_summary = period_totals(expense_df, "M")
-    quarterly_summary = period_totals(expense_df, "Q")
-    yearly_summary = period_totals(expense_df, "Y")
+    # Every series spans the same months, from the first to the last transaction.
+    first_month = transactions_df["Date"].min().to_period("M")
+    last_month = transactions_df["Date"].max().to_period("M")
+    monthly_summary = period_totals(expense_df, "M", first_month, last_month)
+    monthly_income = period_totals(income_df, "M", first_month, last_month)
+    quarterly_summary = period_totals(expense_df, "Q", first_month.asfreq("Q"), last_month.asfreq("Q"))
+    yearly_summary = period_totals(expense_df, "Y", first_month.asfreq("Y"), last_month.asfreq("Y"))
 
     category_totals = expense_df.groupby("Category")["Amount"].sum().sort_values(ascending=False)
     highest_spending_category = category_totals.index[0] if not category_totals.empty else "N/A"
     average_spending = round(float(expense_df["Amount"].mean()), 2) if not expense_df.empty else 0.0
 
-    recent_transactions_df = expense_df.sort_values("Date", ascending=False).head(recent_limit).copy()
+    recent_transactions_df = transactions_df.sort_values("Date", ascending=False).head(recent_limit).copy()
     recent_transactions_df["Date"] = recent_transactions_df["Date"].dt.strftime("%Y-%m-%d")
     recent_transactions = recent_transactions_df.to_dict("records")
 
@@ -266,7 +273,7 @@ def build_dashboard_payload(transactions_df: pd.DataFrame, recent_limit: int = 5
     )
 
     if ml_results is None:
-        ml_results = run_ml_pipeline(expense_df, current_app.config["TRAINED_MODELS_DIR"])
+        ml_results = run_ml_pipeline(transactions_df, current_app.config["TRAINED_MODELS_DIR"])
 
     charts = {
         "monthly_expense": plot_div(
@@ -294,16 +301,17 @@ def build_dashboard_payload(transactions_df: pd.DataFrame, recent_limit: int = 5
         "income_vs_expense": plot_div(
             go.Figure(
                 data=[
-                    go.Bar(name="Income", x=["Income"], y=[0], marker_color="#2563eb"),
-                    go.Bar(name="Expense", x=["Expense"], y=[total_expense], marker_color="#ef4444"),
+                    go.Bar(name="Income", x=monthly_income["Label"], y=monthly_income["Total"], marker_color="#2563eb"),
+                    go.Bar(name="Expense", x=monthly_summary["Label"], y=monthly_summary["Total"], marker_color="#ef4444"),
                 ]
             ).update_layout(
-                title="Income vs Expense",
                 barmode="group",
                 template="plotly_white",
-                margin=dict(l=25, r=25, t=60, b=30),
+                margin=dict(l=25, r=25, t=35, b=30),
                 paper_bgcolor="rgba(0,0,0,0)",
                 plot_bgcolor="rgba(0,0,0,0)",
+                hovermode="x unified",
+                legend=dict(orientation="h", y=1.12),
             )
         ),
         "category_pie": plot_div(
@@ -337,6 +345,11 @@ def build_dashboard_payload(transactions_df: pd.DataFrame, recent_limit: int = 5
             "highest_spending_category": highest_spending_category,
             "monthly_spending_trend": monthly_summary.drop(columns="Period").to_dict("records"),
             "category_distribution": category_frame.to_dict("records"),
+            "income_vs_expense": {
+                "labels": monthly_summary["Label"].tolist(),
+                "income": monthly_income["Total"].tolist(),
+                "expense": monthly_summary["Total"].tolist(),
+            },
             "chart_series": {
                 "monthly": series_dict(monthly_summary),
                 "quarterly": series_dict(quarterly_summary),
