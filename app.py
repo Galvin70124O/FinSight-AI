@@ -7,7 +7,7 @@ from blueprints.auth import auth_bp
 from blueprints.main import main_bp
 from config import Config
 from database import close_db, init_db
-from utils import CSVValidationError, seed_kaggle_transactions
+from utils import CSVValidationError
 
 csrf = CSRFProtect()
 
@@ -47,21 +47,6 @@ def create_app(test_config: dict | None = None) -> Flask:
 
     with app.app_context():
         init_db()
-        from database import get_db
-
-        db = get_db()
-        user_count = db.execute("SELECT COUNT(*) AS count FROM users").fetchone()["count"]
-        existing_seed = db.execute(
-            "SELECT COUNT(*) AS count FROM transactions WHERE source_file = ?",
-            ("kaggle_seed",),
-        ).fetchone()["count"]
-        if existing_seed == 0 and user_count > 0:
-            try:
-                seed_kaggle_transactions(db, user_id=None)
-            except Exception:
-                app.logger.exception("Failed to seed Kaggle transactions")
-        elif user_count == 0:
-            app.logger.info("Skipping Kaggle seed until at least one user exists")
 
     return app
 

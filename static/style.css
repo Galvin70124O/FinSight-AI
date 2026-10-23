@@ -684,5 +684,8 @@ svg {
 }
 
 .logout-form { margin-top: 0.75rem; }
-.logout-button { width: 100%; cursor: pointer; font: inherit; }
+button.ghost-button { cursor: pointer; font: inherit; }
+.cta-group { display: flex; flex-wrap: wrap; gap: 0.7rem; align-items: center; }
+.cta-group form { margin: 0; }
+.logout-button { width: 100%; }
 .sidebar.is-collapsed .logout-button { padding-inline: 0.4rem; font-size: 0.75rem; }

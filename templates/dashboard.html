@@ -11,7 +11,15 @@
         <strong>{{ payload.insight }}</strong>
       </div>
     </div>
-    <a class="action-button" href="{{ url_for('main.upload') }}">Import transactions</a>
+    <div class="cta-group">
+      <a class="action-button" href="{{ url_for('main.upload') }}">Import transactions</a>
+      {% if not transactions %}
+      <form method="post" action="{{ url_for('main.load_demo_data') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button class="ghost-button" type="submit">Load demo data</button>
+      </form>
+      {% endif %}
+    </div>
   </section>
 
   <section class="kpi-grid" aria-label="Financial metrics">
@@ -148,7 +156,7 @@
       </div>
       {% else %}
       <div class="empty-state">
-        <p>No transactions have been imported yet. Upload your CSV to start generating insights.</p>
+        <p>No transactions have been imported yet. Upload your CSV, or load the demo data to explore the dashboard.</p>
       </div>
       {% endif %}
     </article>
