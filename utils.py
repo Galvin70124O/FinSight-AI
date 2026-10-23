@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 from pathlib import Path
 from typing import Any
@@ -15,6 +16,44 @@ from ml.pipeline import run_ml_pipeline
 
 REQUIRED_COLUMNS = ["Date", "Category", "Amount", "Type", "Description"]
 KAGGLE_DATASET_FILES = ["Expenses_clean.csv", "Income_clean.csv"]
+logger = logging.getLogger(__name__)
+
+
+class CSVValidationError(ValueError):
+    """Raised when an uploaded CSV fails validation."""
+
+
+def empty_dashboard_payload() -> dict[str, Any]:
+    """Return the default dashboard payload."""
+    return {
+        "metrics": {
+            "total_income": 0.0,
+            "total_expense": 0.0,
+            "current_balance": 0.0,
+            "savings_rate": 0.0,
+            "health_score": 0.0,
+        },
+        "recent_transactions": [],
+        "insight": "Upload a transaction file to begin generating AI insights.",
+        "charts": {},
+        "summary": {
+            "average_spending": 0.0,
+            "highest_spending_category": "N/A",
+            "monthly_spending_trend": [],
+            "category_distribution": [],
+            "chart_series": {
+                "monthly": {"labels": [], "values": [], "counts": []},
+                "quarterly": {"labels": [], "values": [], "counts": []},
+                "yearly": {"labels": [], "values": [], "counts": []},
+            },
+        },
+        "ml": {
+            "expense_prediction": {"next_month": "N/A", "predicted_expense": 0.0, "confidence": 0.0},
+            "health_score": {"score": 0.0, "label": "Needs Attention"},
+            "anomaly_count": 0,
+            "message": "",
+        },
+    }
 
 
 def find_dataset_files(base_dir: str | None = None) -> list[Path]:
@@ -43,14 +82,20 @@ def allowed_file(filename: str) -> bool:
 def clean_transaction_dataframe(df: pd.DataFrame) -> pd.DataFrame:
     """Validate, clean, and standardize uploaded transaction data."""
     if df is None:
-        raise ValueError("The uploaded file is empty.")
+        raise CSVValidationError("The uploaded file is empty.")
+
+    if not isinstance(df, pd.DataFrame):
+        raise CSVValidationError("Uploaded file could not be read as a table.")
+
+    if df.empty:
+        raise CSVValidationError("The uploaded CSV is empty.")
 
     df = df.copy()
     df.columns = [str(col).strip() for col in df.columns]
 
     missing_columns = [col for col in REQUIRED_COLUMNS if col not in df.columns]
     if missing_columns:
-        raise ValueError(f"Missing required columns: {', '.join(missing_columns)}")
+        raise CSVValidationError(f"Missing required columns: {', '.join(missing_columns)}")
 
     df = df.loc[:, REQUIRED_COLUMNS].copy()
     df = df.drop_duplicates()
@@ -66,10 +111,38 @@ def clean_transaction_dataframe(df: pd.DataFrame) -> pd.DataFrame:
     df = df[df["Type"].isin(["Income", "Expense"])].copy()
 
     if df.empty:
-        raise ValueError("No valid transactions remained after cleaning. Please review the uploaded CSV.")
+        raise CSVValidationError("No valid transactions remained after cleaning. Please review the uploaded CSV.")
 
     df = enrich_transaction_dataframe(df)
     return df.reset_index(drop=True)
+
+
+def validate_uploaded_csv(df: pd.DataFrame) -> None:
+    """Validate the CSV shape before deeper processing starts."""
+    if not isinstance(df, pd.DataFrame):
+        raise CSVValidationError("The uploaded file is not a valid CSV table.")
+    if df.empty:
+        raise CSVValidationError("The uploaded CSV does not contain any rows.")
+
+    required_columns = [column.lower() for column in REQUIRED_COLUMNS]
+    normalized_columns = {str(column).strip().lower() for column in df.columns}
+    missing = [column for column in required_columns if column not in normalized_columns]
+    if missing:
+        raise CSVValidationError("Missing required columns: " + ", ".join(column.title() for column in missing))
+
+
+def normalize_transaction_columns(df: pd.DataFrame) -> pd.DataFrame:
+    """Standardize transaction column names."""
+    rename_map = {
+        "date": "Date",
+        "category": "Category",
+        "amount": "Amount",
+        "type": "Type",
+        "description": "Description",
+    }
+    normalized = df.copy()
+    normalized.columns = [str(col).strip() for col in normalized.columns]
+    return normalized.rename(columns={column: rename_map[column.lower()] for column in normalized.columns if column.lower() in rename_map})
 
 
 def prepare_expense_transactions(transactions_df: pd.DataFrame) -> pd.DataFrame:
@@ -77,19 +150,7 @@ def prepare_expense_transactions(transactions_df: pd.DataFrame) -> pd.DataFrame:
     if transactions_df is None or transactions_df.empty:
         return pd.DataFrame(columns=["Date", "Category", "Amount", "Type", "Description", "Year", "Month", "Month_Number", "Day", "Day_Name", "Week", "Quarter", "Weekend"])
 
-    df = transactions_df.copy()
-    df.columns = [str(col).strip() for col in df.columns]
-
-    if "Date" not in df.columns and "date" in df.columns:
-        df = df.rename(columns={"date": "Date"})
-    if "Category" not in df.columns and "category" in df.columns:
-        df = df.rename(columns={"category": "Category"})
-    if "Amount" not in df.columns and "amount" in df.columns:
-        df = df.rename(columns={"amount": "Amount"})
-    if "Type" not in df.columns and "type" in df.columns:
-        df = df.rename(columns={"type": "Type"})
-    if "Description" not in df.columns and "description" in df.columns:
-        df = df.rename(columns={"description": "Description"})
+    df = normalize_transaction_columns(transactions_df)
 
     if "Date" not in df.columns:
         return pd.DataFrame(columns=["Date", "Category", "Amount", "Type", "Description", "Year", "Month", "Month_Number", "Day", "Day_Name", "Week", "Quarter", "Weekend"])
@@ -232,57 +293,11 @@ def seed_kaggle_transactions(db, user_id: int | None = None) -> int:
 def build_dashboard_payload(transactions_df: pd.DataFrame, recent_limit: int = 5, ml_results: dict[str, Any] | None = None) -> dict[str, Any]:
     """Create layout-ready analytics for the dashboard."""
     if transactions_df is None or transactions_df.empty:
-        return {
-            "metrics": {
-                "total_income": 0.0,
-                "total_expense": 0.0,
-                "current_balance": 0.0,
-                "savings_rate": 0.0,
-                "health_score": 0.0,
-            },
-            "recent_transactions": [],
-            "insight": "Upload a transaction file to begin generating AI insights.",
-            "charts": {},
-            "summary": {
-                "average_spending": 0.0,
-                "highest_spending_category": "N/A",
-                "monthly_spending_trend": [],
-                "category_distribution": [],
-                "chart_series": {"monthly": {"labels": [], "values": [], "counts": []}, "quarterly": {"labels": [], "values": [], "counts": []}, "yearly": {"labels": [], "values": [], "counts": []}},
-            },
-            "ml": {
-                "expense_prediction": {"next_month": "N/A", "predicted_expense": 0.0, "confidence": 0.0},
-                "health_score": {"score": 0.0, "label": "Needs Attention"},
-                "anomaly_count": 0,
-            },
-        }
+        return empty_dashboard_payload()
 
     transactions_df = prepare_expense_transactions(transactions_df)
     if transactions_df.empty:
-        return {
-            "metrics": {
-                "total_income": 0.0,
-                "total_expense": 0.0,
-                "current_balance": 0.0,
-                "savings_rate": 0.0,
-                "health_score": 0.0,
-            },
-            "recent_transactions": [],
-            "insight": "Upload a transaction file to begin generating AI insights.",
-            "charts": {},
-            "summary": {
-                "average_spending": 0.0,
-                "highest_spending_category": "N/A",
-                "monthly_spending_trend": [],
-                "category_distribution": [],
-                "chart_series": {"monthly": {"labels": [], "values": [], "counts": []}, "quarterly": {"labels": [], "values": [], "counts": []}, "yearly": {"labels": [], "values": [], "counts": []}},
-            },
-            "ml": {
-                "expense_prediction": {"next_month": "N/A", "predicted_expense": 0.0, "confidence": 0.0},
-                "health_score": {"score": 0.0, "label": "Needs Attention"},
-                "anomaly_count": 0,
-            },
-        }
+        return empty_dashboard_payload()
 
     expense_df = transactions_df.copy()
     income_df = pd.DataFrame(columns=["Amount"])
@@ -438,6 +453,7 @@ def build_dashboard_payload(transactions_df: pd.DataFrame, recent_limit: int = 5
                 "label": ml_results["health_score"].label,
             },
             "anomaly_count": ml_results["anomaly_count"],
+            "message": ml_results.get("message", ""),
         },
     }
 

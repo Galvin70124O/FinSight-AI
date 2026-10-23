@@ -29,8 +29,6 @@ class ExpensePredictionModel:
     def fit(self, monthly_expenses: pd.Series) -> "ExpensePredictionModel":
         """Train a linear-regression based expense policy."""
         values = monthly_expenses.astype(float).tolist()
-        if len(values) < 2:
-            raise ValueError("At least two monthly points are required for training.")
         self.history = values
         x = [[i] for i in range(len(values))]
         y = values
@@ -61,7 +59,11 @@ def train_expense_prediction(transactions_df: pd.DataFrame, model_path: str | No
     """Create a forecast for the next month from historical expense totals."""
     expenses = transactions_df[transactions_df["Type"] == "Expense"].copy()
     if expenses.empty:
-        return ExpensePredictionResult(next_month="N/A", predicted_expense=0.0, confidence=0.0)
+        return ExpensePredictionResult(
+            next_month="N/A",
+            predicted_expense=0.0,
+            confidence=0.0,
+        )
 
     if {"Year", "Month_Number"}.issubset(expenses.columns):
         monthly_totals = (
@@ -81,6 +83,8 @@ def train_expense_prediction(transactions_df: pd.DataFrame, model_path: str | No
         period_label = str(monthly_totals.index[-1])
 
     if monthly_values.empty:
+        return ExpensePredictionResult(next_month="N/A", predicted_expense=0.0, confidence=0.0)
+    if len(monthly_values) < 2:
         return ExpensePredictionResult(next_month="N/A", predicted_expense=0.0, confidence=0.0)
 
     model = ExpensePredictionModel().fit(monthly_values)
