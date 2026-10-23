@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import os
 
 import pandas as pd
 from flask import Blueprint, current_app, flash, redirect, render_template, request, session, url_for
@@ -59,6 +60,16 @@ def dashboard():
     payload = build_dashboard_payload(df, ml_results=ml_results)
 
     return render_template("dashboard.html", payload=payload, transactions=transactions)
+
+
+@main_bp.route("/demo-data", methods=["POST"])
+def load_demo_data():
+    """Import the bundled sample transactions into the current user's account only."""
+    demo_path = os.path.join(current_app.config["DATASET_DIR"], "sample_transactions.csv")
+    cleaned_df = clean_transaction_dataframe(pd.read_csv(demo_path))
+    saved_rows = save_transactions(get_db(), session["user_id"], cleaned_df, source_file="demo_data")
+    flash(f"Loaded {saved_rows} demo transaction(s).", "success")
+    return redirect(url_for("main.dashboard"))
 
 
 @main_bp.route("/upload", methods=["GET", "POST"])

@@ -1,9 +1,6 @@
 from __future__ import annotations
 
-import json
 import logging
-import os
-from pathlib import Path
 from typing import Any
 
 import pandas as pd
@@ -15,7 +12,6 @@ from ml.pipeline import run_ml_pipeline
 
 
 REQUIRED_COLUMNS = ["Date", "Category", "Amount", "Type", "Description"]
-KAGGLE_DATASET_FILES = ["Expenses_clean.csv", "Income_clean.csv"]
 logger = logging.getLogger(__name__)
 
 
@@ -54,24 +50,6 @@ def empty_dashboard_payload() -> dict[str, Any]:
             "message": "",
         },
     }
-
-
-def find_dataset_files(base_dir: str | None = None) -> list[Path]:
-    """Locate Kaggle dataset files in the project root or dataset folder."""
-    search_roots = []
-    if base_dir:
-        search_roots.append(Path(base_dir))
-    search_roots.extend([Path(__file__).resolve().parent, Path(__file__).resolve().parent / "dataset"])
-
-    discovered: list[Path] = []
-    seen: set[Path] = set()
-    for root in search_roots:
-        for file_name in KAGGLE_DATASET_FILES:
-            candidate = root / file_name
-            if candidate.exists() and candidate not in seen:
-                discovered.append(candidate)
-                seen.add(candidate)
-    return discovered
 
 
 def allowed_file(filename: str) -> bool:
@@ -211,93 +189,6 @@ def enrich_transaction_dataframe(df: pd.DataFrame) -> pd.DataFrame:
     df["Quarter"] = df["Date"].dt.quarter
     df["Weekend"] = df["Date"].dt.dayofweek >= 5
     return df.reset_index(drop=True)
-
-
-def normalize_kaggle_dataframe(df: pd.DataFrame, transaction_type: str) -> pd.DataFrame:
-    """Map Kaggle-style columns into the application's standard transaction schema."""
-    if df is None or df.empty:
-        return pd.DataFrame(columns=["Date", "Category", "Amount", "Transaction_Type", "Description"])
-
-    normalized = df.copy()
-    normalized.columns = [str(col).strip() for col in normalized.columns]
-
-    date_candidates = [col for col in normalized.columns if col.lower() in {"date", "date_time", "datetime", "transaction_date", "posted_at", "timestamp"}]
-    category_candidates = [col for col in normalized.columns if col.lower() in {"category", "subcategory", "expense_category", "income_category", "type", "transaction_type"}]
-    amount_candidates = [col for col in normalized.columns if col.lower() in {"amount", "value", "price", "transaction_amount", "total"}]
-    description_candidates = [col for col in normalized.columns if col.lower() in {"description", "details", "note", "notes", "memo", "merchant", "payee"}]
-
-    if not date_candidates:
-        raise ValueError("Unable to find a date column in the Kaggle dataset.")
-    if not category_candidates:
-        raise ValueError("Unable to find a category column in the Kaggle dataset.")
-    if not amount_candidates:
-        raise ValueError("Unable to find an amount column in the Kaggle dataset.")
-
-    normalized = normalized.rename(
-        columns={
-            date_candidates[0]: "Date",
-            category_candidates[0]: "Category",
-            amount_candidates[0]: "Amount",
-        }
-    )
-
-    if description_candidates:
-        normalized = normalized.rename(columns={description_candidates[0]: "Description"})
-    else:
-        normalized["Description"] = normalized.get("Category", "")
-
-    normalized["Date"] = pd.to_datetime(normalized["Date"], errors="coerce")
-    normalized["Category"] = normalized["Category"].fillna("Uncategorized").astype(str).str.strip()
-    normalized["Description"] = normalized["Description"].fillna("No description").astype(str).str.strip()
-    normalized["Amount"] = pd.to_numeric(normalized["Amount"], errors="coerce")
-    normalized["Transaction_Type"] = transaction_type
-    normalized = normalized.dropna(subset=["Date", "Category", "Amount"])
-    normalized = normalized[normalized["Amount"] > 0].copy()
-    normalized = normalized.drop_duplicates(subset=["Date", "Category", "Amount", "Description"]).copy()
-    normalized = enrich_transaction_dataframe(normalized)
-    normalized["Type"] = transaction_type
-    return normalized.reset_index(drop=True)
-
-
-def load_and_prepare_kaggle_transactions() -> pd.DataFrame:
-    """Load Kaggle datasets, normalize them, merge them, and return one standardized transaction frame."""
-    dataset_paths = find_dataset_files()
-    frames: list[pd.DataFrame] = []
-    for path in dataset_paths:
-        if path.name.lower().startswith("expenses"):
-            transaction_type = "Expense"
-        elif path.name.lower().startswith("income"):
-            transaction_type = "Income"
-        else:
-            continue
-
-        df = pd.read_csv(path)
-        normalized = normalize_kaggle_dataframe(df, transaction_type)
-        if not normalized.empty:
-            frames.append(normalized)
-
-    if not frames:
-        return pd.DataFrame(columns=["Date", "Category", "Amount", "Transaction_Type", "Description", "Type", "Year", "Month", "Month_Number", "Day", "Day_Name", "Week", "Quarter", "Weekend"])
-
-    merged = pd.concat(frames, ignore_index=True)
-    merged = merged.drop_duplicates(subset=["Date", "Category", "Amount", "Transaction_Type", "Description"]).copy()
-    merged = merged.sort_values("Date").reset_index(drop=True)
-    return merged
-
-
-def seed_kaggle_transactions(db, user_id: int | None = None) -> int:
-    """Load and insert the Kaggle expense dataset into SQLite as standardized transactions."""
-    transactions_df = load_and_prepare_kaggle_transactions()
-    if transactions_df.empty:
-        return 0
-
-    if user_id is None:
-        user_id = 1
-
-    from models import save_transactions
-
-    expense_df = transactions_df[transactions_df["Type"] == "Expense"].copy()
-    return save_transactions(db, user_id, expense_df, source_file="kaggle_seed")
 
 
 def build_dashboard_payload(transactions_df: pd.DataFrame, recent_limit: int = 5, ml_results: dict[str, Any] | None = None) -> dict[str, Any]:
