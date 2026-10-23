@@ -62,6 +62,12 @@
         </div>
       </div>
       <div class="bubble-stack">
+        {% if payload.ml.message %}
+        <div class="bubble subtle">
+          <span class="bubble-title">ML status</span>
+          <p>{{ payload.ml.message }}</p>
+        </div>
+        {% endif %}
         <div class="bubble">
           <span class="bubble-title">AI detected</span>
           <p>{{ payload.insight }}</p>

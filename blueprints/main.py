@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+
 import pandas as pd
 from flask import Blueprint, current_app, flash, redirect, render_template, request, session, url_for
 from werkzeug.utils import secure_filename
@@ -8,7 +9,7 @@ from werkzeug.utils import secure_filename
 from database import get_db
 from ml.pipeline import run_ml_pipeline
 from models import get_user_transactions, save_transactions
-from utils import allowed_file, build_dashboard_payload, clean_transaction_dataframe, load_and_prepare_kaggle_transactions
+from utils import allowed_file, build_dashboard_payload, clean_transaction_dataframe, validate_uploaded_csv
 
 main_bp = Blueprint("main", __name__)
 
@@ -32,28 +33,29 @@ def index():
     return render_template("landing.html")
 
 
+def _transactions_frame(rows: list[dict[str, object]]) -> pd.DataFrame:
+    return pd.DataFrame(
+        [
+            {
+                "Date": row["date"],
+                "Category": row["category"],
+                "Amount": row["amount"],
+                "Type": row["type"],
+                "Description": row["description"],
+            }
+            for row in rows
+        ]
+    )
+
+
 @main_bp.route("/dashboard")
 def dashboard():
     """Render the main dashboard for authenticated users."""
     db = get_db()
     transactions = get_user_transactions(db, session["user_id"])
-    if not transactions:
-        payload = build_dashboard_payload(pd.DataFrame(columns=["Date", "Category", "Amount", "Type", "Description"]))
-    else:
-        df = pd.DataFrame(
-            [
-                {
-                    "Date": row["date"],
-                    "Category": row["category"],
-                    "Amount": row["amount"],
-                    "Type": row["type"],
-                    "Description": row["description"],
-                }
-                for row in transactions
-            ]
-        )
-        ml_results = run_ml_pipeline(df, current_app.config["TRAINED_MODELS_DIR"])
-        payload = build_dashboard_payload(df, ml_results=ml_results)
+    df = _transactions_frame(transactions)
+    ml_results = run_ml_pipeline(df, current_app.config["TRAINED_MODELS_DIR"]) if not df.empty else None
+    payload = build_dashboard_payload(df, ml_results=ml_results)
 
     return render_template("dashboard.html", payload=payload, transactions=transactions)
 
@@ -79,14 +81,12 @@ def upload():
         upload_path = os.path.join(current_app.config["UPLOAD_FOLDER"], filename)
         file.save(upload_path)
 
-        try:
-            df = pd.read_csv(upload_path)
-            cleaned_df = clean_transaction_dataframe(df)
-            db = get_db()
-            save_transactions(db, session["user_id"], cleaned_df, source_file=filename)
-            flash("Transactions imported successfully.", "success")
-        except Exception as exc:
-            flash(f"Import failed: {exc}", "danger")
+        df = pd.read_csv(upload_path)
+        validate_uploaded_csv(df)
+        cleaned_df = clean_transaction_dataframe(df)
+        db = get_db()
+        saved_rows = save_transactions(db, session["user_id"], cleaned_df, source_file=filename)
+        flash(f"Imported {saved_rows} transaction(s) successfully.", "success")
 
         return redirect(url_for("main.dashboard"))
 
