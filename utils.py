@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import math
 from typing import Any
 
 import pandas as pd
@@ -13,6 +14,37 @@ from ml.pipeline import run_ml_pipeline
 
 REQUIRED_COLUMNS = ["Date", "Category", "Amount", "Type", "Description"]
 logger = logging.getLogger(__name__)
+
+
+def format_inr(value: Any, decimals: int | None = None) -> str:
+    """Format a number as rupees with Indian digit grouping, e.g. ₹1,25,000.
+
+    With ``decimals=None`` paise are shown only when the amount has them.
+    """
+    amount = float(value or 0)
+    if decimals is None:
+        decimals = 0 if round(amount, 2) == round(amount) else 2
+    amount = round(amount, decimals)
+    sign = "-" if amount < 0 else ""
+    whole, _, fraction = f"{abs(amount):.{decimals}f}".partition(".")
+    if len(whole) > 3:
+        head, groups = whole[:-3], [whole[-3:]]
+        while head:
+            groups.insert(0, head[-2:])
+            head = head[:-2]
+        whole = ",".join(groups)
+    return f"{sign}₹{whole}" + (f".{fraction}" if fraction else "")
+
+
+def inr_axis(max_value: float, ticks: int = 5) -> dict[str, list]:
+    """Tick positions and ₹ labels for a Plotly axis (Plotly cannot group digits the Indian way)."""
+    if max_value <= 0:
+        return {}
+    raw_step = max_value / ticks
+    magnitude = 10 ** math.floor(math.log10(raw_step))
+    step = next(m * magnitude for m in (1, 2, 2.5, 5, 10) if m * magnitude >= raw_step)
+    values = [step * i for i in range(math.ceil(max_value / step) + 1)]
+    return {"tickvals": values, "ticktext": [format_inr(v, 0) for v in values]}
 
 
 class CSVValidationError(ValueError):
@@ -285,8 +317,8 @@ def build_dashboard_payload(transactions_df: pd.DataFrame, recent_limit: int = 1
                     line=dict(color="#2dd4bf", width=3, shape="spline"),
                     fill="tozeroy",
                     fillcolor="rgba(45, 212, 191, 0.16)",
-                    hovertemplate="<b>%{x}</b><br>Total Expense: $%{y:,.2f}<br>Transactions: %{customdata}<extra></extra>",
-                    customdata=monthly_summary["Count"].tolist(),
+                    hovertemplate="<b>%{x}</b><br>Total expense: %{customdata[0]}<br>Transactions: %{customdata[1]}<extra></extra>",
+                    customdata=[[format_inr(total), count] for total, count in zip(monthly_summary["Total"], monthly_summary["Count"])],
                 )]
             ).update_layout(
                 template="plotly_white",
@@ -295,14 +327,21 @@ def build_dashboard_payload(transactions_df: pd.DataFrame, recent_limit: int = 1
                 plot_bgcolor="rgba(0,0,0,0)",
                 hovermode="x",
                 xaxis=dict(title="Month"),
-                yaxis=dict(title="Total Expense"),
+                yaxis=dict(title="Total expense", **inr_axis(monthly_summary["Total"].max())),
             )
         ),
         "income_vs_expense": plot_div(
             go.Figure(
                 data=[
-                    go.Bar(name="Income", x=monthly_income["Label"], y=monthly_income["Total"], marker_color="#2563eb"),
-                    go.Bar(name="Expense", x=monthly_summary["Label"], y=monthly_summary["Total"], marker_color="#ef4444"),
+                    go.Bar(
+                        name=name,
+                        x=series["Label"],
+                        y=series["Total"],
+                        marker_color=color,
+                        customdata=[format_inr(total) for total in series["Total"]],
+                        hovertemplate=f"{name}: %{{customdata}}<extra></extra>",
+                    )
+                    for name, series, color in (("Income", monthly_income, "#2563eb"), ("Expense", monthly_summary, "#ef4444"))
                 ]
             ).update_layout(
                 barmode="group",
@@ -312,14 +351,18 @@ def build_dashboard_payload(transactions_df: pd.DataFrame, recent_limit: int = 1
                 plot_bgcolor="rgba(0,0,0,0)",
                 hovermode="x unified",
                 legend=dict(orientation="h", y=1.12),
+                yaxis=inr_axis(max(monthly_income["Total"].max(), monthly_summary["Total"].max())),
             )
         ),
         "category_pie": plot_div(
-            px.pie(
-                category_frame,
-                names="Category",
-                values="Total",
-                color_discrete_sequence=px.colors.sequential.Emrld,
+            go.Figure(
+                data=[go.Pie(
+                    labels=category_frame["Category"],
+                    values=category_frame["Total"],
+                    customdata=[format_inr(total) for total in category_frame["Total"]],
+                    hovertemplate="<b>%{label}</b><br>%{customdata}<br>%{percent}<extra></extra>",
+                    marker=dict(colors=px.colors.sequential.Emrld),
+                )]
             ).update_layout(
                 title="Spending Distribution",
                 template="plotly_white",

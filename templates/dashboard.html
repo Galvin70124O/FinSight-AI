@@ -25,15 +25,15 @@
   <section class="kpi-grid" aria-label="Financial metrics">
     <div class="kpi-item">
       <span class="kpi-label">Balance</span>
-      <strong data-counter="{{ payload.metrics.current_balance }}" data-prefix="$" data-decimals="2">$0.00</strong>
+      <strong data-counter="{{ payload.metrics.current_balance }}" data-currency="INR">{{ payload.metrics.current_balance|inr }}</strong>
     </div>
     <div class="kpi-item">
       <span class="kpi-label">Income</span>
-      <strong data-counter="{{ payload.metrics.total_income }}" data-prefix="$" data-decimals="2">$0.00</strong>
+      <strong data-counter="{{ payload.metrics.total_income }}" data-currency="INR">{{ payload.metrics.total_income|inr }}</strong>
     </div>
     <div class="kpi-item">
       <span class="kpi-label">Expenses</span>
-      <strong data-counter="{{ payload.metrics.total_expense }}" data-prefix="$" data-decimals="2">$0.00</strong>
+      <strong data-counter="{{ payload.metrics.total_expense }}" data-currency="INR">{{ payload.metrics.total_expense|inr }}</strong>
     </div>
     <div class="kpi-item">
       <span class="kpi-label">Savings Rate</span>
@@ -82,15 +82,15 @@
         </div>
         <div class="bubble accent">
           <span class="bubble-title">Recommendation</span>
-          <p>Cook at home twice this week to save approximately ${{ "%.2f"|format(payload.ml.expense_prediction.predicted_expense * 0.03) }}.</p>
+          <p>Cook at home twice this week to save approximately {{ (payload.ml.expense_prediction.predicted_expense * 0.03)|inr }}.</p>
         </div>
         <div class="bubble subtle">
           <span class="bubble-title">Prediction</span>
-          <p>Expected spending next month: ${{ "%.2f"|format(payload.ml.expense_prediction.predicted_expense) }}.</p>
+          <p>Expected spending next month: {{ payload.ml.expense_prediction.predicted_expense|inr }}.</p>
         </div>
       </div>
       <div class="insight-stats">
-        <div><span>Average spend</span><strong>${{ "%.2f"|format(payload.summary.average_spending) }}</strong></div>
+        <div><span>Average spend</span><strong>{{ payload.summary.average_spending|inr }}</strong></div>
         <div><span>Top category</span><strong>{{ payload.summary.highest_spending_category }}</strong></div>
         <div><span>Flagged signals</span><strong>{{ payload.ml.anomaly_count }}</strong></div>
       </div>
@@ -163,7 +163,7 @@
               <td>{{ tx['Date'] }}</td>
               <td>{{ tx['Category'] }}</td>
               <td><span class="tx-badge {{ 'expense' if tx['Type'] == 'Expense' else 'income' }}">{{ tx['Type'] }}</span></td>
-              <td class="amount-cell {{ 'expense' if tx['Type'] == 'Expense' else 'income' }}">${{ "%.2f"|format(tx['Amount']) }}</td>
+              <td class="amount-cell {{ 'expense' if tx['Type'] == 'Expense' else 'income' }}">{{ tx['Amount']|inr }}</td>
               <td>{{ tx['Description'] }}</td>
             </tr>
             {% endfor %}
