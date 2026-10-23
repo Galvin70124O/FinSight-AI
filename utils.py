@@ -191,6 +191,41 @@ def enrich_transaction_dataframe(df: pd.DataFrame) -> pd.DataFrame:
     return df.reset_index(drop=True)
 
 
+PERIOD_LABELS = {
+    "M": lambda period: period.strftime("%b %Y"),
+    "Q": lambda period: f"Q{period.quarter} {period.year}",
+    "Y": lambda period: str(period.year),
+}
+
+
+def period_totals(df: pd.DataFrame, freq: str) -> pd.DataFrame:
+    """Sum amounts per calendar period in date order, filling empty periods with 0.
+
+    Grouping by the full period (e.g. Jan 2025) keeps the same month in
+    different years apart.
+    """
+    if df.empty:
+        return pd.DataFrame(columns=["Period", "Label", "Total", "Count"])
+    periods = df["Date"].dt.to_period(freq)
+    grouped = df.groupby(periods)["Amount"].agg(Total="sum", Count="size")
+    full_range = pd.period_range(periods.min(), periods.max(), freq=freq)
+    grouped = grouped.reindex(full_range, fill_value=0)
+    return pd.DataFrame({
+        "Period": full_range,
+        "Label": [PERIOD_LABELS[freq](period) for period in full_range],
+        "Total": grouped["Total"].astype(float).round(2).to_numpy(),
+        "Count": grouped["Count"].astype(int).to_numpy(),
+    })
+
+
+def series_dict(summary: pd.DataFrame) -> dict[str, list]:
+    return {
+        "labels": summary["Label"].tolist(),
+        "values": summary["Total"].tolist(),
+        "counts": summary["Count"].tolist(),
+    }
+
+
 def build_dashboard_payload(transactions_df: pd.DataFrame, recent_limit: int = 5, ml_results: dict[str, Any] | None = None) -> dict[str, Any]:
     """Create layout-ready analytics for the dashboard."""
     if transactions_df is None or transactions_df.empty:
@@ -209,32 +244,9 @@ def build_dashboard_payload(transactions_df: pd.DataFrame, recent_limit: int = 5
     savings_rate = round((current_balance / total_income * 100), 1) if total_income else 0.0
     health_score = round(min(max(100 - (total_expense / total_income * 100 if total_income else 0) * 1.2, 0), 100), 1)
 
-    month_order = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
-    monthly_spending = (
-        expense_df.groupby("Month", sort=False)["Amount"].sum().reindex(month_order, fill_value=0.0)
-    )
-    monthly_counts = (
-        expense_df.groupby("Month", sort=False).size().reindex(month_order, fill_value=0)
-    )
-    monthly_summary = pd.DataFrame({
-        "Month": month_order,
-        "Total_Expense": monthly_spending.values,
-        "Transaction_Count": monthly_counts.values,
-    })
-
-    monthly_summary["Month"] = month_order
-    monthly_summary["Total_Expense"] = monthly_summary["Total_Expense"].astype(float)
-    monthly_summary["Transaction_Count"] = monthly_summary["Transaction_Count"].astype(int)
-
-    quarterly_groups = expense_df.groupby("Quarter", sort=True).agg(Total_Expense=("Amount", "sum"), Transaction_Count=("Amount", "size"))
-    quarterly_labels = [f"Q{quarter}" for quarter in quarterly_groups.index.tolist()]
-    quarterly_values = quarterly_groups["Total_Expense"].astype(float).tolist()
-    quarterly_counts = quarterly_groups["Transaction_Count"].astype(int).tolist()
-
-    yearly_groups = expense_df.groupby("Year", sort=True).agg(Total_Expense=("Amount", "sum"), Transaction_Count=("Amount", "size"))
-    yearly_labels = [str(year) for year in yearly_groups.index.tolist()]
-    yearly_values = yearly_groups["Total_Expense"].astype(float).tolist()
-    yearly_counts = yearly_groups["Transaction_Count"].astype(int).tolist()
+    monthly_summary = period_totals(expense_df, "M")
+    quarterly_summary = period_totals(expense_df, "Q")
+    yearly_summary = period_totals(expense_df, "Y")
 
     category_totals = expense_df.groupby("Category")["Amount"].sum().sort_values(ascending=False)
     highest_spending_category = category_totals.index[0] if not category_totals.empty else "N/A"
@@ -260,14 +272,14 @@ def build_dashboard_payload(transactions_df: pd.DataFrame, recent_limit: int = 5
         "monthly_expense": plot_div(
             go.Figure(
                 data=[go.Scatter(
-                    x=monthly_summary["Month"],
-                    y=monthly_summary["Total_Expense"],
+                    x=monthly_summary["Label"],
+                    y=monthly_summary["Total"],
                     mode="lines",
                     line=dict(color="#2dd4bf", width=3, shape="spline"),
                     fill="tozeroy",
                     fillcolor="rgba(45, 212, 191, 0.16)",
                     hovertemplate="<b>%{x}</b><br>Total Expense: $%{y:,.2f}<br>Transactions: %{customdata}<extra></extra>",
-                    customdata=monthly_summary["Transaction_Count"].tolist(),
+                    customdata=monthly_summary["Count"].tolist(),
                 )]
             ).update_layout(
                 template="plotly_white",
@@ -323,24 +335,12 @@ def build_dashboard_payload(transactions_df: pd.DataFrame, recent_limit: int = 5
         "summary": {
             "average_spending": average_spending,
             "highest_spending_category": highest_spending_category,
-            "monthly_spending_trend": monthly_summary.to_dict("records"),
+            "monthly_spending_trend": monthly_summary.drop(columns="Period").to_dict("records"),
             "category_distribution": category_frame.to_dict("records"),
             "chart_series": {
-                "monthly": {
-                    "labels": monthly_summary["Month"].tolist(),
-                    "values": monthly_summary["Total_Expense"].round(2).tolist(),
-                    "counts": monthly_summary["Transaction_Count"].astype(int).tolist(),
-                },
-                "quarterly": {
-                    "labels": quarterly_labels,
-                    "values": [round(float(value), 2) for value in quarterly_values],
-                    "counts": quarterly_counts,
-                },
-                "yearly": {
-                    "labels": yearly_labels,
-                    "values": [round(float(value), 2) for value in yearly_values],
-                    "counts": yearly_counts,
-                },
+                "monthly": series_dict(monthly_summary),
+                "quarterly": series_dict(quarterly_summary),
+                "yearly": series_dict(yearly_summary),
             },
         },
         "ml": {
