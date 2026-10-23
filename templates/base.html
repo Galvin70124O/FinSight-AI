@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="theme-color" content="#07111f">
+    <meta name="theme-color" content="#0b0f14">
     <title>FinSight AI</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
@@ -103,6 +103,12 @@
               <span>{{ 'Signed in' if session.get('user_id') else 'Guest mode' }}</span>
             </div>
           </div>
+          {% if session.get('user_id') %}
+          <form method="post" action="{{ url_for('auth.logout') }}" class="logout-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button class="ghost-button logout-button" type="submit">Log out</button>
+          </form>
+          {% endif %}
         </div>
       </aside>
 

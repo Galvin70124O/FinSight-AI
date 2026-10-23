@@ -1,96 +1,81 @@
 from __future__ import annotations
 
-import os
-import pickle
 from dataclasses import dataclass
-from pathlib import Path
-from typing import Any
 
+import numpy as np
 import pandas as pd
+from scipy import stats
 from sklearn.linear_model import LinearRegression
+
+MIN_MONTHS = 3
+CONFIDENT_MONTHS = 6
+INTERVAL = 0.80
 
 
 @dataclass
-class ExpensePredictionResult:
-    """Container for prediction output."""
+class ExpenseForecast:
+    """Next month's expected spending with an 80% prediction interval."""
 
-    next_month: str
-    predicted_expense: float
-    confidence: float
-
-
-class ExpensePredictionModel:
-    """Simple linear regression model for expense forecasting."""
-
-    def __init__(self) -> None:
-        self.model = LinearRegression()
-        self.history: list[float] = []
-
-    def fit(self, monthly_expenses: pd.Series) -> "ExpensePredictionModel":
-        """Train a linear-regression based expense policy."""
-        values = monthly_expenses.astype(float).tolist()
-        if len(values) < 2:
-            raise ValueError("At least two monthly points are required for training.")
-        self.history = values
-        x = [[i] for i in range(len(values))]
-        y = values
-        self.model.fit(x, y)
-        return self
-
-    def predict(self, horizon: int = 1) -> float:
-        """Predict the next expense value."""
-        if not self.history:
-            raise ValueError("The model has not been trained yet.")
-        next_index = len(self.history)
-        prediction = self.model.predict([[next_index]])[0]
-        return max(float(prediction), 0.0)
-
-    def save(self, path: str) -> None:
-        """Persist the fitted model to disk."""
-        with open(path, "wb") as handle:
-            pickle.dump(self, handle)
-
-    @classmethod
-    def load(cls, path: str) -> "ExpensePredictionModel":
-        """Load a previously stored model."""
-        with open(path, "rb") as handle:
-            return pickle.load(handle)
+    enough_data: bool
+    months_used: int
+    month: str | None = None
+    predicted: float | None = None
+    low: float | None = None
+    high: float | None = None
+    low_confidence: bool = False
+    message: str = ""
 
 
-def train_expense_prediction(transactions_df: pd.DataFrame, model_path: str | None = None) -> ExpensePredictionResult:
-    """Create a forecast for the next month from historical expense totals."""
-    expenses = transactions_df[transactions_df["Type"] == "Expense"].copy()
-    if expenses.empty:
-        return ExpensePredictionResult(next_month="N/A", predicted_expense=0.0, confidence=0.0)
+def monthly_expense_totals(transactions_df: pd.DataFrame) -> pd.Series:
+    """Total expenses per year-month, oldest first, with months without spending as 0.
 
-    if {"Year", "Month_Number"}.issubset(expenses.columns):
-        monthly_totals = (
-            expenses.groupby(["Year", "Month_Number"], as_index=False)["Amount"].sum().sort_values(["Year", "Month_Number"])
+    The range runs from the first to the last month with any transaction, so a
+    month with only income still counts as a month of history.
+    """
+    if transactions_df.empty:
+        return pd.Series(dtype=float)
+    dates = pd.to_datetime(transactions_df["Date"])
+    months = pd.period_range(dates.min().to_period("M"), dates.max().to_period("M"), freq="M")
+    expenses = transactions_df[transactions_df["Type"] == "Expense"]
+    totals = expenses.groupby(pd.to_datetime(expenses["Date"]).dt.to_period("M"))["Amount"].sum()
+    return totals.reindex(months, fill_value=0.0).astype(float)
+
+
+def forecast_expenses(transactions_df: pd.DataFrame) -> ExpenseForecast:
+    """Fit a straight-line trend to monthly totals and forecast the next month.
+
+    The range is a standard regression prediction interval built from how far
+    past months sat from the trend line, so it widens when spending is erratic
+    or history is short.
+    """
+    totals = monthly_expense_totals(transactions_df)
+    n = len(totals)
+    if n < MIN_MONTHS:
+        return ExpenseForecast(
+            enough_data=False,
+            months_used=n,
+            message=f"Need at least {MIN_MONTHS} months of data to forecast spending (you have {n}).",
         )
-        monthly_values = monthly_totals["Amount"].astype(float)
-        period_label = f"{int(monthly_totals.iloc[-1]['Year'])}-{int(monthly_totals.iloc[-1]['Month_Number']):02d}"
-    elif "Month" in expenses.columns:
-        monthly_totals = expenses.groupby("Month")["Amount"].sum().sort_index()
-        monthly_values = monthly_totals.astype(float)
-        period_label = str(monthly_totals.index[-1])
-    else:
-        expenses = expenses.copy()
-        expenses["Month"] = pd.to_datetime(expenses["Date"], errors="coerce").dt.strftime("%Y-%m")
-        monthly_totals = expenses.groupby("Month")["Amount"].sum().sort_index()
-        monthly_values = monthly_totals.astype(float)
-        period_label = str(monthly_totals.index[-1])
 
-    if monthly_values.empty:
-        return ExpensePredictionResult(next_month="N/A", predicted_expense=0.0, confidence=0.0)
+    x = np.arange(n, dtype=float)
+    y = totals.to_numpy()
+    model = LinearRegression().fit(x.reshape(-1, 1), y)
+    predicted = float(model.predict([[n]])[0])
 
-    model = ExpensePredictionModel().fit(monthly_values)
-    predicted_expense = model.predict()
-    if model_path:
-        Path(os.path.dirname(model_path)).mkdir(parents=True, exist_ok=True)
-        model.save(model_path)
+    residuals = y - model.predict(x.reshape(-1, 1))
+    dof = n - 2
+    residual_std = float(np.sqrt(np.sum(residuals**2) / dof))
+    leverage = 1 + 1 / n + (n - x.mean()) ** 2 / np.sum((x - x.mean()) ** 2)
+    margin = float(stats.t.ppf(0.5 + INTERVAL / 2, dof)) * residual_std * float(np.sqrt(leverage))
 
-    return ExpensePredictionResult(
-        next_month=period_label,
-        predicted_expense=round(predicted_expense, 2),
-        confidence=0.82,
+    low_confidence = n < CONFIDENT_MONTHS
+    return ExpenseForecast(
+        enough_data=True,
+        months_used=n,
+        month=(totals.index[-1] + 1).strftime("%b %Y"),
+        predicted=round(max(predicted, 0.0), 2),
+        low=round(max(predicted - margin, 0.0), 2),
+        high=round(max(predicted + margin, 0.0), 2),
+        low_confidence=low_confidence,
+        message=f"Low confidence: based on only {n} months." if low_confidence else f"Based on {n} months of history.",
     )

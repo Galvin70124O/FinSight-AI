@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from typing import Any
 
 import pandas as pd
@@ -58,12 +59,12 @@ def _normalize_transaction_signature(date_value: Any, category: Any, amount: Any
 def create_user(db, username: str, email: str, password: str) -> int:
     """Persist a new user with a hashed password."""
     password_hash = generate_password_hash(password)
-    cursor = db.execute(
-        "INSERT INTO users (username, email, password_hash) VALUES (?, ?, ?)",
+    row = db.execute(
+        "INSERT INTO users (username, email, password_hash) VALUES (?, ?, ?) RETURNING id",
         (username, email, password_hash),
-    )
+    ).fetchone()
     db.commit()
-    return cursor.lastrowid
+    return row[0]
 
 
 def get_user_by_username(db, username: str) -> User | None:
@@ -184,3 +185,21 @@ def get_user_transactions(db, user_id: int):
         """,
         (user_id,),
     ).fetchall()
+
+
+def get_cached_insights(db, user_id: int) -> dict | None:
+    """Return the insights stored for a user, or None if they were never computed."""
+    row = db.execute("SELECT payload FROM user_insights WHERE user_id = ?", (user_id,)).fetchone()
+    return json.loads(row["payload"]) if row is not None else None
+
+
+def save_insights(db, user_id: int, insights: dict) -> None:
+    """Store a user's computed insights, replacing any previous ones."""
+    db.execute(
+        """
+        INSERT INTO user_insights (user_id, computed_at, payload) VALUES (?, ?, ?)
+        ON CONFLICT (user_id) DO UPDATE SET computed_at = excluded.computed_at, payload = excluded.payload
+        """,
+        (user_id, datetime.now(timezone.utc).isoformat(timespec="seconds"), json.dumps(insights)),
+    )
+    db.commit()

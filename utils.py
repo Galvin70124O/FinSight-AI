@@ -1,8 +1,7 @@
 from __future__ import annotations
 
-import json
-import os
-from pathlib import Path
+import logging
+import math
 from typing import Any
 
 import pandas as pd
@@ -10,29 +9,92 @@ import plotly.express as px
 import plotly.graph_objects as go
 from flask import current_app
 
-from ml.pipeline import run_ml_pipeline
-
 
 REQUIRED_COLUMNS = ["Date", "Category", "Amount", "Type", "Description"]
-KAGGLE_DATASET_FILES = ["Expenses_clean.csv", "Income_clean.csv"]
+logger = logging.getLogger(__name__)
 
 
-def find_dataset_files(base_dir: str | None = None) -> list[Path]:
-    """Locate Kaggle dataset files in the project root or dataset folder."""
-    search_roots = []
-    if base_dir:
-        search_roots.append(Path(base_dir))
-    search_roots.extend([Path(__file__).resolve().parent, Path(__file__).resolve().parent / "dataset"])
+def format_inr(value: Any, decimals: int | None = None) -> str:
+    """Format a number as rupees with Indian digit grouping, e.g. ₹1,25,000.
 
-    discovered: list[Path] = []
-    seen: set[Path] = set()
-    for root in search_roots:
-        for file_name in KAGGLE_DATASET_FILES:
-            candidate = root / file_name
-            if candidate.exists() and candidate not in seen:
-                discovered.append(candidate)
-                seen.add(candidate)
-    return discovered
+    With ``decimals=None`` paise are shown only when the amount has them.
+    """
+    amount = float(value or 0)
+    if decimals is None:
+        decimals = 0 if round(amount, 2) == round(amount) else 2
+    amount = round(amount, decimals)
+    sign = "-" if amount < 0 else ""
+    whole, _, fraction = f"{abs(amount):.{decimals}f}".partition(".")
+    if len(whole) > 3:
+        head, groups = whole[:-3], [whole[-3:]]
+        while head:
+            groups.insert(0, head[-2:])
+            head = head[:-2]
+        whole = ",".join(groups)
+    return f"{sign}₹{whole}" + (f".{fraction}" if fraction else "")
+
+
+def inr_axis(max_value: float, ticks: int = 5) -> dict[str, list]:
+    """Tick positions and ₹ labels for a Plotly axis (Plotly cannot group digits the Indian way)."""
+    if max_value <= 0:
+        return {}
+    raw_step = max_value / ticks
+    magnitude = 10 ** math.floor(math.log10(raw_step))
+    step = next(m * magnitude for m in (1, 2, 2.5, 5, 10) if m * magnitude >= raw_step)
+    values = [step * i for i in range(math.ceil(max_value / step) + 1)]
+    return {"tickvals": values, "ticktext": [format_inr(v, 0) for v in values]}
+
+
+class CSVValidationError(ValueError):
+    """Raised when an uploaded CSV fails validation."""
+
+
+def empty_dashboard_payload() -> dict[str, Any]:
+    """Return the default dashboard payload."""
+    return {
+        "metrics": {
+            "total_income": 0.0,
+            "total_expense": 0.0,
+            "current_balance": 0.0,
+            "savings_rate": 0.0,
+            "health_score": None,
+        },
+        "recent_transactions": [],
+        "insight": "Upload a transaction file to begin generating insights.",
+        "charts": {},
+        "summary": {
+            "average_spending": 0.0,
+            "highest_spending_category": "N/A",
+            "monthly_spending_trend": [],
+            "category_distribution": [],
+            "income_vs_expense": {"labels": [], "income": [], "expense": []},
+            "chart_series": {
+                "monthly": {"labels": [], "values": [], "counts": []},
+                "quarterly": {"labels": [], "values": [], "counts": []},
+                "yearly": {"labels": [], "values": [], "counts": []},
+            },
+        },
+        "insights": {"forecast": None, "anomalies": [], "health": None, "tip": None},
+    }
+
+
+def spending_tip(expense_df: pd.DataFrame, months: int) -> dict[str, Any] | None:
+    """A concrete tip about the largest expense category whose amounts vary.
+
+    Categories where every payment is identical (rent, a fixed subscription)
+    are skipped because they cannot be trimmed week to week.
+    """
+    variable = [category for category, group in expense_df.groupby("Category") if group["Amount"].nunique() > 1]
+    if not variable or months < 1:
+        return None
+    totals = expense_df[expense_df["Category"].isin(variable)].groupby("Category")["Amount"].sum().sort_values(ascending=False)
+    monthly_average = float(totals.iloc[0]) / months
+    return {
+        "category": str(totals.index[0]),
+        "monthly_average": round(monthly_average, 2),
+        "share": round(float(totals.iloc[0]) / float(expense_df["Amount"].sum()) * 100, 1),
+        "saving": round(monthly_average * 0.10, 2),
+    }
 
 
 def allowed_file(filename: str) -> bool:
@@ -43,14 +105,20 @@ def allowed_file(filename: str) -> bool:
 def clean_transaction_dataframe(df: pd.DataFrame) -> pd.DataFrame:
     """Validate, clean, and standardize uploaded transaction data."""
     if df is None:
-        raise ValueError("The uploaded file is empty.")
+        raise CSVValidationError("The uploaded file is empty.")
+
+    if not isinstance(df, pd.DataFrame):
+        raise CSVValidationError("Uploaded file could not be read as a table.")
+
+    if df.empty:
+        raise CSVValidationError("The uploaded CSV is empty.")
 
     df = df.copy()
     df.columns = [str(col).strip() for col in df.columns]
 
     missing_columns = [col for col in REQUIRED_COLUMNS if col not in df.columns]
     if missing_columns:
-        raise ValueError(f"Missing required columns: {', '.join(missing_columns)}")
+        raise CSVValidationError(f"Missing required columns: {', '.join(missing_columns)}")
 
     df = df.loc[:, REQUIRED_COLUMNS].copy()
     df = df.drop_duplicates()
@@ -66,30 +134,56 @@ def clean_transaction_dataframe(df: pd.DataFrame) -> pd.DataFrame:
     df = df[df["Type"].isin(["Income", "Expense"])].copy()
 
     if df.empty:
-        raise ValueError("No valid transactions remained after cleaning. Please review the uploaded CSV.")
+        raise CSVValidationError("No valid transactions remained after cleaning. Please review the uploaded CSV.")
 
     df = enrich_transaction_dataframe(df)
     return df.reset_index(drop=True)
 
 
-def prepare_expense_transactions(transactions_df: pd.DataFrame) -> pd.DataFrame:
-    """Normalize and deduplicate expense transactions for analytics and charting."""
+def read_uploaded_csv(stream) -> pd.DataFrame:
+    """Parse an uploaded CSV stream, turning parser errors into user-facing messages."""
+    try:
+        return pd.read_csv(stream)
+    except pd.errors.EmptyDataError as exc:
+        raise CSVValidationError("The uploaded file is empty.") from exc
+    except (pd.errors.ParserError, UnicodeDecodeError) as exc:
+        raise CSVValidationError("The file could not be read as a CSV. Save it as UTF-8 CSV and try again.") from exc
+
+
+def validate_uploaded_csv(df: pd.DataFrame) -> None:
+    """Validate the CSV shape before deeper processing starts."""
+    if not isinstance(df, pd.DataFrame):
+        raise CSVValidationError("The uploaded file is not a valid CSV table.")
+    if df.empty:
+        raise CSVValidationError("The uploaded CSV does not contain any rows.")
+
+    required_columns = [column.lower() for column in REQUIRED_COLUMNS]
+    normalized_columns = {str(column).strip().lower() for column in df.columns}
+    missing = [column for column in required_columns if column not in normalized_columns]
+    if missing:
+        raise CSVValidationError("Missing required columns: " + ", ".join(column.title() for column in missing))
+
+
+def normalize_transaction_columns(df: pd.DataFrame) -> pd.DataFrame:
+    """Standardize transaction column names."""
+    rename_map = {
+        "date": "Date",
+        "category": "Category",
+        "amount": "Amount",
+        "type": "Type",
+        "description": "Description",
+    }
+    normalized = df.copy()
+    normalized.columns = [str(col).strip() for col in normalized.columns]
+    return normalized.rename(columns={column: rename_map[column.lower()] for column in normalized.columns if column.lower() in rename_map})
+
+
+def prepare_transactions(transactions_df: pd.DataFrame) -> pd.DataFrame:
+    """Normalize and deduplicate income and expense transactions for analytics and charting."""
     if transactions_df is None or transactions_df.empty:
         return pd.DataFrame(columns=["Date", "Category", "Amount", "Type", "Description", "Year", "Month", "Month_Number", "Day", "Day_Name", "Week", "Quarter", "Weekend"])
 
-    df = transactions_df.copy()
-    df.columns = [str(col).strip() for col in df.columns]
-
-    if "Date" not in df.columns and "date" in df.columns:
-        df = df.rename(columns={"date": "Date"})
-    if "Category" not in df.columns and "category" in df.columns:
-        df = df.rename(columns={"category": "Category"})
-    if "Amount" not in df.columns and "amount" in df.columns:
-        df = df.rename(columns={"amount": "Amount"})
-    if "Type" not in df.columns and "type" in df.columns:
-        df = df.rename(columns={"type": "Type"})
-    if "Description" not in df.columns and "description" in df.columns:
-        df = df.rename(columns={"description": "Description"})
+    df = normalize_transaction_columns(transactions_df)
 
     if "Date" not in df.columns:
         return pd.DataFrame(columns=["Date", "Category", "Amount", "Type", "Description", "Year", "Month", "Month_Number", "Day", "Day_Name", "Week", "Quarter", "Weekend"])
@@ -109,7 +203,7 @@ def prepare_expense_transactions(transactions_df: pd.DataFrame) -> pd.DataFrame:
 
     df = df.dropna(subset=["Date", "Category", "Amount", "Type"]).copy()
     df = df[df["Amount"] > 0].copy()
-    df = df[df["Type"].isin(["Expense"])].copy()
+    df = df[df["Type"].isin(["Income", "Expense"])].copy()
     df = df.drop_duplicates(subset=["Date", "Category", "Amount", "Type", "Description"], keep="first")
 
     if df.empty:
@@ -142,216 +236,126 @@ def enrich_transaction_dataframe(df: pd.DataFrame) -> pd.DataFrame:
     return df.reset_index(drop=True)
 
 
-def normalize_kaggle_dataframe(df: pd.DataFrame, transaction_type: str) -> pd.DataFrame:
-    """Map Kaggle-style columns into the application's standard transaction schema."""
-    if df is None or df.empty:
-        return pd.DataFrame(columns=["Date", "Category", "Amount", "Transaction_Type", "Description"])
-
-    normalized = df.copy()
-    normalized.columns = [str(col).strip() for col in normalized.columns]
-
-    date_candidates = [col for col in normalized.columns if col.lower() in {"date", "date_time", "datetime", "transaction_date", "posted_at", "timestamp"}]
-    category_candidates = [col for col in normalized.columns if col.lower() in {"category", "subcategory", "expense_category", "income_category", "type", "transaction_type"}]
-    amount_candidates = [col for col in normalized.columns if col.lower() in {"amount", "value", "price", "transaction_amount", "total"}]
-    description_candidates = [col for col in normalized.columns if col.lower() in {"description", "details", "note", "notes", "memo", "merchant", "payee"}]
-
-    if not date_candidates:
-        raise ValueError("Unable to find a date column in the Kaggle dataset.")
-    if not category_candidates:
-        raise ValueError("Unable to find a category column in the Kaggle dataset.")
-    if not amount_candidates:
-        raise ValueError("Unable to find an amount column in the Kaggle dataset.")
-
-    normalized = normalized.rename(
-        columns={
-            date_candidates[0]: "Date",
-            category_candidates[0]: "Category",
-            amount_candidates[0]: "Amount",
-        }
-    )
-
-    if description_candidates:
-        normalized = normalized.rename(columns={description_candidates[0]: "Description"})
-    else:
-        normalized["Description"] = normalized.get("Category", "")
-
-    normalized["Date"] = pd.to_datetime(normalized["Date"], errors="coerce")
-    normalized["Category"] = normalized["Category"].fillna("Uncategorized").astype(str).str.strip()
-    normalized["Description"] = normalized["Description"].fillna("No description").astype(str).str.strip()
-    normalized["Amount"] = pd.to_numeric(normalized["Amount"], errors="coerce")
-    normalized["Transaction_Type"] = transaction_type
-    normalized = normalized.dropna(subset=["Date", "Category", "Amount"])
-    normalized = normalized[normalized["Amount"] > 0].copy()
-    normalized = normalized.drop_duplicates(subset=["Date", "Category", "Amount", "Description"]).copy()
-    normalized = enrich_transaction_dataframe(normalized)
-    normalized["Type"] = transaction_type
-    return normalized.reset_index(drop=True)
+PERIOD_LABELS = {
+    "M": lambda period: period.strftime("%b %Y"),
+    "Q": lambda period: f"Q{period.quarter} {period.year}",
+    "Y": lambda period: str(period.year),
+}
 
 
-def load_and_prepare_kaggle_transactions() -> pd.DataFrame:
-    """Load Kaggle datasets, normalize them, merge them, and return one standardized transaction frame."""
-    dataset_paths = find_dataset_files()
-    frames: list[pd.DataFrame] = []
-    for path in dataset_paths:
-        if path.name.lower().startswith("expenses"):
-            transaction_type = "Expense"
-        elif path.name.lower().startswith("income"):
-            transaction_type = "Income"
-        else:
-            continue
+def period_totals(df: pd.DataFrame, freq: str, start=None, end=None) -> pd.DataFrame:
+    """Sum amounts per calendar period in date order, filling empty periods with 0.
 
-        df = pd.read_csv(path)
-        normalized = normalize_kaggle_dataframe(df, transaction_type)
-        if not normalized.empty:
-            frames.append(normalized)
-
-    if not frames:
-        return pd.DataFrame(columns=["Date", "Category", "Amount", "Transaction_Type", "Description", "Type", "Year", "Month", "Month_Number", "Day", "Day_Name", "Week", "Quarter", "Weekend"])
-
-    merged = pd.concat(frames, ignore_index=True)
-    merged = merged.drop_duplicates(subset=["Date", "Category", "Amount", "Transaction_Type", "Description"]).copy()
-    merged = merged.sort_values("Date").reset_index(drop=True)
-    return merged
+    Grouping by the full period (e.g. Jan 2025) keeps the same month in
+    different years apart. ``start``/``end`` widen the range so several
+    series can share one axis.
+    """
+    periods = df["Date"].dt.to_period(freq)
+    start = start if start is not None else (periods.min() if not df.empty else None)
+    end = end if end is not None else (periods.max() if not df.empty else None)
+    if start is None or end is None:
+        return pd.DataFrame(columns=["Period", "Label", "Total", "Count"])
+    grouped = df.groupby(periods)["Amount"].agg(Total="sum", Count="size")
+    full_range = pd.period_range(start, end, freq=freq)
+    grouped = grouped.reindex(full_range, fill_value=0)
+    return pd.DataFrame({
+        "Period": full_range,
+        "Label": [PERIOD_LABELS[freq](period) for period in full_range],
+        "Total": grouped["Total"].astype(float).round(2).to_numpy(),
+        "Count": grouped["Count"].astype(int).to_numpy(),
+    })
 
 
-def seed_kaggle_transactions(db, user_id: int | None = None) -> int:
-    """Load and insert the Kaggle expense dataset into SQLite as standardized transactions."""
-    transactions_df = load_and_prepare_kaggle_transactions()
-    if transactions_df.empty:
-        return 0
-
-    if user_id is None:
-        user_id = 1
-
-    from models import save_transactions
-
-    expense_df = transactions_df[transactions_df["Type"] == "Expense"].copy()
-    return save_transactions(db, user_id, expense_df, source_file="kaggle_seed")
+def series_dict(summary: pd.DataFrame) -> dict[str, list]:
+    return {
+        "labels": summary["Label"].tolist(),
+        "values": summary["Total"].tolist(),
+        "counts": summary["Count"].tolist(),
+    }
 
 
-def build_dashboard_payload(transactions_df: pd.DataFrame, recent_limit: int = 5, ml_results: dict[str, Any] | None = None) -> dict[str, Any]:
-    """Create layout-ready analytics for the dashboard."""
+def spending_view(summary: pd.DataFrame, axis_title: str) -> dict[str, Any]:
+    """One Month/Quarter/Year view of the spending chart, ready for Plotly.update."""
+    axis = inr_axis(summary["Total"].max() if not summary.empty else 0)
+    return {
+        "x": summary["Label"].tolist(),
+        "y": summary["Total"].tolist(),
+        "customdata": [[format_inr(total), int(count)] for total, count in zip(summary["Total"], summary["Count"])],
+        "tickvals": axis.get("tickvals", []),
+        "ticktext": axis.get("ticktext", []),
+        "axis_title": axis_title,
+    }
+
+
+def build_dashboard_payload(transactions_df: pd.DataFrame, insights: dict[str, Any] | None = None, recent_limit: int = 10) -> dict[str, Any]:
+    """Create layout-ready analytics for the dashboard.
+
+    ``insights`` is the cached output of ml.pipeline.compute_insights for this user.
+    """
     if transactions_df is None or transactions_df.empty:
-        return {
-            "metrics": {
-                "total_income": 0.0,
-                "total_expense": 0.0,
-                "current_balance": 0.0,
-                "savings_rate": 0.0,
-                "health_score": 0.0,
-            },
-            "recent_transactions": [],
-            "insight": "Upload a transaction file to begin generating AI insights.",
-            "charts": {},
-            "summary": {
-                "average_spending": 0.0,
-                "highest_spending_category": "N/A",
-                "monthly_spending_trend": [],
-                "category_distribution": [],
-                "chart_series": {"monthly": {"labels": [], "values": [], "counts": []}, "quarterly": {"labels": [], "values": [], "counts": []}, "yearly": {"labels": [], "values": [], "counts": []}},
-            },
-            "ml": {
-                "expense_prediction": {"next_month": "N/A", "predicted_expense": 0.0, "confidence": 0.0},
-                "health_score": {"score": 0.0, "label": "Needs Attention"},
-                "anomaly_count": 0,
-            },
-        }
+        return empty_dashboard_payload()
 
-    transactions_df = prepare_expense_transactions(transactions_df)
+    transactions_df = prepare_transactions(transactions_df)
     if transactions_df.empty:
-        return {
-            "metrics": {
-                "total_income": 0.0,
-                "total_expense": 0.0,
-                "current_balance": 0.0,
-                "savings_rate": 0.0,
-                "health_score": 0.0,
-            },
-            "recent_transactions": [],
-            "insight": "Upload a transaction file to begin generating AI insights.",
-            "charts": {},
-            "summary": {
-                "average_spending": 0.0,
-                "highest_spending_category": "N/A",
-                "monthly_spending_trend": [],
-                "category_distribution": [],
-                "chart_series": {"monthly": {"labels": [], "values": [], "counts": []}, "quarterly": {"labels": [], "values": [], "counts": []}, "yearly": {"labels": [], "values": [], "counts": []}},
-            },
-            "ml": {
-                "expense_prediction": {"next_month": "N/A", "predicted_expense": 0.0, "confidence": 0.0},
-                "health_score": {"score": 0.0, "label": "Needs Attention"},
-                "anomaly_count": 0,
-            },
-        }
+        return empty_dashboard_payload()
 
-    expense_df = transactions_df.copy()
-    income_df = pd.DataFrame(columns=["Amount"])
+    income_df = transactions_df[transactions_df["Type"] == "Income"]
+    expense_df = transactions_df[transactions_df["Type"] == "Expense"]
 
-    total_income = float(income_df["Amount"].sum()) if not income_df.empty else 0.0
+    total_income = float(income_df["Amount"].sum())
     total_expense = float(expense_df["Amount"].sum())
     current_balance = total_income - total_expense
     savings_rate = round((current_balance / total_income * 100), 1) if total_income else 0.0
-    health_score = round(min(max(100 - (total_expense / total_income * 100 if total_income else 0) * 1.2, 0), 100), 1)
+    insights = insights or {}
+    health = insights.get("health")
 
-    month_order = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
-    monthly_spending = (
-        expense_df.groupby("Month", sort=False)["Amount"].sum().reindex(month_order, fill_value=0.0)
-    )
-    monthly_counts = (
-        expense_df.groupby("Month", sort=False).size().reindex(month_order, fill_value=0)
-    )
-    monthly_summary = pd.DataFrame({
-        "Month": month_order,
-        "Total_Expense": monthly_spending.values,
-        "Transaction_Count": monthly_counts.values,
-    })
-
-    monthly_summary["Month"] = month_order
-    monthly_summary["Total_Expense"] = monthly_summary["Total_Expense"].astype(float)
-    monthly_summary["Transaction_Count"] = monthly_summary["Transaction_Count"].astype(int)
-
-    quarterly_groups = expense_df.groupby("Quarter", sort=True).agg(Total_Expense=("Amount", "sum"), Transaction_Count=("Amount", "size"))
-    quarterly_labels = [f"Q{quarter}" for quarter in quarterly_groups.index.tolist()]
-    quarterly_values = quarterly_groups["Total_Expense"].astype(float).tolist()
-    quarterly_counts = quarterly_groups["Transaction_Count"].astype(int).tolist()
-
-    yearly_groups = expense_df.groupby("Year", sort=True).agg(Total_Expense=("Amount", "sum"), Transaction_Count=("Amount", "size"))
-    yearly_labels = [str(year) for year in yearly_groups.index.tolist()]
-    yearly_values = yearly_groups["Total_Expense"].astype(float).tolist()
-    yearly_counts = yearly_groups["Transaction_Count"].astype(int).tolist()
+    # Every series spans the same months, from the first to the last transaction.
+    first_month = transactions_df["Date"].min().to_period("M")
+    last_month = transactions_df["Date"].max().to_period("M")
+    monthly_summary = period_totals(expense_df, "M", first_month, last_month)
+    monthly_income = period_totals(income_df, "M", first_month, last_month)
+    quarterly_summary = period_totals(expense_df, "Q", first_month.asfreq("Q"), last_month.asfreq("Q"))
+    yearly_summary = period_totals(expense_df, "Y", first_month.asfreq("Y"), last_month.asfreq("Y"))
 
     category_totals = expense_df.groupby("Category")["Amount"].sum().sort_values(ascending=False)
     highest_spending_category = category_totals.index[0] if not category_totals.empty else "N/A"
     average_spending = round(float(expense_df["Amount"].mean()), 2) if not expense_df.empty else 0.0
 
-    recent_transactions_df = expense_df.sort_values("Date", ascending=False).head(recent_limit).copy()
+    recent_transactions_df = transactions_df.sort_values("Date", ascending=False).head(recent_limit).copy()
     recent_transactions_df["Date"] = recent_transactions_df["Date"].dt.strftime("%Y-%m-%d")
     recent_transactions = recent_transactions_df.to_dict("records")
 
     category_frame = category_totals.reset_index()
     category_frame.columns = ["Category", "Total"]
 
-    insight = (
-        "Your finances are strong. Keep spending disciplined and increase the share of income directed to savings."
-        if health_score >= 75
-        else "Your spending is trending higher than ideal. Consider tightening discretionary categories."
-    )
+    months = len(monthly_summary)
+    if total_income:
+        insight = (
+            f"Over {months} month(s) you earned {format_inr(total_income)} and spent "
+            f"{format_inr(total_expense)}, keeping {savings_rate}% of your income."
+        )
+    else:
+        insight = f"You have recorded {format_inr(total_expense)} of spending. Add income transactions to see your savings rate."
 
-    if ml_results is None:
-        ml_results = run_ml_pipeline(expense_df, current_app.config["TRAINED_MODELS_DIR"])
+    # The Month/Quarter/Year buttons swap these views into the spending chart.
+    spending_views = {
+        "month": spending_view(monthly_summary, "Month"),
+        "quarter": spending_view(quarterly_summary, "Quarter"),
+        "year": spending_view(yearly_summary, "Year"),
+    }
 
     charts = {
         "monthly_expense": plot_div(
             go.Figure(
                 data=[go.Scatter(
-                    x=monthly_summary["Month"],
-                    y=monthly_summary["Total_Expense"],
-                    mode="lines",
-                    line=dict(color="#2dd4bf", width=3, shape="spline"),
+                    x=spending_views["month"]["x"],
+                    y=spending_views["month"]["y"],
+                    mode="lines+markers",
+                    line=dict(color="#2dd4bf", width=3),  # straight segments: a spline overshoots the real totals
                     fill="tozeroy",
                     fillcolor="rgba(45, 212, 191, 0.16)",
-                    hovertemplate="<b>%{x}</b><br>Total Expense: $%{y:,.2f}<br>Transactions: %{customdata}<extra></extra>",
-                    customdata=monthly_summary["Transaction_Count"].tolist(),
+                    hovertemplate="<b>%{x}</b><br>Total expense: %{customdata[0]}<br>Transactions: %{customdata[1]}<extra></extra>",
+                    customdata=spending_views["month"]["customdata"],
                 )]
             ).update_layout(
                 template="plotly_white",
@@ -360,30 +364,48 @@ def build_dashboard_payload(transactions_df: pd.DataFrame, recent_limit: int = 5
                 plot_bgcolor="rgba(0,0,0,0)",
                 hovermode="x",
                 xaxis=dict(title="Month"),
-                yaxis=dict(title="Total Expense"),
-            )
+                yaxis=dict(
+                    title="Total expense",
+                    tickvals=spending_views["month"]["tickvals"],
+                    ticktext=spending_views["month"]["ticktext"],
+                ),
+            ),
+            div_id="spendingChart",
         ),
+        "spending_views": spending_views,
         "income_vs_expense": plot_div(
             go.Figure(
                 data=[
-                    go.Bar(name="Income", x=["Income"], y=[0], marker_color="#2563eb"),
-                    go.Bar(name="Expense", x=["Expense"], y=[total_expense], marker_color="#ef4444"),
+                    go.Bar(
+                        name=name,
+                        x=series["Label"],
+                        y=series["Total"],
+                        marker_color=color,
+                        customdata=[format_inr(total) for total in series["Total"]],
+                        hovertemplate=f"{name}: %{{customdata}}<extra></extra>",
+                    )
+                    for name, series, color in (("Income", monthly_income, "#2563eb"), ("Expense", monthly_summary, "#ef4444"))
                 ]
             ).update_layout(
-                title="Income vs Expense",
                 barmode="group",
                 template="plotly_white",
-                margin=dict(l=25, r=25, t=60, b=30),
+                margin=dict(l=25, r=25, t=35, b=30),
                 paper_bgcolor="rgba(0,0,0,0)",
                 plot_bgcolor="rgba(0,0,0,0)",
+                hovermode="x unified",
+                legend=dict(orientation="h", y=1.12),
+                yaxis=inr_axis(max(monthly_income["Total"].max(), monthly_summary["Total"].max())),
             )
         ),
         "category_pie": plot_div(
-            px.pie(
-                category_frame,
-                names="Category",
-                values="Total",
-                color_discrete_sequence=px.colors.sequential.Emrld,
+            go.Figure(
+                data=[go.Pie(
+                    labels=category_frame["Category"],
+                    values=category_frame["Total"],
+                    customdata=[format_inr(total) for total in category_frame["Total"]],
+                    hovertemplate="<b>%{label}</b><br>%{customdata}<br>%{percent}<extra></extra>",
+                    marker=dict(colors=px.colors.sequential.Emrld),
+                )]
             ).update_layout(
                 title="Spending Distribution",
                 template="plotly_white",
@@ -399,7 +421,7 @@ def build_dashboard_payload(transactions_df: pd.DataFrame, recent_limit: int = 5
             "total_expense": round(total_expense, 2),
             "current_balance": round(current_balance, 2),
             "savings_rate": savings_rate,
-            "health_score": health_score,
+            "health_score": health["score"] if health else None,
         },
         "recent_transactions": recent_transactions,
         "insight": insight,
@@ -407,41 +429,28 @@ def build_dashboard_payload(transactions_df: pd.DataFrame, recent_limit: int = 5
         "summary": {
             "average_spending": average_spending,
             "highest_spending_category": highest_spending_category,
-            "monthly_spending_trend": monthly_summary.to_dict("records"),
+            "monthly_spending_trend": monthly_summary.drop(columns="Period").to_dict("records"),
             "category_distribution": category_frame.to_dict("records"),
+            "income_vs_expense": {
+                "labels": monthly_summary["Label"].tolist(),
+                "income": monthly_income["Total"].tolist(),
+                "expense": monthly_summary["Total"].tolist(),
+            },
             "chart_series": {
-                "monthly": {
-                    "labels": monthly_summary["Month"].tolist(),
-                    "values": monthly_summary["Total_Expense"].round(2).tolist(),
-                    "counts": monthly_summary["Transaction_Count"].astype(int).tolist(),
-                },
-                "quarterly": {
-                    "labels": quarterly_labels,
-                    "values": [round(float(value), 2) for value in quarterly_values],
-                    "counts": quarterly_counts,
-                },
-                "yearly": {
-                    "labels": yearly_labels,
-                    "values": [round(float(value), 2) for value in yearly_values],
-                    "counts": yearly_counts,
-                },
+                "monthly": series_dict(monthly_summary),
+                "quarterly": series_dict(quarterly_summary),
+                "yearly": series_dict(yearly_summary),
             },
         },
-        "ml": {
-            "expense_prediction": {
-                "next_month": ml_results["expense_prediction"].next_month,
-                "predicted_expense": ml_results["expense_prediction"].predicted_expense,
-                "confidence": ml_results["expense_prediction"].confidence,
-            },
-            "health_score": {
-                "score": ml_results["health_score"].score,
-                "label": ml_results["health_score"].label,
-            },
-            "anomaly_count": ml_results["anomaly_count"],
+        "insights": {
+            "forecast": insights.get("forecast"),
+            "anomalies": insights.get("anomalies", []),
+            "health": health,
+            "tip": spending_tip(expense_df, months),
         },
     }
 
 
-def plot_div(fig: Any) -> str:
+def plot_div(fig: Any, div_id: str | None = None) -> str:
     """Render a Plotly figure as HTML for embedding in templates."""
-    return fig.to_html(full_html=False, include_plotlyjs="cdn")
+    return fig.to_html(full_html=False, include_plotlyjs="cdn", div_id=div_id)

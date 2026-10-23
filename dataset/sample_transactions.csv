@@ -1,16 +1,136 @@
 Date,Category,Amount,Type,Description
-2024-01-03,Salary,5200,Income,January payroll
-2024-01-04,Groceries,142,Expense,Weekly groceries
-2024-01-05,Utilities,86,Expense,Electricity bill
-2024-01-07,Entertainment,64,Expense,Streaming subscriptions
-2024-01-09,Transport,38,Expense,Metro pass
-2024-02-02,Salary,5200,Income,February payroll
-2024-02-03,Groceries,151,Expense,Weekly groceries
-2024-02-06,Utilities,92,Expense,Internet bill
-2024-02-12,Entertainment,71,Expense,Concert tickets
-2024-02-14,Transport,41,Expense,Gas refill
-2024-03-01,Salary,5400,Income,March payroll
-2024-03-04,Groceries,164,Expense,Weekly groceries
-2024-03-05,Utilities,89,Expense,Water bill
-2024-03-11,Entertainment,88,Expense,Weekend dining
-2024-03-14,Transport,47,Expense,Taxi ride
+2024-09-01,Salary,85000,Income,Monthly salary
+2024-09-03,Rent,22000,Expense,Flat rent
+2024-09-04,Groceries,2108,Expense,Weekly groceries
+2024-09-05,Utilities,2063,Expense,Electricity bill
+2024-09-06,Utilities,799,Expense,Broadband
+2024-09-07,Bills,399,Expense,Mobile recharge
+2024-09-09,Transport,287,Expense,Cab ride
+2024-09-11,Groceries,2608,Expense,Weekly groceries
+2024-09-13,Dining,1531,Expense,Food delivery
+2024-09-16,Transport,298,Expense,Auto rickshaw
+2024-09-18,Groceries,3133,Expense,Weekly groceries
+2024-09-20,Entertainment,499,Expense,Streaming subscription
+2024-09-22,Shopping,2976,Expense,Household items
+2024-09-23,Transport,548,Expense,Metro card top-up
+2024-09-25,Groceries,1898,Expense,Weekly groceries
+2024-09-27,Dining,819,Expense,Dinner out
+2024-10-01,Salary,85000,Income,Monthly salary
+2024-10-03,Rent,22000,Expense,Flat rent
+2024-10-04,Groceries,1985,Expense,Weekly groceries
+2024-10-05,Utilities,1892,Expense,Electricity bill
+2024-10-06,Utilities,799,Expense,Broadband
+2024-10-07,Bills,399,Expense,Mobile recharge
+2024-10-09,Transport,539,Expense,Metro card top-up
+2024-10-11,Groceries,2928,Expense,Weekly groceries
+2024-10-13,Dining,1570,Expense,Dinner out
+2024-10-16,Transport,364,Expense,Cab ride
+2024-10-18,Freelance,12000,Income,Freelance project
+2024-10-18,Groceries,2669,Expense,Weekly groceries
+2024-10-20,Entertainment,499,Expense,Streaming subscription
+2024-10-22,Shopping,1403,Expense,Clothes
+2024-10-23,Transport,571,Expense,Cab ride
+2024-10-25,Groceries,1921,Expense,Weekly groceries
+2024-10-27,Dining,1190,Expense,Food delivery
+2024-10-29,Shopping,6500,Expense,Diwali gifts
+2024-11-01,Salary,85000,Income,Monthly salary
+2024-11-03,Rent,22000,Expense,Flat rent
+2024-11-04,Groceries,2940,Expense,Weekly groceries
+2024-11-05,Utilities,1495,Expense,Electricity bill
+2024-11-06,Utilities,799,Expense,Broadband
+2024-11-07,Bills,399,Expense,Mobile recharge
+2024-11-09,Transport,323,Expense,Cab ride
+2024-11-11,Groceries,2072,Expense,Weekly groceries
+2024-11-13,Dining,1435,Expense,Food delivery
+2024-11-14,Healthcare,692,Expense,Pharmacy
+2024-11-16,Transport,310,Expense,Cab ride
+2024-11-18,Groceries,2393,Expense,Weekly groceries
+2024-11-20,Entertainment,499,Expense,Streaming subscription
+2024-11-22,Shopping,3539,Expense,Books
+2024-11-23,Transport,407,Expense,Cab ride
+2024-11-25,Groceries,2658,Expense,Weekly groceries
+2024-11-27,Dining,785,Expense,Dinner out
+2024-12-01,Salary,85000,Income,Monthly salary
+2024-12-03,Rent,22000,Expense,Flat rent
+2024-12-04,Groceries,1999,Expense,Weekly groceries
+2024-12-05,Utilities,2162,Expense,Electricity bill
+2024-12-06,Utilities,799,Expense,Broadband
+2024-12-07,Bills,399,Expense,Mobile recharge
+2024-12-09,Transport,280,Expense,Cab ride
+2024-12-11,Groceries,2921,Expense,Weekly groceries
+2024-12-13,Dining,1037,Expense,Lunch with friends
+2024-12-16,Transport,355,Expense,Auto rickshaw
+2024-12-18,Groceries,1928,Expense,Weekly groceries
+2024-12-20,Entertainment,499,Expense,Streaming subscription
+2024-12-22,Shopping,2681,Expense,Household items
+2024-12-23,Transport,598,Expense,Cab ride
+2024-12-25,Groceries,2955,Expense,Weekly groceries
+2024-12-27,Dining,1076,Expense,Food delivery
+2025-01-01,Salary,92000,Income,Monthly salary
+2025-01-03,Rent,22000,Expense,Flat rent
+2025-01-04,Groceries,2299,Expense,Weekly groceries
+2025-01-05,Utilities,1768,Expense,Electricity bill
+2025-01-06,Utilities,799,Expense,Broadband
+2025-01-07,Bills,399,Expense,Mobile recharge
+2025-01-09,Transport,518,Expense,Auto rickshaw
+2025-01-11,Groceries,1967,Expense,Weekly groceries
+2025-01-13,Dining,1223,Expense,Dinner out
+2025-01-16,Transport,425,Expense,Cab ride
+2025-01-18,Freelance,12000,Income,Freelance project
+2025-01-18,Groceries,2976,Expense,Weekly groceries
+2025-01-20,Entertainment,499,Expense,Streaming subscription
+2025-01-22,Shopping,1875,Expense,Household items
+2025-01-23,Transport,479,Expense,Auto rickshaw
+2025-01-25,Groceries,2414,Expense,Weekly groceries
+2025-01-27,Dining,720,Expense,Food delivery
+2025-02-01,Salary,92000,Income,Monthly salary
+2025-02-03,Rent,22000,Expense,Flat rent
+2025-02-04,Groceries,2801,Expense,Weekly groceries
+2025-02-05,Utilities,1711,Expense,Electricity bill
+2025-02-06,Utilities,799,Expense,Broadband
+2025-02-07,Bills,399,Expense,Mobile recharge
+2025-02-09,Transport,289,Expense,Cab ride
+2025-02-11,Groceries,2663,Expense,Weekly groceries
+2025-02-13,Dining,958,Expense,Food delivery
+2025-02-14,Healthcare,1467,Expense,Pharmacy
+2025-02-15,Shopping,46999,Expense,New phone
+2025-02-16,Transport,543,Expense,Auto rickshaw
+2025-02-18,Groceries,1880,Expense,Weekly groceries
+2025-02-20,Entertainment,499,Expense,Streaming subscription
+2025-02-22,Shopping,1481,Expense,Clothes
+2025-02-23,Transport,424,Expense,Cab ride
+2025-02-25,Groceries,3168,Expense,Weekly groceries
+2025-02-27,Dining,1108,Expense,Food delivery
+2025-03-01,Salary,92000,Income,Monthly salary
+2025-03-03,Rent,22000,Expense,Flat rent
+2025-03-04,Groceries,3160,Expense,Weekly groceries
+2025-03-05,Utilities,2370,Expense,Electricity bill
+2025-03-06,Utilities,799,Expense,Broadband
+2025-03-07,Bills,399,Expense,Mobile recharge
+2025-03-09,Transport,581,Expense,Cab ride
+2025-03-11,Groceries,1933,Expense,Weekly groceries
+2025-03-13,Dining,995,Expense,Food delivery
+2025-03-16,Transport,598,Expense,Auto rickshaw
+2025-03-18,Freelance,15000,Income,Freelance project
+2025-03-18,Groceries,1924,Expense,Weekly groceries
+2025-03-20,Entertainment,499,Expense,Streaming subscription
+2025-03-22,Shopping,2655,Expense,Clothes
+2025-03-23,Transport,395,Expense,Cab ride
+2025-03-25,Groceries,2434,Expense,Weekly groceries
+2025-03-27,Dining,955,Expense,Dinner out
+2025-04-01,Salary,92000,Income,Monthly salary
+2025-04-03,Rent,22000,Expense,Flat rent
+2025-04-04,Groceries,2811,Expense,Weekly groceries
+2025-04-05,Utilities,1639,Expense,Electricity bill
+2025-04-06,Utilities,799,Expense,Broadband
+2025-04-07,Bills,399,Expense,Mobile recharge
+2025-04-09,Transport,316,Expense,Cab ride
+2025-04-11,Groceries,1920,Expense,Weekly groceries
+2025-04-13,Dining,682,Expense,Dinner out
+2025-04-16,Transport,376,Expense,Auto rickshaw
+2025-04-18,Groceries,2246,Expense,Weekly groceries
+2025-04-20,Entertainment,499,Expense,Streaming subscription
+2025-04-22,Shopping,2338,Expense,Clothes
+2025-04-23,Transport,450,Expense,Auto rickshaw
+2025-04-25,Groceries,2388,Expense,Weekly groceries
+2025-04-27,Dining,1059,Expense,Lunch with friends

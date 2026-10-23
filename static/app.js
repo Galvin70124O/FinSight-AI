@@ -20,8 +20,12 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  // Rupees with Indian digit grouping, e.g. ₹1,25,000.
+  const inr = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 });
+
   document.querySelectorAll('[data-counter]').forEach((element) => {
     const target = parseFloat(element.getAttribute('data-counter') || '0');
+    const isCurrency = element.getAttribute('data-currency') === 'INR';
     const prefix = element.getAttribute('data-prefix') || '';
     const suffix = element.getAttribute('data-suffix') || '';
     const decimals = parseInt(element.getAttribute('data-decimals') || '0', 10);
@@ -32,7 +36,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const progress = Math.min((now - start) / duration, 1);
       const eased = 1 - Math.pow(1 - progress, 3);
       const current = target * eased;
-      element.textContent = `${prefix}${current.toFixed(decimals)}${suffix}`;
+      element.textContent = isCurrency ? inr.format(current) : `${prefix}${current.toFixed(decimals)}${suffix}`;
       if (progress < 1) {
         requestAnimationFrame(step);
       }
@@ -41,11 +45,35 @@ document.addEventListener('DOMContentLoaded', () => {
     requestAnimationFrame(step);
   });
 
+  // Month / Quarter / Year switch for the spending chart. The server sends
+  // each view (labels, totals, ₹ hover text and axis ticks) as JSON.
+  const viewsElement = document.getElementById('spendingViews');
+  const spendingViews = viewsElement ? JSON.parse(viewsElement.textContent) : {};
+  const showSpendingView = (range) => {
+    const view = spendingViews[range];
+    const chart = document.getElementById('spendingChart');
+    if (!view || !chart || !window.Plotly) return;
+    window.Plotly.update(
+      chart,
+      { x: [view.x], y: [view.y], customdata: [view.customdata] },
+      {
+        'xaxis.title.text': view.axis_title,
+        'yaxis.tickvals': view.tickvals,
+        'yaxis.ticktext': view.ticktext,
+      },
+    );
+  };
+
   document.querySelectorAll('.seg-btn').forEach((button) => {
     button.addEventListener('click', () => {
       const container = button.closest('.segmented');
-      container?.querySelectorAll('.seg-btn').forEach((chip) => chip.classList.remove('active'));
+      container?.querySelectorAll('.seg-btn').forEach((chip) => {
+        chip.classList.remove('active');
+        chip.setAttribute('aria-pressed', 'false');
+      });
       button.classList.add('active');
+      button.setAttribute('aria-pressed', 'true');
+      showSpendingView(button.dataset.range);
     });
   });
 

@@ -11,29 +11,41 @@
         <strong>{{ payload.insight }}</strong>
       </div>
     </div>
-    <a class="action-button" href="{{ url_for('main.upload') }}">Import transactions</a>
+    <div class="cta-group">
+      <a class="action-button" href="{{ url_for('main.upload') }}">Import transactions</a>
+      {% if not transactions %}
+      <form method="post" action="{{ url_for('main.load_demo_data') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button class="ghost-button" type="submit">Load demo data</button>
+      </form>
+      {% endif %}
+    </div>
   </section>
 
   <section class="kpi-grid" aria-label="Financial metrics">
     <div class="kpi-item">
       <span class="kpi-label">Balance</span>
-      <strong data-counter="{{ payload.metrics.current_balance }}" data-prefix="$" data-decimals="2">$0.00</strong>
+      <strong data-counter="{{ payload.metrics.current_balance }}" data-currency="INR">{{ payload.metrics.current_balance|inr }}</strong>
     </div>
     <div class="kpi-item">
       <span class="kpi-label">Income</span>
-      <strong data-counter="{{ payload.metrics.total_income }}" data-prefix="$" data-decimals="2">$0.00</strong>
+      <strong data-counter="{{ payload.metrics.total_income }}" data-currency="INR">{{ payload.metrics.total_income|inr }}</strong>
     </div>
     <div class="kpi-item">
       <span class="kpi-label">Expenses</span>
-      <strong data-counter="{{ payload.metrics.total_expense }}" data-prefix="$" data-decimals="2">$0.00</strong>
+      <strong data-counter="{{ payload.metrics.total_expense }}" data-currency="INR">{{ payload.metrics.total_expense|inr }}</strong>
     </div>
     <div class="kpi-item">
       <span class="kpi-label">Savings Rate</span>
-      <strong data-counter="{{ payload.metrics.savings_rate }}" data-suffix="%" data-decimals="1">0%</strong>
+      <strong data-counter="{{ payload.metrics.savings_rate }}" data-suffix="%" data-decimals="1">{{ payload.metrics.savings_rate }}%</strong>
     </div>
     <div class="kpi-item">
       <span class="kpi-label">Financial Health</span>
-      <strong data-counter="{{ payload.metrics.health_score }}" data-suffix="/100" data-decimals="0">0/100</strong>
+      {% if payload.metrics.health_score is not none %}
+      <strong data-counter="{{ payload.metrics.health_score }}" data-suffix="/100" data-decimals="0">{{ payload.metrics.health_score|round|int }}/100</strong>
+      {% else %}
+      <strong>&mdash;</strong>
+      {% endif %}
     </div>
   </section>
 
@@ -42,16 +54,21 @@
       <div class="panel-head">
         <div>
           <p class="section-label">Spending trend</p>
-          <h2>Monthly momentum</h2>
+          <h2>Spending over time</h2>
         </div>
-        <div class="segmented" role="tablist" aria-label="Time range">
-          <button class="seg-btn active" type="button" data-range="month">Month</button>
-          <button class="seg-btn" type="button" data-range="quarter">Quarter</button>
-          <button class="seg-btn" type="button" data-range="year">Year</button>
+        {% if payload.charts.spending_views %}
+        <div class="segmented" role="group" aria-label="Time range">
+          <button class="seg-btn active" type="button" data-range="month" aria-pressed="true">Month</button>
+          <button class="seg-btn" type="button" data-range="quarter" aria-pressed="false">Quarter</button>
+          <button class="seg-btn" type="button" data-range="year" aria-pressed="false">Year</button>
         </div>
+        {% endif %}
       </div>
       <div class="chart-shell">{{ payload.charts.monthly_expense|safe }}</div>
-      <p class="panel-foot">Interactive trend view with a smoother path for cash-flow planning.</p>
+      {% if payload.charts.spending_views %}
+      <script type="application/json" id="spendingViews">{{ payload.charts.spending_views|tojson }}</script>
+      {% endif %}
+      <p class="panel-foot">Total spending per period. Hover a point for the amount and number of transactions.</p>
     </article>
 
     <aside class="panel insight-panel" id="insights">
@@ -61,27 +78,110 @@
           <h2>Recommendations</h2>
         </div>
       </div>
+      {% set forecast = payload.insights.forecast %}
+      {% set tip = payload.insights.tip %}
       <div class="bubble-stack">
         <div class="bubble">
-          <span class="bubble-title">AI detected</span>
+          <span class="bubble-title">Summary</span>
           <p>{{ payload.insight }}</p>
         </div>
+        {% if tip %}
         <div class="bubble accent">
-          <span class="bubble-title">Recommendation</span>
-          <p>Cook at home twice this week to save approximately ${{ "%.2f"|format(payload.ml.expense_prediction.predicted_expense * 0.03) }}.</p>
+          <span class="bubble-title">Tip</span>
+          <p>{{ tip.category }} is your biggest variable expense: about {{ tip.monthly_average|inr(0) }} a month ({{ tip.share }}% of spending). Trimming it by 10% would save about {{ tip.saving|inr(0) }} a month.</p>
         </div>
+        {% endif %}
+        {% if forecast %}
         <div class="bubble subtle">
-          <span class="bubble-title">Prediction</span>
-          <p>Expected spending next month: ${{ "%.2f"|format(payload.ml.expense_prediction.predicted_expense) }}.</p>
+          <span class="bubble-title">Forecast{% if forecast.low_confidence %} &middot; low confidence{% endif %}</span>
+          {% if forecast.enough_data %}
+          <p>Expected spending in {{ forecast.month }}: about {{ forecast.predicted|inr(0) }}, likely between {{ forecast.low|inr(0) }} and {{ forecast.high|inr(0) }} (80% range).</p>
+          <p class="bubble-note">{{ forecast.message }}</p>
+          {% else %}
+          <p>{{ forecast.message }}</p>
+          {% endif %}
         </div>
+        {% endif %}
       </div>
       <div class="insight-stats">
-        <div><span>Average spend</span><strong>${{ "%.2f"|format(payload.summary.average_spending) }}</strong></div>
+        <div><span>Average spend</span><strong>{{ payload.summary.average_spending|inr }}</strong></div>
         <div><span>Top category</span><strong>{{ payload.summary.highest_spending_category }}</strong></div>
-        <div><span>Flagged signals</span><strong>{{ payload.ml.anomaly_count }}</strong></div>
+        <div><span>Unusual</span><strong><a href="#unusual">{{ payload.insights.anomalies|length }}</a></strong></div>
       </div>
     </aside>
   </section>
+
+  <section class="content-grid single-grid">
+    <article class="panel chart-panel" id="cashflow">
+      <div class="panel-head">
+        <div>
+          <p class="section-label">Cash flow</p>
+          <h2>Income vs expense by month</h2>
+        </div>
+      </div>
+      {% if payload.charts.income_vs_expense %}
+      <div class="chart-shell">{{ payload.charts.income_vs_expense|safe }}</div>
+      {% else %}
+      <div class="empty-state"><p>Your monthly income and spending will appear here once you add transactions.</p></div>
+      {% endif %}
+    </article>
+  </section>
+
+  {% if transactions %}
+  <section class="content-grid">
+    <article class="panel" id="unusual">
+      <div class="panel-head">
+        <div>
+          <p class="section-label">Anomaly detection</p>
+          <h2>Unusual transactions</h2>
+        </div>
+      </div>
+      {% if payload.insights.anomalies %}
+      <div class="table-wrapper">
+        <table class="transaction-table">
+          <thead>
+            <tr><th>Date</th><th>Category</th><th>Amount</th><th>Usual</th><th>Description</th></tr>
+          </thead>
+          <tbody>
+            {% for item in payload.insights.anomalies %}
+            <tr>
+              <td>{{ item.date }}</td>
+              <td>{{ item.category }}</td>
+              <td class="amount-cell expense">{{ item.amount|inr }}{% if item.ratio %} <span class="muted">({{ item.ratio }}&times;)</span>{% endif %}</td>
+              <td>{{ item.typical|inr }}</td>
+              <td>{{ item.description }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <div class="empty-state"><p>Nothing unusual. Each expense is compared with the usual amount for its category (categories need at least 4 expenses).</p></div>
+      {% endif %}
+    </article>
+
+    <aside class="panel" id="health">
+      <div class="panel-head compact-head">
+        <div>
+          <p class="section-label">Financial health</p>
+          <h2>{% if payload.insights.health and payload.insights.health.score is not none %}{{ payload.insights.health.score|round|int }}/100 &middot; {{ payload.insights.health.label }}{% else %}Not available yet{% endif %}</h2>
+        </div>
+      </div>
+      {% if payload.insights.health and payload.insights.health.score is not none %}
+      <ul class="health-breakdown">
+        {% for part in payload.insights.health.components %}
+        <li>
+          <div class="health-row"><span>{{ part.name }}</span><strong>{{ part.points }} / {{ part.max_points }}</strong></div>
+          <p>{{ part.detail }}</p>
+        </li>
+        {% endfor %}
+      </ul>
+      {% else %}
+      <div class="empty-state"><p>{{ payload.insights.health.message if payload.insights.health else "Add income transactions to see your health score." }}</p></div>
+      {% endif %}
+    </aside>
+  </section>
+  {% endif %}
 
   <section class="content-grid lower-grid">
     <article class="panel" id="reports">
@@ -133,7 +233,7 @@
               <td>{{ tx['Date'] }}</td>
               <td>{{ tx['Category'] }}</td>
               <td><span class="tx-badge {{ 'expense' if tx['Type'] == 'Expense' else 'income' }}">{{ tx['Type'] }}</span></td>
-              <td class="amount-cell {{ 'expense' if tx['Type'] == 'Expense' else 'income' }}">${{ "%.2f"|format(tx['Amount']) }}</td>
+              <td class="amount-cell {{ 'expense' if tx['Type'] == 'Expense' else 'income' }}">{{ tx['Amount']|inr }}</td>
               <td>{{ tx['Description'] }}</td>
             </tr>
             {% endfor %}
@@ -142,7 +242,7 @@
       </div>
       {% else %}
       <div class="empty-state">
-        <p>No transactions have been imported yet. Upload your CSV to start generating insights.</p>
+        <p>No transactions have been imported yet. Upload your CSV, or load the demo data to explore the dashboard.</p>
       </div>
       {% endif %}
     </article>
