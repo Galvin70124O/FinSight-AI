@@ -1,11 +1,10 @@
 from __future__ import annotations
 
 import re
-import sqlite3
 
 from flask import Blueprint, flash, redirect, render_template, request, session, url_for
 
-from database import get_db
+from database import IntegrityError, get_db
 from models import User, create_user, get_user_by_email, get_user_by_username, verify_password
 
 auth_bp = Blueprint("auth", __name__)
@@ -43,7 +42,8 @@ def register():
 
         try:
             create_user(db, username, email, password)
-        except sqlite3.IntegrityError:
+        except IntegrityError:
+            db.rollback()
             flash("That username or email is already registered.", "danger")
             return render_template("register.html")
 
@@ -66,6 +66,8 @@ def login():
             flash("Incorrect username or password.", "danger")
             return render_template("login.html")
 
+        # Start a fresh session so nothing from before login carries over.
+        session.clear()
         session["user_id"] = user.id
         session["username"] = user.username
         return redirect(url_for("main.dashboard"))
@@ -73,7 +75,7 @@ def login():
     return render_template("login.html")
 
 
-@auth_bp.route("/logout")
+@auth_bp.route("/logout", methods=["POST"])
 def logout():
     """End the current session."""
     session.clear()

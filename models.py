@@ -58,12 +58,12 @@ def _normalize_transaction_signature(date_value: Any, category: Any, amount: Any
 def create_user(db, username: str, email: str, password: str) -> int:
     """Persist a new user with a hashed password."""
     password_hash = generate_password_hash(password)
-    cursor = db.execute(
-        "INSERT INTO users (username, email, password_hash) VALUES (?, ?, ?)",
+    row = db.execute(
+        "INSERT INTO users (username, email, password_hash) VALUES (?, ?, ?) RETURNING id",
         (username, email, password_hash),
-    )
+    ).fetchone()
     db.commit()
-    return cursor.lastrowid
+    return row[0]
 
 
 def get_user_by_username(db, username: str) -> User | None:

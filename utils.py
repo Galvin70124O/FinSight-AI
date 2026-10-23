@@ -117,6 +117,16 @@ def clean_transaction_dataframe(df: pd.DataFrame) -> pd.DataFrame:
     return df.reset_index(drop=True)
 
 
+def read_uploaded_csv(stream) -> pd.DataFrame:
+    """Parse an uploaded CSV stream, turning parser errors into user-facing messages."""
+    try:
+        return pd.read_csv(stream)
+    except pd.errors.EmptyDataError as exc:
+        raise CSVValidationError("The uploaded file is empty.") from exc
+    except (pd.errors.ParserError, UnicodeDecodeError) as exc:
+        raise CSVValidationError("The file could not be read as a CSV. Save it as UTF-8 CSV and try again.") from exc
+
+
 def validate_uploaded_csv(df: pd.DataFrame) -> None:
     """Validate the CSV shape before deeper processing starts."""
     if not isinstance(df, pd.DataFrame):

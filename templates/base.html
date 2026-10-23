@@ -103,6 +103,12 @@
               <span>{{ 'Signed in' if session.get('user_id') else 'Guest mode' }}</span>
             </div>
           </div>
+          {% if session.get('user_id') %}
+          <form method="post" action="{{ url_for('auth.logout') }}" class="logout-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button class="ghost-button logout-button" type="submit">Log out</button>
+          </form>
+          {% endif %}
         </div>
       </aside>
 

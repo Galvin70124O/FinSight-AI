@@ -17,6 +17,7 @@
       </div>
     </div>
     <form method="post" enctype="multipart/form-data" class="auth-form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <label class="upload-file">
         <span>Select CSV file</span>
         <input type="file" name="file" accept=".csv" required>
