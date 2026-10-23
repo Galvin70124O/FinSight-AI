@@ -20,8 +20,12 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  // Rupees with Indian digit grouping, e.g. ₹1,25,000.
+  const inr = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 });
+
   document.querySelectorAll('[data-counter]').forEach((element) => {
     const target = parseFloat(element.getAttribute('data-counter') || '0');
+    const isCurrency = element.getAttribute('data-currency') === 'INR';
     const prefix = element.getAttribute('data-prefix') || '';
     const suffix = element.getAttribute('data-suffix') || '';
     const decimals = parseInt(element.getAttribute('data-decimals') || '0', 10);
@@ -32,7 +36,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const progress = Math.min((now - start) / duration, 1);
       const eased = 1 - Math.pow(1 - progress, 3);
       const current = target * eased;
-      element.textContent = `${prefix}${current.toFixed(decimals)}${suffix}`;
+      element.textContent = isCurrency ? inr.format(current) : `${prefix}${current.toFixed(decimals)}${suffix}`;
       if (progress < 1) {
         requestAnimationFrame(step);
       }

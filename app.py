@@ -7,7 +7,7 @@ from blueprints.auth import auth_bp
 from blueprints.main import main_bp
 from config import Config
 from database import close_db, init_db
-from utils import CSVValidationError
+from utils import CSVValidationError, format_inr
 
 csrf = CSRFProtect()
 
@@ -23,6 +23,7 @@ def create_app(test_config: dict | None = None) -> Flask:
     os.makedirs(app.instance_path, exist_ok=True)
     os.makedirs(app.config["TRAINED_MODELS_DIR"], exist_ok=True)
 
+    app.jinja_env.filters["inr"] = format_inr
     csrf.init_app(app)
     app.register_blueprint(auth_bp)
     app.register_blueprint(main_bp)
