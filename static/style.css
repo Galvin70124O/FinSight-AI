@@ -682,3 +682,7 @@ body[data-theme="light"] .topbar { background: rgba(255,255,255,0.76); }
 svg {
   color: var(--primary);
 }
+
+.logout-form { margin-top: 0.75rem; }
+.logout-button { width: 100%; cursor: pointer; font: inherit; }
+.sidebar.is-collapsed .logout-button { padding-inline: 0.4rem; font-size: 0.75rem; }
