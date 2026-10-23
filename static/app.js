@@ -45,11 +45,35 @@ document.addEventListener('DOMContentLoaded', () => {
     requestAnimationFrame(step);
   });
 
+  // Month / Quarter / Year switch for the spending chart. The server sends
+  // each view (labels, totals, ₹ hover text and axis ticks) as JSON.
+  const viewsElement = document.getElementById('spendingViews');
+  const spendingViews = viewsElement ? JSON.parse(viewsElement.textContent) : {};
+  const showSpendingView = (range) => {
+    const view = spendingViews[range];
+    const chart = document.getElementById('spendingChart');
+    if (!view || !chart || !window.Plotly) return;
+    window.Plotly.update(
+      chart,
+      { x: [view.x], y: [view.y], customdata: [view.customdata] },
+      {
+        'xaxis.title.text': view.axis_title,
+        'yaxis.tickvals': view.tickvals,
+        'yaxis.ticktext': view.ticktext,
+      },
+    );
+  };
+
   document.querySelectorAll('.seg-btn').forEach((button) => {
     button.addEventListener('click', () => {
       const container = button.closest('.segmented');
-      container?.querySelectorAll('.seg-btn').forEach((chip) => chip.classList.remove('active'));
+      container?.querySelectorAll('.seg-btn').forEach((chip) => {
+        chip.classList.remove('active');
+        chip.setAttribute('aria-pressed', 'false');
+      });
       button.classList.add('active');
+      button.setAttribute('aria-pressed', 'true');
+      showSpendingView(button.dataset.range);
     });
   });
 

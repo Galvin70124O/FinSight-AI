@@ -274,6 +274,19 @@ def series_dict(summary: pd.DataFrame) -> dict[str, list]:
     }
 
 
+def spending_view(summary: pd.DataFrame, axis_title: str) -> dict[str, Any]:
+    """One Month/Quarter/Year view of the spending chart, ready for Plotly.update."""
+    axis = inr_axis(summary["Total"].max() if not summary.empty else 0)
+    return {
+        "x": summary["Label"].tolist(),
+        "y": summary["Total"].tolist(),
+        "customdata": [[format_inr(total), int(count)] for total, count in zip(summary["Total"], summary["Count"])],
+        "tickvals": axis.get("tickvals", []),
+        "ticktext": axis.get("ticktext", []),
+        "axis_title": axis_title,
+    }
+
+
 def build_dashboard_payload(transactions_df: pd.DataFrame, insights: dict[str, Any] | None = None, recent_limit: int = 10) -> dict[str, Any]:
     """Create layout-ready analytics for the dashboard.
 
@@ -324,18 +337,25 @@ def build_dashboard_payload(transactions_df: pd.DataFrame, insights: dict[str, A
     else:
         insight = f"You have recorded {format_inr(total_expense)} of spending. Add income transactions to see your savings rate."
 
+    # The Month/Quarter/Year buttons swap these views into the spending chart.
+    spending_views = {
+        "month": spending_view(monthly_summary, "Month"),
+        "quarter": spending_view(quarterly_summary, "Quarter"),
+        "year": spending_view(yearly_summary, "Year"),
+    }
+
     charts = {
         "monthly_expense": plot_div(
             go.Figure(
                 data=[go.Scatter(
-                    x=monthly_summary["Label"],
-                    y=monthly_summary["Total"],
-                    mode="lines",
-                    line=dict(color="#2dd4bf", width=3, shape="spline"),
+                    x=spending_views["month"]["x"],
+                    y=spending_views["month"]["y"],
+                    mode="lines+markers",
+                    line=dict(color="#2dd4bf", width=3),  # straight segments: a spline overshoots the real totals
                     fill="tozeroy",
                     fillcolor="rgba(45, 212, 191, 0.16)",
                     hovertemplate="<b>%{x}</b><br>Total expense: %{customdata[0]}<br>Transactions: %{customdata[1]}<extra></extra>",
-                    customdata=[[format_inr(total), count] for total, count in zip(monthly_summary["Total"], monthly_summary["Count"])],
+                    customdata=spending_views["month"]["customdata"],
                 )]
             ).update_layout(
                 template="plotly_white",
@@ -344,9 +364,15 @@ def build_dashboard_payload(transactions_df: pd.DataFrame, insights: dict[str, A
                 plot_bgcolor="rgba(0,0,0,0)",
                 hovermode="x",
                 xaxis=dict(title="Month"),
-                yaxis=dict(title="Total expense", **inr_axis(monthly_summary["Total"].max())),
-            )
+                yaxis=dict(
+                    title="Total expense",
+                    tickvals=spending_views["month"]["tickvals"],
+                    ticktext=spending_views["month"]["ticktext"],
+                ),
+            ),
+            div_id="spendingChart",
         ),
+        "spending_views": spending_views,
         "income_vs_expense": plot_div(
             go.Figure(
                 data=[
@@ -425,6 +451,6 @@ def build_dashboard_payload(transactions_df: pd.DataFrame, insights: dict[str, A
     }
 
 
-def plot_div(fig: Any) -> str:
+def plot_div(fig: Any, div_id: str | None = None) -> str:
     """Render a Plotly figure as HTML for embedding in templates."""
-    return fig.to_html(full_html=False, include_plotlyjs="cdn")
+    return fig.to_html(full_html=False, include_plotlyjs="cdn", div_id=div_id)
