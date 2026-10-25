@@ -1,41 +1,37 @@
 {% extends 'base.html' %}
+{% from '_macros.html' import logo_mark %}
+{% block title %}Create account · FinSight AI{% endblock %}
 {% block content %}
-<section class="auth-wrap">
+<section class="auth">
   <div class="auth-card">
-    <div class="auth-brand">
-      <div class="auth-logo" aria-hidden="true">
-        <svg viewBox="0 0 64 64">
-          <path d="M16 44V18C16 14.6863 18.6863 12 22 12H44C47.3137 12 50 14.6863 50 18V44" stroke="currentColor" stroke-width="6" stroke-linecap="round"/>
-          <path d="M24 44V28" stroke="currentColor" stroke-width="6" stroke-linecap="round"/>
-          <path d="M32 44V34" stroke="currentColor" stroke-width="6" stroke-linecap="round"/>
-          <path d="M40 44V24" stroke="currentColor" stroke-width="6" stroke-linecap="round"/>
-        </svg>
-      </div>
-      <div>
-        <h2>Create your account</h2>
-        <p>Join FinSight AI and turn your finances into clear intelligence.</p>
-      </div>
+    <div class="auth-head">
+      {{ logo_mark() }}
+      <h1 class="auth-title">Create your account</h1>
+      <p class="tile-sub">Import a CSV or load demo data once you’re in.</p>
     </div>
-    <form method="post" class="auth-form">
+    <form method="post" class="form">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <label>
+      <label class="field">
         <span>Username</span>
-        <input type="text" name="username" required>
+        <input class="input" type="text" name="username" autocomplete="username" required autofocus>
       </label>
-      <label>
+      <label class="field">
         <span>Email</span>
-        <input type="email" name="email" required>
+        <input class="input" type="email" name="email" autocomplete="email" required>
       </label>
-      <label>
-        <span>Password</span>
-        <input type="password" name="password" required>
-      </label>
-      <label>
-        <span>Confirm Password</span>
-        <input type="password" name="confirm_password" required>
-      </label>
-      <button class="action-button full" type="submit">Create account</button>
+      <div class="field-pair">
+        <label class="field">
+          <span>Password</span>
+          <input class="input" type="password" name="password" autocomplete="new-password" required>
+        </label>
+        <label class="field">
+          <span>Confirm password</span>
+          <input class="input" type="password" name="confirm_password" autocomplete="new-password" required>
+        </label>
+      </div>
+      <button class="btn btn-primary btn-block" type="submit">Create account</button>
     </form>
+    <p class="auth-switch">Already have an account? <a class="link" href="{{ url_for('auth.login') }}">Sign in</a></p>
   </div>
 </section>
 {% endblock %}

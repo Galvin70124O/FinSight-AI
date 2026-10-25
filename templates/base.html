@@ -1,159 +1,151 @@
+{% from '_macros.html' import icon, logo_mark %}
 <!doctype html>
 <html lang="en" data-theme="dark">
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="theme-color" content="#0b0f14">
-    <title>FinSight AI</title>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <meta name="theme-color" content="#0B0F17">
+    <title>{% block title %}FinSight AI{% endblock %}</title>
+    <script>
+      // Apply the saved theme before first paint so there is no flash. Dark is the default look.
+      (function () {
+        try {
+          var t = localStorage.getItem('finsight-theme');
+          document.documentElement.setAttribute('data-theme', t === 'light' ? 'light' : 'dark');
+          if (localStorage.getItem('finsight-sidebar') === 'collapsed') document.documentElement.classList.add('sidebar-collapsed');
+        } catch (e) {}
+      })();
+    </script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
     <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
   </head>
   <body>
-    <div class="page-loader" id="page-loader">
-      <div class="loader-card">
-        <div class="loader-ring"></div>
-        <p>Loading FinSight AI</p>
-      </div>
-    </div>
+    <a class="skip-link" href="#main">Skip to content</a>
+    {% set signed_in = session.get('user_id') %}
+    {% set username = session.get('username', 'Guest') %}
 
     <div class="app-shell">
-      <aside class="sidebar" id="sidebar">
+      <aside class="sidebar" id="sidebar" aria-label="Sidebar">
         <div class="sidebar-top">
-          <a class="brand" href="{{ url_for('main.index') }}">
-            <span class="brand-mark" aria-hidden="true">
-              <svg viewBox="0 0 64 64" role="img" aria-label="FinSight AI logo">
-                <path d="M16 44V18C16 14.6863 18.6863 12 22 12H44C47.3137 12 50 14.6863 50 18V44" stroke="url(#brandStroke)" stroke-width="6" stroke-linecap="round"/>
-                <path d="M24 44V28" stroke="url(#brandStroke)" stroke-width="6" stroke-linecap="round"/>
-                <path d="M32 44V34" stroke="url(#brandStroke)" stroke-width="6" stroke-linecap="round"/>
-                <path d="M40 44V24" stroke="url(#brandStroke)" stroke-width="6" stroke-linecap="round"/>
-                <defs>
-                  <linearGradient id="brandStroke" x1="16" y1="12" x2="50" y2="44" gradientUnits="userSpaceOnUse">
-                    <stop offset="0%" stop-color="#2DD4BF"/>
-                    <stop offset="55%" stop-color="#38BDF8"/>
-                    <stop offset="100%" stop-color="#8B5CF6"/>
-                  </linearGradient>
-                </defs>
-              </svg>
-            </span>
-            <span class="brand-text">
-              <strong>FinSight</strong>
-              <span>AI</span>
-            </span>
+          <a class="brand" href="{{ url_for('main.index') }}" aria-label="FinSight AI home">
+            {{ logo_mark() }}
+            <span class="brand-text">FinSight <span>AI</span></span>
           </a>
-          <button class="sidebar-toggle" id="sidebarToggle" type="button" aria-label="Toggle sidebar">
-            <span></span>
-            <span></span>
+          <button class="icon-button collapse-button" id="sidebarCollapse" type="button" aria-label="Collapse sidebar" aria-pressed="false">
+            {{ icon('sidebar') }}
           </button>
         </div>
 
-        <nav class="nav-stack" aria-label="Primary navigation">
-          {% if session.get('user_id') %}
-            <a class="nav-link{% if request.endpoint == 'main.dashboard' %} active{% endif %}" href="{{ url_for('main.dashboard') }}">
-              <span class="nav-icon">
-                <svg viewBox="0 0 24 24"><path d="M4 11.5 12 5l8 6.5V20a1 1 0 0 1-1 1h-4v-6H9v6H5a1 1 0 0 1-1-1z"/></svg>
-              </span>
-              <span>Dashboard</span>
-            </a>
-            <a class="nav-link" href="#analytics">
-              <span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M5 19V9m7 10V5m7 14v-8"/></svg></span>
-              <span>Analytics</span>
-            </a>
-            <a class="nav-link" href="#transactions">
-              <span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M6 7h12M6 12h8m-8 5h12"/></svg></span>
-              <span>Transactions</span>
-            </a>
-            <a class="nav-link" href="{{ url_for('main.upload') }}">
-              <span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M12 5v10m0 0 4-4m-4 4-4-4M5 19h14"/></svg></span>
-              <span>Import Data</span>
-            </a>
-            <a class="nav-link" href="#insights">
-              <span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M8 7h8m-8 4h5m-5 4h8"/></svg></span>
-              <span>AI Insights</span>
-            </a>
-            <a class="nav-link" href="#reports">
-              <span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M7 4h10a2 2 0 0 1 2 2v12l-3-2-3 2-3-2-3 2V6a2 2 0 0 1 2-2Z"/></svg></span>
-              <span>Reports</span>
-            </a>
-            <a class="nav-link" href="#settings">
-              <span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7Zm8 3.5-.9-.4a7.9 7.9 0 0 0-.4-1.1l.5-.9a1 1 0 0 0-.2-1.2l-.8-.8a1 1 0 0 0-1.2-.2l-.9.5a7.9 7.9 0 0 0-1.1-.4L15 4a1 1 0 0 0-1-.8h-1.2a1 1 0 0 0-1 .8l-.4.9a7.9 7.9 0 0 0-1.1.4l-.9-.5a1 1 0 0 0-1.2.2l-.8.8a1 1 0 0 0-.2 1.2l.5.9a7.9 7.9 0 0 0-.4 1.1L4 11a1 1 0 0 0-1 1v1.2a1 1 0 0 0 .8 1l.9.4c.1.3.2.6.4 1.1l-.5.9a1 1 0 0 0 .2 1.2l.8.8a1 1 0 0 0 1.2.2l.9-.5c.3.1.7.3 1.1.4l.4.9a1 1 0 0 0 1 .8h1.2a1 1 0 0 0 1-.8l.4-.9c.4-.1.8-.2 1.1-.4l.9.5a1 1 0 0 0 1.2-.2l.8-.8a1 1 0 0 0 .2-1.2l-.5-.9c.2-.4.3-.8.4-1.1l.9-.4a1 1 0 0 0 .8-1V12a1 1 0 0 0-.8-1Z"/></svg></span>
-              <span>Settings</span>
-            </a>
+        <nav class="nav" aria-label="Primary">
+          {% if signed_in %}
+            {% set dash = url_for('main.dashboard') %}
+            <p class="nav-label">Overview</p>
+            <a class="nav-link{% if request.endpoint in ('main.dashboard', 'main.index') %} active{% endif %}" href="{{ dash }}" data-spy="top" title="Dashboard">{{ icon('home') }}<span>Dashboard</span></a>
+            <a class="nav-link" href="{{ dash }}#insights" data-spy="insights" title="AI insights">{{ icon('sparkles') }}<span>AI insights</span></a>
+            <a class="nav-link" href="{{ dash }}#analytics" data-spy="analytics" title="Analytics">{{ icon('chart') }}<span>Analytics</span></a>
+            <a class="nav-link" href="{{ dash }}#categories" data-spy="categories" title="Categories">{{ icon('pie') }}<span>Categories</span></a>
+            <a class="nav-link" href="{{ dash }}#transactions" data-spy="transactions" title="Transactions">{{ icon('list') }}<span>Transactions</span></a>
+            <p class="nav-label">Data</p>
+            <a class="nav-link{% if request.endpoint == 'main.upload' %} active{% endif %}" href="{{ url_for('main.upload') }}" title="Import data">{{ icon('upload') }}<span>Import data</span></a>
           {% else %}
-            <a class="nav-link{% if request.endpoint == 'main.index' %} active{% endif %}" href="{{ url_for('main.index') }}">
-              <span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M4 12 12 4l8 8"/><path d="M7 10v8h10v-8"/></svg></span>
-              <span>Overview</span>
-            </a>
-            <a class="nav-link" href="{{ url_for('auth.register') }}">
-              <span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M12 5v14m-7-7h14"/></svg></span>
-              <span>Create account</span>
-            </a>
-            <a class="nav-link" href="{{ url_for('auth.login') }}">
-              <span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm6 8a6 6 0 0 0-12 0"/></svg></span>
-              <span>Sign in</span>
-            </a>
+            <a class="nav-link{% if request.endpoint == 'main.index' %} active{% endif %}" href="{{ url_for('main.index') }}" title="Overview">{{ icon('home') }}<span>Overview</span></a>
+            <a class="nav-link{% if request.endpoint == 'auth.login' %} active{% endif %}" href="{{ url_for('auth.login') }}" title="Sign in">{{ icon('login') }}<span>Sign in</span></a>
+            <a class="nav-link{% if request.endpoint == 'auth.register' %} active{% endif %}" href="{{ url_for('auth.register') }}" title="Create account">{{ icon('user-plus') }}<span>Create account</span></a>
           {% endif %}
         </nav>
 
         <div class="sidebar-footer">
-          <div class="user-card">
-            <div class="avatar">A</div>
-            <div>
-              <strong>{{ session.get('username', 'Operator') }}</strong>
-              <span>{{ 'Signed in' if session.get('user_id') else 'Guest mode' }}</span>
-            </div>
+          <div class="user-chip">
+            <span class="avatar" aria-hidden="true">{{ username[:1]|upper }}</span>
+            <span class="user-meta">
+              <strong>{{ username }}</strong>
+              <span>{{ 'Signed in' if signed_in else 'Not signed in' }}</span>
+            </span>
           </div>
-          {% if session.get('user_id') %}
-          <form method="post" action="{{ url_for('auth.logout') }}" class="logout-form">
+          {% if signed_in %}
+          <form method="post" action="{{ url_for('auth.logout') }}" id="logoutForm">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <button class="ghost-button logout-button" type="submit">Log out</button>
+            <button class="icon-button" type="submit" aria-label="Log out" title="Log out">{{ icon('logout') }}</button>
           </form>
           {% endif %}
         </div>
       </aside>
+      <div class="sidebar-scrim" id="sidebarScrim" hidden></div>
 
       <div class="main-panel">
         <header class="topbar">
-          <label class="search-field" aria-label="Search">
-            <svg viewBox="0 0 24 24"><path d="m21 21-4.3-4.3m1.8-5.2a7 7 0 1 1-14 0 7 7 0 0 1 14 0Z"/></svg>
-            <input type="text" placeholder="Search transactions, categories, insights">
-          </label>
-
+          <button class="icon-button menu-button" id="sidebarOpen" type="button" aria-label="Open menu" aria-controls="sidebar" aria-expanded="false">{{ icon('menu') }}</button>
+          <div class="topbar-title">{% block topbar_title %}{% endblock %}</div>
           <div class="topbar-actions">
-            <label class="filter-pill" aria-label="Date range">
-              <span>Range</span>
-              <select>
-                <option>Month</option>
-                <option>Quarter</option>
-                <option>Year</option>
-              </select>
-            </label>
-            <button class="icon-button" type="button" aria-label="Notifications">
-              <svg viewBox="0 0 24 24"><path d="M12 4a4 4 0 0 0-4 4v2.1a6.8 6.8 0 0 1-.8 3.2L5.5 15h13l-1.7-1.7a6.8 6.8 0 0 1-.8-3.2V8a4 4 0 0 0-4-4Zm-2 13h4"/></svg>
+            {% block topbar_extra %}{% endblock %}
+            <button class="search-trigger" id="paletteOpen" type="button" aria-haspopup="dialog" aria-label="Search and jump to (Ctrl+K)">
+              {{ icon('search') }}
+              <span class="search-text">Search or jump to…</span>
+              <kbd class="kbd" data-mod-key>Ctrl K</kbd>
             </button>
-            <button class="avatar-button" type="button" aria-label="Profile">
-              <span class="avatar">A</span>
+            <button class="icon-button" id="themeToggle" type="button" aria-label="Switch to light theme" title="Toggle theme">
+              <span class="theme-icon-dark">{{ icon('moon') }}</span>
+              <span class="theme-icon-light">{{ icon('sun') }}</span>
             </button>
           </div>
         </header>
 
-        <main class="content-area">
+        <main class="content" id="main" tabindex="-1">
           {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}
               <div class="flash-stack">
                 {% for category, message in messages %}
-                  <div class="flash-alert {{ category }}" role="alert">{{ message }}</div>
+                  <div class="flash {{ category }}" role="alert">
+                    <span class="flash-dot" aria-hidden="true"></span>
+                    <span>{{ message }}</span>
+                  </div>
                 {% endfor %}
               </div>
             {% endif %}
           {% endwith %}
 
-          <div class="page-transition">
-            {% block content %}{% endblock %}
-          </div>
+          {% block content %}{% endblock %}
         </main>
       </div>
     </div>
+
+    {# Command palette: opened with Ctrl/Cmd+K or "/". Commands come from the JSON below plus the dashboard's sections and transactions. #}
+    <div class="palette" id="palette" hidden>
+      <div class="palette-scrim" data-palette-close></div>
+      <div class="palette-box" role="dialog" aria-modal="true" aria-label="Command palette">
+        <div class="palette-search">
+          {{ icon('search') }}
+          <input id="paletteInput" type="text" placeholder="Type a command or search transactions" autocomplete="off" spellcheck="false"
+                 role="combobox" aria-expanded="true" aria-controls="paletteList" aria-autocomplete="list">
+          <kbd class="kbd">Esc</kbd>
+        </div>
+        <ul class="palette-list" id="paletteList" role="listbox" aria-label="Results"></ul>
+        <div class="palette-foot"><span><kbd class="kbd">↑</kbd><kbd class="kbd">↓</kbd> to move</span><span><kbd class="kbd">Enter</kbd> to open</span></div>
+      </div>
+    </div>
+    <script type="application/json" id="paletteCommands">
+      {%- set commands = [] -%}
+      {%- if signed_in -%}
+        {%- set commands = [
+          {'group': 'Go to', 'label': 'Dashboard', 'href': url_for('main.dashboard')},
+          {'group': 'Go to', 'label': 'Import transactions', 'href': url_for('main.upload')},
+          {'group': 'Actions', 'label': 'Toggle light / dark theme', 'action': 'theme'},
+          {'group': 'Actions', 'label': 'Collapse or expand sidebar', 'action': 'sidebar'},
+          {'group': 'Actions', 'label': 'Log out', 'action': 'logout'},
+        ] -%}
+      {%- else -%}
+        {%- set commands = [
+          {'group': 'Go to', 'label': 'Overview', 'href': url_for('main.index')},
+          {'group': 'Go to', 'label': 'Sign in', 'href': url_for('auth.login')},
+          {'group': 'Go to', 'label': 'Create account', 'href': url_for('auth.register')},
+          {'group': 'Actions', 'label': 'Toggle light / dark theme', 'action': 'theme'},
+        ] -%}
+      {%- endif -%}
+      {{ commands|tojson }}
+    </script>
 
     <script src="{{ url_for('static', filename='app.js') }}" defer></script>
   </body>

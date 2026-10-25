@@ -162,3 +162,75 @@ templates/, static/  Pages, styles, scripts
 dataset/             Demo data (sample_transactions.csv)
 tests/               pytest suite
 ```
+
+## Design system
+
+Style: **premium dark dashboard**, inspired by Copilot Money, Monzo and
+Robinhood. Deep navy surfaces, hairline borders, one lime accent for money
+coming in, rose for overspend, violet for AI. Dark is the default; a light
+theme is available from the sun/moon button (saved in `localStorage` as
+`finsight-theme`, applied in `<head>` before first paint). All tokens live at
+the top of `static/style.css`; change them there, not in components.
+
+**Colours (dark / light)**
+
+| Token | Dark | Light | Use |
+| --- | --- | --- | --- |
+| `--bg` | `#0B0F17` | `#F5F7FA` | Page |
+| `--card` | `#121826` | `#FFFFFF` | Tiles, sidebar footer, palette |
+| `--card-2` | `#182032` | `#F4F6F9` | Inputs, hovered rows, inner wells |
+| `--border` | white 5% | slate 7% | Tile borders |
+| `--border-2` | white 10% | slate 12% | Controls, table header line |
+| `--text` / `--muted` | `#F1F5F9` / `#94A3B8` | `#0F172A` / `#586579` | Body / labels |
+| `--accent` | `#A3E635` | `#4D7C0F` | Positive amounts, lines, active nav |
+| `--accent-fill` | `#A3E635` | `#A3E635` | Primary button (ink `#1A2E05`) |
+| `--neg` | `#FB7185` | `#E11D48` | Overspend, anomalies, expense line |
+| `--ai` | `#A78BFA` | `#7C3AED` | AI insight card |
+| `--c0`…`--c7` | lime, violet, sky, amber, rose, teal, orange, slate | darker variants | Category donut + legend, in that order |
+
+**Type.** Geist (Google Fonts) with Inter/system fallback; Geist Mono for
+keyboard hints, chart axis labels under the net strip and CSV column chips.
+Body 14/20, labels 13 medium, sub-text 12/18 muted, tile titles 15/22
+semibold, figures 26/32 semibold with `-0.03em` tracking, hero figure 40/44.
+Every number uses `tabular-nums` (`.num`, `.figure`).
+
+**Spacing and shape.** 4px scale (`--s1`…`--s16`); tiles have 20px padding and
+16px gaps. Radius: 8px chips/badges, 12px buttons/inputs, 20px tiles (16px on
+phones), full for filter chips. No shadows on tiles; only floating layers (the
+command palette, auth card, mobile drawer) use `--shadow-pop`.
+
+**Components.**
+- **Shell:** left sidebar (248px) that collapses to a 76px icon rail
+  (`finsight-sidebar` in `localStorage`); on screens under 900px it becomes a
+  drawer opened from the top bar. Sticky, blurred top bar with page title,
+  data-period chip, search trigger and theme toggle.
+- **Command palette:** Ctrl/Cmd+K or `/`. Lists pages, actions, dashboard
+  sections and, when you type, matching recent transactions. Commands come from
+  the `paletteCommands` JSON in `base.html` plus `[data-section]` elements.
+- **Tiles:** `.tile` in a 4-column `.bento` grid (`.span-2`, `.span-4`); 2
+  columns under 1180px, 1 column under 640px (stat tiles stay 2-up). Add
+  `data-spotlight` for the pointer-following glow (ported from 21st.dev
+  "Spotlight").
+- **AI card:** `.ai-tile`, a violet-to-lime gradient border with stacked
+  Tip / Forecast / Unusual rows.
+- **Stats:** `.figure` + `sparkline()` macro (`templates/_macros.html`),
+  `.meter` bars, the SVG `.ring` for the health score.
+- **Charts:** Plotly figures come from `utils.py` unchanged; `themeCharts()` in
+  `static/app.js` restyles them for the current theme (transparent background,
+  horizontal gridlines only, no axis lines, lime/rose areas, donut with a centre
+  total). It re-runs when the theme changes.
+- **Tables:** `.data-table` with a sticky header, category icon
+  (`category_icon()` macro), right-aligned tabular amounts (`+` lime for
+  income, `−` for expenses, rose only for anomalies), filter chips. On phones
+  secondary columns hide (`.hide-sm`) and fold into a `.cell-sub` line.
+- **Forms:** `.field` + `.input` (42px, lime focus ring), `.btn-primary`,
+  `.btn-ghost`; the import page uses a `.dropzone` around the file input.
+
+**Motion.** Tiles rise in (6px, .45s, staggered), bars and meters grow once,
+figures count up, and the palette pops in. There is no looping or bouncing
+motion, and `prefers-reduced-motion` turns all of it off.
+
+**Accessibility.** Text contrast is at least 4.5:1 in both themes. Every
+control shows a 2px `:focus-visible` ring in the accent colour. There is a skip
+link, labelled icon buttons, and the palette uses combobox/listbox roles. The
+category list next to the donut is the text version of the chart.

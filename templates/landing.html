@@ -1,46 +1,53 @@
 {% extends 'base.html' %}
+{% from '_macros.html' import icon %}
+{% block topbar_title %}<span class="topbar-heading">Welcome</span>{% endblock %}
 {% block content %}
-<section class="landing-shell">
-  <section class="hero-panel landing-hero">
-    <div class="hero-copy">
-      <p class="eyebrow">Fintech-grade intelligence</p>
-      <h1>Turn every transaction into clear, actionable finance.</h1>
-      <p>FinSight AI gives operators, founders, and households a calm way to understand cash flow, uncover hidden spend, and act with confidence.</p>
-      <div class="cta-group">
-        <a class="action-button" href="{{ url_for('auth.register') }}">Get started</a>
-        <a class="ghost-button" href="{{ url_for('auth.login') }}">Sign in</a>
-      </div>
-      <div class="hero-badges">
-        <span>AI insights</span>
-        <span>Secure imports</span>
-        <span>Instant analytics</span>
-      </div>
-    </div>
-    <div class="hero-visual">
-      <div class="visual-stack">
-        <div class="visual-pill">Next-month forecast</div>
-        <div class="visual-card">
-          <p>Built from your own history</p>
-          <strong>A range, not a guess</strong>
-          <span>Needs 3+ months of transactions</span>
-        </div>
-      </div>
+<div class="landing">
+  <section class="landing-hero">
+    <p class="eyebrow"><span class="eyebrow-dot" aria-hidden="true"></span>Personal finance analytics</p>
+    <h1 class="hero-title">See where your money goes,<br><span class="accent-text">and where it’s heading.</span></h1>
+    <p class="hero-lead">Import your transactions as a CSV. FinSight AI charts income against spending, forecasts next month with an honest range, flags unusual expenses, and scores your financial health with the working shown.</p>
+    <div class="hero-cta">
+      <a class="btn btn-primary btn-lg" href="{{ url_for('auth.register') }}">Get started {{ icon('arrow-right') }}</a>
+      <a class="btn btn-ghost btn-lg" href="{{ url_for('auth.login') }}">Sign in</a>
     </div>
   </section>
 
-  <section class="feature-row">
-    <article class="feature-card">
-      <h3>Forecast with confidence</h3>
-      <p>See upcoming expenses and track monthly trends before they become a surprise.</p>
+  <section class="bento landing-bento" aria-label="Features">
+    <article class="tile span-2 feature" data-spotlight>
+      <p class="tile-label">Forecast</p>
+      <h2 class="tile-title">A range, not a guess</h2>
+      <p class="tile-sub">Next month’s spending with an 80% range, built from your own history. Needs 3+ months of transactions.</p>
+      <div class="feature-visual range-visual" aria-hidden="true">
+        <span style="--h:42%"></span><span style="--h:55%"></span><span style="--h:48%"></span><span style="--h:63%"></span><span style="--h:58%"></span>
+        <span class="forecast" style="--h:66%"><i></i></span>
+      </div>
     </article>
-    <article class="feature-card">
-      <h3>Own your cash flow</h3>
-      <p>Organize income, expenses, and savings in one polished operating view.</p>
+    <article class="tile feature" data-spotlight>
+      <p class="tile-label">Anomalies</p>
+      <h2 class="tile-title">Unusual spend, flagged</h2>
+      <p class="tile-sub">Each expense is compared with what is normal for its category.</p>
     </article>
-    <article class="feature-card">
-      <h3>Elevated experience</h3>
-      <p>Premium visuals, thoughtful motion, and responsive workflows for every screen size.</p>
+    <article class="tile feature" data-spotlight>
+      <p class="tile-label">Health</p>
+      <h2 class="tile-title">A score you can check</h2>
+      <p class="tile-sub">Out of 100, with points for each part shown.</p>
+    </article>
+    <article class="tile feature" data-spotlight>
+      <p class="tile-label">Cash flow</p>
+      <h2 class="tile-title">Income vs expense</h2>
+      <p class="tile-sub">Month by month, in rupees with Indian digit grouping.</p>
+    </article>
+    <article class="tile feature" data-spotlight>
+      <p class="tile-label">Categories</p>
+      <h2 class="tile-title">Spending mix</h2>
+      <p class="tile-sub">See which categories take the biggest share.</p>
+    </article>
+    <article class="tile span-2 feature" data-spotlight>
+      <p class="tile-label">Privacy</p>
+      <h2 class="tile-title">{{ icon('shield', 'icon title-icon') }}Your CSV is never stored on disk</h2>
+      <p class="tile-sub">Files are parsed in memory; only the transactions are saved, to your account alone. Re-importing the same rows does not create duplicates.</p>
     </article>
   </section>
-</section>
+</div>
 {% endblock %}

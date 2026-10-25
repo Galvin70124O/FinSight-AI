@@ -1,28 +1,32 @@
 {% extends 'base.html' %}
+{% from '_macros.html' import icon %}
+{% block title %}Import data · FinSight AI{% endblock %}
+{% block topbar_title %}<h1 class="topbar-heading">Import data</h1>{% endblock %}
 {% block content %}
-<section class="auth-wrap">
-  <div class="auth-card upload-card">
-    <div class="auth-brand">
-      <div class="auth-logo" aria-hidden="true">
-        <svg viewBox="0 0 64 64">
-          <path d="M16 44V18C16 14.6863 18.6863 12 22 12H44C47.3137 12 50 14.6863 50 18V44" stroke="currentColor" stroke-width="6" stroke-linecap="round"/>
-          <path d="M24 44V28" stroke="currentColor" stroke-width="6" stroke-linecap="round"/>
-          <path d="M32 44V34" stroke="currentColor" stroke-width="6" stroke-linecap="round"/>
-          <path d="M40 44V24" stroke="currentColor" stroke-width="6" stroke-linecap="round"/>
-        </svg>
-      </div>
+<section class="import">
+  <div class="tile import-card">
+    <header class="tile-head">
       <div>
-        <h2>Import transaction history</h2>
-        <p>Upload a CSV with `Date`, `Category`, `Amount`, `Type`, and `Description` columns.</p>
+        <h2 class="tile-title">Import transaction history</h2>
+        <p class="tile-sub">The file is read in memory and never stored. Rows you have already imported are skipped.</p>
       </div>
-    </div>
-    <form method="post" enctype="multipart/form-data" class="auth-form">
+    </header>
+    <form method="post" enctype="multipart/form-data" class="form">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <label class="upload-file">
-        <span>Select CSV file</span>
-        <input type="file" name="file" accept=".csv" required>
+      <label class="dropzone" data-dropzone>
+        <input class="dropzone-input" type="file" name="file" accept=".csv" required>
+        <span class="dropzone-icon">{{ icon('upload') }}</span>
+        <span class="dropzone-title" data-dropzone-label>Drop a CSV here, or <span class="link">browse</span></span>
+        <span class="tile-sub">CSV · max 2 MB</span>
       </label>
-      <button class="action-button full" type="submit">Import data</button>
+      <div class="columns-hint">
+        <span class="tile-sub">Required columns</span>
+        <span class="code-chip">Date</span><span class="code-chip">Category</span><span class="code-chip">Amount</span><span class="code-chip">Type</span><span class="code-chip">Description</span>
+      </div>
+      <div class="form-actions">
+        <a class="btn btn-ghost" href="{{ url_for('main.dashboard') }}">Cancel</a>
+        <button class="btn btn-primary" type="submit">Import data</button>
+      </div>
     </form>
   </div>
 </section>
