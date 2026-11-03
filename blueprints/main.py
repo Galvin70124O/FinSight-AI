@@ -10,7 +10,7 @@ from werkzeug.utils import secure_filename
 from database import get_db
 from ml.pipeline import INSIGHTS_VERSION, compute_insights
 from models import get_cached_insights, get_user_transactions, save_insights, save_transactions
-from utils import CSVValidationError, allowed_file, build_dashboard_payload, clean_transaction_dataframe, read_uploaded_csv, validate_uploaded_csv
+from utils import CSVValidationError, plural, allowed_file, build_dashboard_payload, clean_transaction_dataframe, read_uploaded_csv, validate_uploaded_csv
 
 main_bp = Blueprint("main", __name__)
 logger = logging.getLogger(__name__)
@@ -81,7 +81,7 @@ def load_demo_data():
     db = get_db()
     saved_rows = save_transactions(db, session["user_id"], cleaned_df, source_file="demo_data")
     refresh_insights(db, session["user_id"])
-    flash(f"Loaded {saved_rows} demo transaction(s).", "success")
+    flash(f"Loaded {plural(saved_rows, 'demo transaction')}.", "success")
     return redirect(url_for("main.dashboard"))
 
 
@@ -120,7 +120,7 @@ def upload():
             flash("Import failed. Please check that the file matches the CSV format and try again.", "danger")
             return redirect(url_for("main.upload"))
 
-        flash(f"Imported {saved_rows} transaction(s) successfully.", "success")
+        flash(f"Imported {plural(saved_rows, 'transaction')}.", "success")
 
         return redirect(url_for("main.dashboard"))
 

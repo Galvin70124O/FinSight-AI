@@ -105,7 +105,7 @@
         <span class="ai-kind">Unusual</span>
         <p>
           {% set n_anom = payload.insights.anomalies|length %}
-          {% if n_anom %}<a class="link" href="#unusual">{{ n_anom }} transaction{{ 's' if n_anom != 1 }}</a> look higher than usual for their category.{% else %}Nothing unusual in your spending.{% endif %}
+          {% if n_anom %}<a class="link" href="#unusual">{{ n_anom }} transaction{{ 's' if n_anom != 1 }}</a> {{ 'looks' if n_anom == 1 else 'look' }} higher than usual for their category.{% else %}Nothing unusual in your spending.{% endif %}
         </p>
       </li>
       {% endif %}

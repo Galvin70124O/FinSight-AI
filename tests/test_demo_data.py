@@ -31,7 +31,7 @@ def test_demo_data_loads_into_current_user_only(app, db):
 
     page = second.post("/demo-data", data={"csrf_token": csrf_token(second, "/dashboard")}, follow_redirects=True)
 
-    assert "demo transaction(s)" in page.get_data(as_text=True)
+    assert "demo transactions." in page.get_data(as_text=True)
     assert count(db, second_id) > 100
     assert count(db, first_id) == 0
     assert "Load demo data" not in page.get_data(as_text=True)

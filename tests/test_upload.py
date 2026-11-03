@@ -26,7 +26,7 @@ def count(db):
 def test_valid_csv_is_imported_and_not_kept_on_disk(app, client, db, logged_in):
     page = upload(client, VALID_CSV).get_data(as_text=True)
 
-    assert "Imported 2 transaction(s)" in page
+    assert "Imported 2 transactions." in page
     assert count(db) == 2
     assert not os.path.exists(os.path.join(app.root_path, "uploads", "tx.csv"))
 

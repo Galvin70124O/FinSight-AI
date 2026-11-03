@@ -45,6 +45,11 @@ def inr_axis(max_value: float, ticks: int = 5) -> dict[str, list]:
     return {"tickvals": values, "ticktext": [format_inr(v, 0) for v in values]}
 
 
+def plural(count: int, word: str) -> str:
+    """'1 month', '8 months': English plurals for the counts the app prints."""
+    return f"{count} {word}" + ("" if count == 1 else "s")
+
+
 class CSVValidationError(ValueError):
     """Raised when an uploaded CSV fails validation."""
 
@@ -332,12 +337,12 @@ def build_dashboard_payload(transactions_df: pd.DataFrame, insights: dict[str, A
     if total_income and current_balance < 0:
         # A negative "share kept" (e.g. -3589%) means nothing to a reader; say the gap in rupees.
         insight = (
-            f"Over {months} month(s) you earned {format_inr(total_income, 0)} and spent "
+            f"Over {plural(months, 'month')} you earned {format_inr(total_income, 0)} and spent "
             f"{format_inr(total_expense, 0)}: {format_inr(-current_balance, 0)} more than you earned."
         )
     elif total_income:
         insight = (
-            f"Over {months} month(s) you earned {format_inr(total_income, 0)} and spent "
+            f"Over {plural(months, 'month')} you earned {format_inr(total_income, 0)} and spent "
             f"{format_inr(total_expense, 0)}, keeping {savings_rate}% of your income."
         )
     else:

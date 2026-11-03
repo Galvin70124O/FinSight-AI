@@ -55,7 +55,7 @@ def calculate_health_score(transactions_df: pd.DataFrame) -> HealthScore:
             "name": "Months covered",
             "points": round(25 * covered / len(months), 1),
             "max_points": 25,
-            "detail": f"Income covered spending in {covered} of {len(months)} month(s).",
+            "detail": f"Income covered spending in {covered} of {len(months)} month{'' if len(months) == 1 else 's'}.",
         },
     ]
     if len(months) >= 2 and monthly_expense.mean() > 0:

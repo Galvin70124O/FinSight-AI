@@ -54,3 +54,12 @@ def test_overspending_is_described_in_rupees_not_a_negative_share(app):
 
     assert "₹1,75,000 more than you earned" in insight
     assert "keeping" not in insight and "-" not in insight
+
+
+def test_counts_of_one_are_singular(app):
+    from utils import plural
+
+    one_month = [row for row in ROWS if row["Date"].startswith("2025-01")]
+    assert payload(app, one_month)["insight"].startswith("Over 1 month you earned")
+    assert plural(1, "transaction") == "1 transaction"
+    assert plural(0, "transaction") == "0 transactions"
