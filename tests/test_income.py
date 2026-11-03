@@ -93,3 +93,19 @@ def test_unusual_list_is_capped_but_the_count_is_not(app):
 
     assert len(data["anomalies"]) == 10
     assert data["anomaly_count"] == 25
+
+
+def test_month_on_month_compares_the_latest_two_months(app):
+    mom = payload(app)["month_on_month"]
+
+    assert (mom["month"], mom["previous_month"]) == ("Jan 2025", "Dec 2024")
+    assert mom["income"] == {"value": 90000.0, "previous": 80000.0, "change": 10000.0}
+    assert mom["expense"]["change"] == 5000.0
+    assert mom["saved"] == {"value": 65000.0, "previous": 60000.0, "change": 5000.0}
+
+
+def test_month_on_month_needs_two_months(app):
+    from utils import month_on_month
+
+    assert month_on_month(["Jan 2025"], [100.0], [50.0]) is None
+    assert payload(app, [])["month_on_month"] is None

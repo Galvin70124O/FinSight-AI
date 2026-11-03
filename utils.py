@@ -68,6 +68,7 @@ def empty_dashboard_payload() -> dict[str, Any]:
             "health_score": None,
         },
         "recent_transactions": [],
+        "month_on_month": None,
         "insight": "Upload a transaction file to begin generating insights.",
         "charts": {},
         "summary": {
@@ -295,6 +296,28 @@ def spending_view(summary: pd.DataFrame, axis_title: str) -> dict[str, Any]:
     }
 
 
+def month_on_month(labels: list[str], income: list[float], expense: list[float]) -> dict[str, Any] | None:
+    """Latest month against the one before: income, spending and amount saved, with the change in rupees.
+
+    The three lists are the dashboard's per-month series (same months, oldest first).
+    Returns None with fewer than two months, when there is nothing to compare.
+    """
+    if len(labels) < 2:
+        return None
+
+    def figure(now: float, before: float) -> dict[str, float]:
+        return {"value": round(now, 2), "previous": round(before, 2), "change": round(now - before, 2)}
+
+    saved = [i - e for i, e in zip(income, expense)]
+    return {
+        "month": labels[-1],
+        "previous_month": labels[-2],
+        "income": figure(income[-1], income[-2]),
+        "expense": figure(expense[-1], expense[-2]),
+        "saved": figure(saved[-1], saved[-2]),
+    }
+
+
 def build_dashboard_payload(transactions_df: pd.DataFrame, insights: dict[str, Any] | None = None, recent_limit: int = 10) -> dict[str, Any]:
     """Create layout-ready analytics for the dashboard.
 
@@ -442,6 +465,7 @@ def build_dashboard_payload(transactions_df: pd.DataFrame, insights: dict[str, A
             "health_score": health["score"] if health else None,
         },
         "recent_transactions": recent_transactions,
+        "month_on_month": month_on_month(monthly_summary["Label"].tolist(), monthly_income["Total"].tolist(), monthly_summary["Total"].tolist()),
         "insight": insight,
         "charts": charts,
         "summary": {
