@@ -46,3 +46,11 @@ def test_income_only_month_still_appears(app):
 def test_recent_transactions_include_income(app):
     types = {tx["Type"] for tx in payload(app)["recent_transactions"]}
     assert types == {"Income", "Expense"}
+
+
+def test_overspending_is_described_in_rupees_not_a_negative_share(app):
+    rows = ROWS + [{"Date": "2025-01-20", "Category": "Education", "Amount": 300000.0, "Type": "Expense", "Description": "Fees"}]
+    insight = payload(app, rows)["insight"]
+
+    assert "₹1,75,000 more than you earned" in insight
+    assert "keeping" not in insight and "-" not in insight

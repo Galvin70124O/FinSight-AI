@@ -23,7 +23,7 @@ def format_inr(value: Any, decimals: int | None = None) -> str:
     if decimals is None:
         decimals = 0 if round(amount, 2) == round(amount) else 2
     amount = round(amount, decimals)
-    sign = "-" if amount < 0 else ""
+    sign = "−" if amount < 0 else ""  # U+2212 minus, the width of "+", not a hyphen
     whole, _, fraction = f"{abs(amount):.{decimals}f}".partition(".")
     if len(whole) > 3:
         head, groups = whole[:-3], [whole[-3:]]
@@ -329,10 +329,16 @@ def build_dashboard_payload(transactions_df: pd.DataFrame, insights: dict[str, A
     category_frame.columns = ["Category", "Total"]
 
     months = len(monthly_summary)
-    if total_income:
+    if total_income and current_balance < 0:
+        # A negative "share kept" (e.g. -3589%) means nothing to a reader; say the gap in rupees.
         insight = (
-            f"Over {months} month(s) you earned {format_inr(total_income)} and spent "
-            f"{format_inr(total_expense)}, keeping {savings_rate}% of your income."
+            f"Over {months} month(s) you earned {format_inr(total_income, 0)} and spent "
+            f"{format_inr(total_expense, 0)}: {format_inr(-current_balance, 0)} more than you earned."
+        )
+    elif total_income:
+        insight = (
+            f"Over {months} month(s) you earned {format_inr(total_income, 0)} and spent "
+            f"{format_inr(total_expense, 0)}, keeping {savings_rate}% of your income."
         )
     else:
         insight = f"You have recorded {format_inr(total_expense)} of spending. Add income transactions to see your savings rate."
