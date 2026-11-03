@@ -63,3 +63,24 @@ def test_counts_of_one_are_singular(app):
     assert payload(app, one_month)["insight"].startswith("Over 1 month you earned")
     assert plural(1, "transaction") == "1 transaction"
     assert plural(0, "transaction") == "0 transactions"
+
+
+def test_categories_past_the_seventh_fold_into_one_row(app):
+    names = ["Rent", "Groceries", "Dining", "Transport", "Shopping", "Bills", "Health", "Travel", "Gifts", "Books"]
+    rows = ROWS[:1] + [
+        {"Date": "2025-01-10", "Category": name, "Amount": 1000.0 * (10 - i), "Type": "Expense", "Description": name}
+        for i, name in enumerate(names)
+    ]
+    data = payload(app, rows)
+    cats = data["summary"]["category_distribution"]
+
+    assert len(cats) == 8
+    assert cats[-1] == {"Category": "Everything else", "Total": 6000.0}  # Travel + Gifts + Books
+    assert sum(c["Total"] for c in cats) == data["metrics"]["total_expense"]
+
+
+def test_eight_categories_are_listed_without_a_remainder_row(app):
+    rows = ROWS[:1] + [
+        {"Date": "2025-01-10", "Category": f"C{i}", "Amount": 100.0 + i, "Type": "Expense", "Description": "x"} for i in range(8)
+    ]
+    assert "Everything else" not in [c["Category"] for c in payload(app, rows)["summary"]["category_distribution"]]

@@ -200,7 +200,7 @@
     <div class="category-body">
       <div class="donut-shell" data-chart="donut" data-total="{{ m.total_expense|inr(0) }}">{{ payload.charts.category_pie|safe }}</div>
       <ol class="category-list">
-        {% for c in cats[:8] %}
+        {% for c in cats %}
           {% set share = (c.Total / m.total_expense * 100) if m.total_expense else 0 %}
           <li>
             <div class="cat-row">

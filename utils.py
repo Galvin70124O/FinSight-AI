@@ -12,6 +12,8 @@ from flask import current_app
 
 REQUIRED_COLUMNS = ["Date", "Category", "Amount", "Type", "Description"]
 logger = logging.getLogger(__name__)
+TOP_CATEGORIES = 7
+OTHER_CATEGORIES = "Everything else"  # not "Other": users often have a category of that name
 
 
 def format_inr(value: Any, decimals: int | None = None) -> str:
@@ -332,6 +334,10 @@ def build_dashboard_payload(transactions_df: pd.DataFrame, insights: dict[str, A
 
     category_frame = category_totals.reset_index()
     category_frame.columns = ["Category", "Total"]
+    if len(category_frame) > TOP_CATEGORIES + 1:
+        # Fold the tail into one row so the listed shares always add up to 100%.
+        rest = pd.DataFrame([{"Category": OTHER_CATEGORIES, "Total": category_frame["Total"].iloc[TOP_CATEGORIES:].sum()}])
+        category_frame = pd.concat([category_frame.iloc[:TOP_CATEGORIES], rest], ignore_index=True)
 
     months = len(monthly_summary)
     if total_income and current_balance < 0:
