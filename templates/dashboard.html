@@ -94,7 +94,7 @@
         <span class="ai-kind">Forecast{% if forecast.low_confidence %} · low confidence{% endif %}</span>
         {% if forecast.enough_data %}
         <p>Expected spending in {{ forecast.month }}: about <strong class="num">{{ forecast.predicted|inr(0) }}</strong>, likely between {{ forecast.low|inr(0) }} and {{ forecast.high|inr(0) }} (80% range).</p>
-        <p class="ai-note">{{ forecast.message }}</p>
+        <p class="ai-note">{% if forecast.uneven %}Spending is too uneven to forecast closely. {% endif %}{{ forecast.message }}</p>
         {% else %}
         <p>{{ forecast.message }}</p>
         {% endif %}

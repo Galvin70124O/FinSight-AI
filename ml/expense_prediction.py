@@ -23,6 +23,7 @@ class ExpenseForecast:
     low: float | None = None
     high: float | None = None
     low_confidence: bool = False
+    uneven: bool = False
     message: str = ""
 
 
@@ -69,13 +70,17 @@ def forecast_expenses(transactions_df: pd.DataFrame) -> ExpenseForecast:
     margin = float(stats.t.ppf(0.5 + INTERVAL / 2, dof)) * residual_std * float(np.sqrt(leverage))
 
     low_confidence = n < CONFIDENT_MONTHS
+    low, high = max(predicted - margin, 0.0), max(predicted + margin, 0.0)
+    # A range wider than the forecast itself (e.g. ₹0 to ₹1.2 crore) gives no usable guidance.
+    uneven = predicted <= 0 or (high - low) > predicted
     return ExpenseForecast(
         enough_data=True,
         months_used=n,
         month=(totals.index[-1] + 1).strftime("%b %Y"),
         predicted=round(max(predicted, 0.0), 2),
-        low=round(max(predicted - margin, 0.0), 2),
-        high=round(max(predicted + margin, 0.0), 2),
+        low=round(low, 2),
+        high=round(high, 2),
         low_confidence=low_confidence,
+        uneven=uneven,
         message=f"Low confidence: based on only {n} months." if low_confidence else f"Based on {n} months of history.",
     )

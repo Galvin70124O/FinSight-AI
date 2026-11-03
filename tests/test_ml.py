@@ -133,3 +133,13 @@ def test_health_score_penalises_overspending():
 def test_insights_are_plain_json_data():
     insights = compute_insights(monthly_spend(["2025-01", "2025-02", "2025-03"], [1000, 1100, 1200]))
     assert json.loads(json.dumps(insights)) == insights
+
+
+def test_forecast_flags_a_range_wider_than_the_forecast():
+    months = ["2024-09", "2024-10", "2024-11", "2024-12", "2025-01", "2025-02"]
+    steady = forecast_expenses(monthly_spend(months, [1000, 1050, 980, 1020, 1010, 990]))
+    one_off = forecast_expenses(monthly_spend(months, [1000, 1050, 980, 1020, 1010, 90000]))
+
+    assert not steady.uneven
+    assert one_off.uneven
+    assert one_off.high - one_off.low > one_off.predicted
