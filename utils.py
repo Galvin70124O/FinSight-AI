@@ -13,6 +13,7 @@ from flask import current_app
 REQUIRED_COLUMNS = ["Date", "Category", "Amount", "Type", "Description"]
 logger = logging.getLogger(__name__)
 TOP_CATEGORIES = 7
+ANOMALY_LIMIT = 10  # the newest ones; the dashboard says how many more there are
 OTHER_CATEGORIES = "Everything else"  # not "Other": users often have a category of that name
 
 
@@ -81,7 +82,7 @@ def empty_dashboard_payload() -> dict[str, Any]:
                 "yearly": {"labels": [], "values": [], "counts": []},
             },
         },
-        "insights": {"forecast": None, "anomalies": [], "health": None, "tip": None},
+        "insights": {"forecast": None, "anomalies": [], "anomaly_count": 0, "health": None, "tip": None},
     }
 
 
@@ -461,7 +462,8 @@ def build_dashboard_payload(transactions_df: pd.DataFrame, insights: dict[str, A
         },
         "insights": {
             "forecast": insights.get("forecast"),
-            "anomalies": insights.get("anomalies", []),
+            "anomalies": insights.get("anomalies", [])[:ANOMALY_LIMIT],
+            "anomaly_count": len(insights.get("anomalies", [])),
             "health": health,
             "tip": spending_tip(expense_df, months),
         },

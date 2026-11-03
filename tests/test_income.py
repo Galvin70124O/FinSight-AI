@@ -84,3 +84,12 @@ def test_eight_categories_are_listed_without_a_remainder_row(app):
         {"Date": "2025-01-10", "Category": f"C{i}", "Amount": 100.0 + i, "Type": "Expense", "Description": "x"} for i in range(8)
     ]
     assert "Everything else" not in [c["Category"] for c in payload(app, rows)["summary"]["category_distribution"]]
+
+
+def test_unusual_list_is_capped_but_the_count_is_not(app):
+    anomalies = [{"date": f"2025-01-{day:02d}", "category": "Dining", "description": "x", "amount": 9000.0, "typical": 500.0, "ratio": 18.0} for day in range(1, 26)]
+    with app.app_context():
+        data = build_dashboard_payload(pd.DataFrame(ROWS), {"anomalies": anomalies})["insights"]
+
+    assert len(data["anomalies"]) == 10
+    assert data["anomaly_count"] == 25
