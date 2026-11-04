@@ -198,3 +198,11 @@ def test_rows_without_a_merchant_name_have_no_merchant_wide_change(client, db, l
     page = client.get("/categories").get_data(as_text=True)
     assert "No name in the description" in page and "change these one at a time" in page
     assert 'name="merchant" value=""' not in page
+
+
+def test_the_categories_page_is_reachable_from_the_sidebar_palette_and_transactions(client, db, logged_in):
+    add(db, logged_in, "UPI/ZOMATO LTD/412345678901", "Dining")
+    overview = client.get("/dashboard").get_data(as_text=True)
+    assert overview.count('href="/categories"') >= 2  # sidebar and the Transactions section
+    assert '"label": "Categories"' in overview  # command palette
+    assert 'nav-link active" href="/categories"' in client.get("/categories").get_data(as_text=True)

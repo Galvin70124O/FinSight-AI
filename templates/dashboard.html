@@ -248,7 +248,7 @@
   <div class="section-head">
     <div>
       <h2 class="section-title" id="txTitle">Recent transactions</h2>
-      <p class="sub">Your latest {{ payload.recent_transactions|length }}</p>
+      <p class="sub">Your latest {{ payload.recent_transactions|length }}. <a class="link" href="{{ url_for('main.categories') }}">Fix categories</a> for all your merchants.</p>
     </div>
     <div class="table-controls">
       <div class="chips" role="group" aria-label="Show">

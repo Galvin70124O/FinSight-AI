@@ -68,6 +68,7 @@
           <a class="nav-link" href="{{ dash }}#health" data-spy="health">{{ icon('pulse') }}<span>Health score</span></a>
           <a class="nav-link" href="{{ dash }}#transactions" data-spy="transactions">{{ icon('list') }}<span>Transactions</span></a>
           <a class="nav-link{% if request.endpoint == 'main.upload' %} active{% endif %}" href="{{ url_for('main.upload') }}">{{ icon('upload') }}<span>Import a CSV</span></a>
+          <a class="nav-link{% if request.endpoint == 'main.categories' %} active{% endif %}" href="{{ url_for('main.categories') }}">{{ icon('tag') }}<span>Categories</span></a>
         </nav>
         <div class="sidebar-foot">
           <p class="legal-links"><a href="{{ url_for('main.privacy') }}">Privacy</a> · <a href="{{ url_for('main.terms') }}">Terms</a></p>
@@ -150,6 +151,7 @@
       {{ [
         {'group': 'Go to', 'label': 'Overview', 'href': url_for('main.dashboard')},
         {'group': 'Go to', 'label': 'Import a CSV', 'href': url_for('main.upload')},
+        {'group': 'Go to', 'label': 'Categories', 'href': url_for('main.categories')},
         {'group': 'Actions', 'label': 'Switch light / dark theme', 'action': 'theme'},
         {'group': 'Actions', 'label': 'Log out', 'action': 'logout'},
       ]|tojson }}
