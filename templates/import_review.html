@@ -15,7 +15,7 @@
   </header>
 
   <div class="review-intro">
-    <p>{{ groups|length|plural('merchant') }} in this file had no category. Changing a merchant changes all its rows, and FinSight remembers your choice next time.</p>
+    <p>{{ groups|length|plural('merchant') }} in this file had no category. Changing a merchant changes all its rows; tick “Remember” and FinSight uses your choice next time too.</p>
     <ul class="review-counts">
       {% if needs_count %}<li class="needs">{{ icon('alert') }}Needs a category <b class="num">{{ needs_count|digits }}</b></li>{% endif %}
       {% if ruled %}<li>Keyword rule <b class="num">{{ ruled|digits }}</b></li>{% endif %}
@@ -57,6 +57,7 @@
           {%- else %}{{ icon('alert') }}Needs a category
           {%- endif -%}
         </span>
+        <div class="m-choose">
         <select class="select m-select" name="group-{{ g.index }}" aria-labelledby="m{{ g.index }}" aria-describedby="h{{ g.index }}">
           <option value=""{{ ' selected' if not s.category }}>{{ 'Choose a category' if not s.category else 'Uncategorized' }}</option>
           {% for c in categories %}<option{{ ' selected' if c == s.category }}>{{ c }}</option>{% endfor %}
@@ -66,6 +67,10 @@
           </optgroup>
           {% endif %}
         </select>
+        {% if g.name %}{# People's corrections are not remembered unless asked: next month's transfer to them may be for something else. #}
+        <label class="m-remember"><input type="checkbox" name="remember-{{ g.index }}" value="1"{{ ' checked' if not s.person or s.source == 'correction' }}>Remember for this {{ 'person' if s.person else 'merchant' }}</label>
+        {% endif %}
+        </div>
         {% if g.count > 1 %}{# one row is already shown in full above #}
         <details class="m-rows">
           <summary>{{ 'Show all ' ~ g.count ~ ' rows' if g.count <= g.rows|length else 'Show the latest ' ~ g.rows|length ~ ' rows' }}</summary>

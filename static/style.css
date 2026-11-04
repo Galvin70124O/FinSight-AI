@@ -391,7 +391,10 @@ svg { flex: none; }
 .m-total { grid-area: total; text-align: right; white-space: nowrap; }
 .m-how { grid-area: how; display: inline-flex; align-items: center; gap: 6px; min-width: 0; color: var(--ink-2); font-size: 14px; overflow-wrap: anywhere; }
 .merchant.needs .m-how { color: var(--ink); font-weight: 500; }
-.m-select { grid-area: select; width: 100%; min-width: 0; }
+.m-choose { grid-area: select; display: grid; gap: var(--s1); min-width: 0; }
+.m-select { width: 100%; min-width: 0; }
+.m-remember { display: inline-flex; align-items: center; gap: var(--s2); min-height: 32px; color: var(--ink-2); font-size: 13px; cursor: pointer; }
+.m-remember input { width: 16px; height: 16px; margin: 0; accent-color: var(--accent); }
 .m-rows { grid-area: rows; font-size: 14px; }
 .m-rows summary { display: inline-flex; align-items: center; min-height: 32px; color: var(--accent); cursor: pointer; }
 .m-rows .table-wrap { margin: var(--s2) 0 var(--s3); }
@@ -452,7 +455,7 @@ button, .btn, .chip, .seg-btn, .tab, .nav-link, summary { -webkit-user-select: n
 
 /* Fingers need 44px targets and 16px fields (iOS zooms into anything smaller). */
 @media (pointer: coarse) {
-  .btn, .seg-btn, .chip, .select, .search-trigger, .skip-link, .m-rows summary { min-height: 44px; }
+  .btn, .seg-btn, .chip, .select, .search-trigger, .skip-link, .m-rows summary, .m-remember { min-height: 44px; }
   .chip { min-width: 44px; }
   .icon-button { width: 44px; height: 44px; }
   .select, .input { font-size: 16px; }
@@ -469,7 +472,7 @@ button, .btn, .chip, .seg-btn, .tab, .nav-link, summary { -webkit-user-select: n
     gap: var(--s2) var(--s4); padding: var(--s4) 0;
   }
   .m-total { align-self: start; }
-  .m-select { max-width: 24rem; }
+  .m-choose { max-width: 24rem; }
 }
 
 @media (max-width: 1100px) {

@@ -4,6 +4,8 @@ import re
 import threading
 from urllib.parse import urlencode
 
+import pytest
+
 from conftest import csrf_token, register_and_login
 
 NO_CATEGORY = (
@@ -31,6 +33,8 @@ def review_form(page: str) -> dict[str, str]:
     for name, body in re.findall(r'<select[^>]*name="(group-\d+)"[^>]*>(.*?)</select>', page, re.S):
         selected = re.search(r'<option(?: value="([^"]*)")? selected>([^<]*)</option>', body)
         fields[name] = "" if selected is None else (selected.group(1) if selected.group(1) is not None else selected.group(2))
+    # A browser sends a checkbox only when it is ticked.
+    fields.update(re.findall(r'<input type="checkbox" name="(remember-\d+)" value="(1)" checked>', page))
     return fields
 
 
@@ -58,8 +62,37 @@ def test_a_file_without_categories_is_reviewed_then_saved(client, db, logged_in)
         "ZOMATO LTD": "Dining", "RAHUL S": "Rent", "SALARY": "Income",
         "POS 4591XXXXXX1234 NEW HEALTH MEDICALS PUNE": "Healthcare",
     }
-    # Only the merchant the user changed becomes a correction.
-    assert [tuple(r) for r in db.execute("SELECT merchant_key, category FROM category_overrides")] == [("RAHUL S", "Rent")]
+    # RAHUL S is a person, and corrections for people are only remembered when ticked.
+    assert db.execute("SELECT COUNT(*) FROM category_overrides").fetchone()[0] == 0
+
+
+@pytest.mark.parametrize(
+    ("merchant", "tick", "remembered"),
+    [
+        ("RAHUL S", None, False),  # a person: unticked by default
+        ("RAHUL S", True, True),  # a person, ticked
+        ("NEW HEALTH MEDICALS", None, True),  # a business: ticked by default
+        ("NEW HEALTH MEDICALS", False, False),  # a business, unticked
+    ],
+)
+def test_only_ticked_changes_are_remembered(client, db, logged_in, merchant, tick, remembered):
+    page = upload(client, NO_CATEGORY).get_data(as_text=True)
+    group = group_of(page, merchant)
+    assert (f'name="remember-{group}" value="1" checked' in page) == (merchant != "RAHUL S")
+    label = "Remember for this person" if merchant == "RAHUL S" else "Remember for this merchant"
+    assert label in page
+
+    form = review_form(page)
+    form[f"group-{group}"] = "Shopping"
+    if tick is True:
+        form[f"remember-{group}"] = "1"
+    elif tick is False:
+        form.pop(f"remember-{group}", None)
+    client.post("/upload/save", data=form)
+
+    saved = [tuple(r) for r in db.execute("SELECT merchant_key, category FROM category_overrides")]
+    assert saved == ([(merchant, "Shopping")] if remembered else [])
+    assert ("Shopping",) in [tuple(r)[1:] for r in rows(db, logged_in)]  # the rows change either way
 
 
 def test_unchosen_merchants_are_saved_as_uncategorized_without_a_correction(client, db, logged_in):

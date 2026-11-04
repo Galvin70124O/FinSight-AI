@@ -272,7 +272,11 @@ def save_review():
     )
     try:
         saved_rows = save_transactions(db, user_id, frame, source_file=data["f"])
-        corrections = {key: value for (key, suggested), value in zip(data["g"], chosen) if key and value and value != suggested}
+        # Only merchants the user changed and asked to remember (people are unticked by default).
+        corrections = {
+            key: value for i, ((key, suggested), value) in enumerate(zip(data["g"], chosen))
+            if key and value and value != suggested and request.form.get(f"remember-{i}")
+        }
         if corrections:
             save_category_overrides(db, user_id, corrections)
         refresh_insights(db, user_id)
