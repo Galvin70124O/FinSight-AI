@@ -1,7 +1,9 @@
 # FinSight AI
 
 FinSight AI is a personal-finance dashboard. You import your bank or expense
-transactions as a CSV, and it shows where your money goes: income against
+transactions as a CSV (a bank statement with no category column works too:
+FinSight suggests categories and you check them before saving), and it shows
+where your money goes: income against
 spending month by month, spending by category, a forecast for next month with
 an honest range, unusual transactions, and a health score you can see the
 working for. Amounts are shown in rupees with Indian digit grouping
@@ -20,6 +22,7 @@ Real captures of the app with the bundled sample data, in both themes.
 | Landing | [![Landing page, light](docs/screenshots/landing-1440-light.png)](docs/screenshots/landing-1440-light.png) | [![Landing page, dark](docs/screenshots/landing-1440-dark.png)](docs/screenshots/landing-1440-dark.png) | [![Landing page on a phone, light](docs/screenshots/landing-390-light.png)](docs/screenshots/landing-390-light.png) | [![Landing page on a phone, dark](docs/screenshots/landing-390-dark.png)](docs/screenshots/landing-390-dark.png) |
 | Overview | [![Overview with sample data, light](docs/screenshots/dashboard-1440-light.png)](docs/screenshots/dashboard-1440-light.png) | [![Overview with sample data, dark](docs/screenshots/dashboard-1440-dark.png)](docs/screenshots/dashboard-1440-dark.png) | [![Overview on a phone, light](docs/screenshots/dashboard-390-light.png)](docs/screenshots/dashboard-390-light.png) | [![Overview on a phone, dark](docs/screenshots/dashboard-390-dark.png)](docs/screenshots/dashboard-390-dark.png) |
 | Import | [![Import page, light](docs/screenshots/upload-1440-light.png)](docs/screenshots/upload-1440-light.png) | [![Import page, dark](docs/screenshots/upload-1440-dark.png)](docs/screenshots/upload-1440-dark.png) | [![Import page on a phone, light](docs/screenshots/upload-390-light.png)](docs/screenshots/upload-390-light.png) | [![Import page on a phone, dark](docs/screenshots/upload-390-dark.png)](docs/screenshots/upload-390-dark.png) |
+| Category review | [![Category review step, light](docs/screenshots/import-review-1440-light.png)](docs/screenshots/import-review-1440-light.png) | [![Category review step, dark](docs/screenshots/import-review-1440-dark.png)](docs/screenshots/import-review-1440-dark.png) | [![Category review on a phone, light](docs/screenshots/import-review-390-light.png)](docs/screenshots/import-review-390-light.png) | [![Category review on a phone, dark](docs/screenshots/import-review-390-dark.png)](docs/screenshots/import-review-390-dark.png) |
 
 To refresh them (and the pictures on the landing page), see
 [Screenshots](#regenerating-the-screenshots) below.
@@ -29,9 +32,14 @@ To refresh them (and the pictures on the landing page), see
 - Accounts with hashed passwords (12 characters minimum for new accounts),
   CSRF-protected forms and POST-only logout.
 - **Delete your account** on the import page: removes the account, every
-  transaction and the cached insights at once, after a password check.
+  transaction, the cached insights and your category corrections at once,
+  after a password check.
 - CSV import (parsed in memory, never stored on disk; 2 MB limit, with advice
   to split bigger files). Re-importing the same rows does not create duplicates.
+- **Categories filled in** when a file has none: keyword rules, then a small
+  model, and your own corrections always win. You check every suggestion,
+  grouped by merchant, before anything is saved (see
+  [How categories are chosen](#how-categories-are-chosen)).
 - **Load sample data** on an empty overview: eight months of sample
   transactions loaded into your account only.
 - Balance, plus this month's income, spending and savings, each compared with
@@ -74,10 +82,11 @@ python scripts/screenshots.py
 ```
 
 This starts the app on a throwaway database, signs up a sample user, loads the
-sample data and saves `docs/screenshots/*.png` (landing, import and overview at
-1440 and 390 px, light and dark) and the landing-page pictures in
-`static/img/`. It needs the dev requirements (Playwright) and an installed
-Google Chrome; nothing from the run is kept.
+sample data and saves `docs/screenshots/*.png` (landing, import, the category
+review step for a made-up statement, and overview, at 1440 and 390 px, light
+and dark) and the landing-page pictures in `static/img/`. It needs the dev
+requirements (Playwright) and Google Chrome, or Playwright's own Chromium
+(`playwright install chromium`); nothing from the run is kept.
 
 ### Configuration
 
@@ -97,7 +106,7 @@ One row per transaction, with a header row. Column names are case-insensitive.
 | Column | Required | Example | Notes |
 | --- | --- | --- | --- |
 | `Date` | yes | `2025-01-31` | Any format pandas can parse; ISO dates are safest. |
-| `Category` | yes | `Groceries` | Free text. Anomalies are judged within each category. |
+| `Category` | no | `Groceries` | Free text. Leave the column out, or a cell blank, and a category is suggested for you to check. Anomalies are judged within each category. |
 | `Amount` | yes | `2450.50` | Positive number in rupees, no currency symbol or commas. |
 | `Type` | yes | `Expense` | `Income` or `Expense`. Other values are skipped. |
 | `Description` | yes | `Weekly groceries` | Free text. |
@@ -110,16 +119,77 @@ Date,Category,Amount,Type,Description
 ```
 
 Rows with an unreadable date, a missing or non-positive amount, or an unknown
-type are dropped. Exact duplicates (same date, category, amount, type and
-description) are imported once. `dataset/sample_transactions.csv` is a full
-example.
+type are dropped. Duplicates (same date, amount, type and description, ignoring
+case and spacing in the description) are imported once; the category is left
+out of that check because it can be suggested or corrected.
+`dataset/sample_transactions.csv` is a full example.
+
+## How categories are chosen
+
+Bank statements rarely have a category column. They have descriptions such as
+`UPI/ZOMATO LTD/412345678901/Paid via PhonePe` or `NEFT-HDFCN52026...-HOSTEL FEE`.
+When rows have no category, FinSight suggests one per merchant and shows every
+suggestion on a review page before anything is saved. Three layers decide, in
+this order (`ml/categorise.py`):
+
+1. **Your corrections.** When you change a merchant's category on the review
+   page, the merchant name and your category are saved for your account and
+   always win on later imports. They never affect another account.
+2. **Keyword rules.** The description is cleaned first: upper case; UPI, NEFT,
+   IMPS, ACH and similar prefixes, reference and card numbers, dates, branch
+   codes and the `@okaxis` part of UPI handles are removed. Then a fixed list of
+   keywords in `ml/merchant_rules.json` is checked top to bottom, so the more
+   specific rule wins: ZOMATO is Dining but a Zomato REFUND is Income,
+   INSTAMART is Groceries, BESCOM is Utilities.
+3. **A small model** for names no rule knows: TF-IDF on 3–5 character pieces
+   of the cleaned description, then logistic regression (scikit-learn). If it is
+   less than 60% sure, the merchant is marked "Needs a category" for you to
+   choose. Merchants you leave unset are saved as `Uncategorized`.
+
+The model is trained once, offline, by `scripts/train_categoriser.py` on
+`dataset/seed_descriptions.csv`: 396 made-up Indian bank descriptions in UPI,
+NEFT, IMPS, ACH, POS, card, bill-pay and ATM formats, 36 per category. Every
+reference, person, employer and local shop in it is invented; brand names
+appear only where the rules need them, and about 40% of the rows match no rule
+on purpose. The trained file, `ml/categoriser.joblib` (about 170 KB), ships
+with the code and is loaded when the app starts. The app never trains, and
+your transactions are never used to train anything.
+
+On a held-out fifth of the seed merchants (names the model never saw), rules
+alone categorise 73.3% of rows correctly and rules plus the model 82.7%
+("Needs a category" counts as wrong in both). That is measured on fictional
+data, so read it as a sanity check, not a promise about your bank's
+statements. Payments to people (`UPI/RAHUL S/...`) are usually left as "Needs a
+category", which is the honest answer.
+
+Categories offered: Dining, Groceries, Transport, Utilities, Rent, Shopping,
+Entertainment, Healthcare, Education, Cash, Income and Other, then up to 20
+categories you already use.
+
+**The review page.** One row per merchant: "Needs a category" first, then the
+model's least sure guesses, then rules and corrections; changing a merchant
+changes all its rows. Until you press Save, the parsed rows wait in the page
+itself, signed with `SECRET_KEY` so they cannot be altered, and expire after an
+hour. Nothing is written to the database or to disk before Save. Save checks
+every chosen category on the server and is safe to press twice: each review
+carries a one-time token, so a double tap or a resubmitted form imports once.
+A 2 MB file (about 31,000 rows) makes a Save request of about 880 KB, well
+inside the 2 MB request limit.
+
+To change the rules or the seed data, edit them and run
+`python scripts/train_categoriser.py`; it prints both accuracies and saves the
+model. Run it again after changing the scikit-learn version too: the app only
+loads a model saved by the version it runs (pinned in `requirements.txt`) and
+otherwise falls back to your corrections and the rules.
 
 ## How the "AI" works
 
 There is no deep learning here. The app uses small statistical models that you
 can check by hand. They are computed once per user when data is imported and
-cached in the database (`user_insights` table). No model files are written,
-and nothing is shared between users.
+cached in the database (`user_insights` table). Nothing is shared between
+users. (The one saved model, for categories, is described
+[above](#how-categories-are-chosen): it is trained on made-up descriptions and
+ships with the code.)
 
 **Spending forecast.** Expenses are totalled per calendar month; months with
 no spending count as ₹0. A straight-line trend (scikit-learn
@@ -175,6 +245,9 @@ would save.
    there loses all accounts and transactions. Create a Postgres database (on
    Render or elsewhere) and set `DATABASE_URL` to its connection string. Tables
    are created automatically on start.
+4. Nothing trains during the build or at start: the category model
+   (`ml/categoriser.joblib`) is committed and only loaded. `scikit-learn` is
+   pinned to the version that saved it.
 
 ## Project structure
 
@@ -182,19 +255,19 @@ would save.
 app.py               Application factory, CSRF, error handlers (404, 413)
 config.py            Settings from environment variables
 database.py          SQLite / Postgres connection and schema
-models.py            Users, transactions, cached insights, account deletion
+models.py            Users, transactions, cached insights, category corrections, account deletion
 utils.py             CSV cleaning, dashboard numbers, chart specs, ₹ formatting
 blueprints/          Routes (auth, overview, import, sample data, privacy, terms)
-ml/                  Forecast, anomaly detection, health score
+ml/                  Forecast, anomaly detection, health score, categories (rules + model)
 templates/           Pages (Jinja)
 static/style.css     The design system: tokens first, then components
 static/app.js        Theme, charts, filters, command palette
 static/fonts/        Newsreader and IBM Plex Sans (OFL 1.1), self-hosted
 static/vendor/       plotly-basic 2.27.0 (MIT), self-hosted
 static/img/          Landing-page captures made by scripts/screenshots.py
-scripts/             screenshots.py
+scripts/             screenshots.py, train_categoriser.py
 docs/screenshots/    README screenshots
-dataset/             Sample data (sample_transactions.csv)
+dataset/             Sample data, and the made-up seed descriptions the category model learns from
 tests/               pytest suite
 ```
 
