@@ -28,6 +28,9 @@ class Config:
     DATABASE_URL = os.environ.get("DATABASE_URL", "")
     DATASET_DIR = os.path.join(BASE_DIR, "dataset")
     MAX_CONTENT_LENGTH = 2 * 1024 * 1024
+    # The import review posts the file's rows back in one form field. Flask 3.1+ caps form
+    # fields at 500 KB by default, below the 2 MB a review of a 2 MB file can need.
+    MAX_FORM_MEMORY_SIZE = MAX_CONTENT_LENGTH
     ALLOWED_EXTENSIONS = {"csv"}
     SESSION_COOKIE_HTTPONLY = True
     SESSION_COOKIE_SAMESITE = "Lax"

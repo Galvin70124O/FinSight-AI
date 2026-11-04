@@ -2,11 +2,13 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 import pandas as pd
 from werkzeug.security import check_password_hash, generate_password_hash
+
+from database import IntegrityError
 
 
 @dataclass
@@ -42,7 +44,7 @@ class Transaction:
     source_file: str | None = None
 
 
-def _normalize_transaction_signature(date_value: Any, amount: Any, transaction_type: Any, description: Any) -> tuple[str, float, str, str]:
+def transaction_signature(date_value: Any, amount: Any, transaction_type: Any, description: Any) -> tuple[str, float, str, str]:
     """Create a stable signature for transaction deduplication.
 
     The category is left out on purpose: it can be filled in automatically or
@@ -93,16 +95,15 @@ def verify_password(user: User, password: str) -> bool:
     return check_password_hash(user.password_hash, password)
 
 
+def imported_signatures(db, user_id: int) -> set[tuple[str, float, str, str]]:
+    """Duplicate-check signatures of every transaction the user already has."""
+    rows = db.execute("SELECT date, amount, type, description FROM transactions WHERE user_id = ?", (user_id,)).fetchall()
+    return {transaction_signature(row["date"], row["amount"], row["type"], row["description"]) for row in rows}
+
+
 def save_transactions(db, user_id: int, transactions_df, source_file: str | None = None) -> int:
     """Insert cleaned transaction rows into the database without duplicates."""
-    existing_rows = db.execute(
-        "SELECT date, amount, type, description FROM transactions WHERE user_id = ?",
-        (user_id,),
-    ).fetchall()
-    existing_keys = {
-        _normalize_transaction_signature(row["date"], row["amount"], row["type"], row["description"])
-        for row in existing_rows
-    }
+    existing_keys = imported_signatures(db, user_id)
 
     count = 0
     for _, row in transactions_df.iterrows():
@@ -130,7 +131,7 @@ def save_transactions(db, user_id: int, transactions_df, source_file: str | None
             metadata.get("tags") if isinstance(metadata, dict) and "tags" in metadata else None,
             metadata_json,
         )
-        signature = _normalize_transaction_signature(payload[0], payload[2], payload[3], payload[4])
+        signature = transaction_signature(payload[0], payload[2], payload[3], payload[4])
         if signature in existing_keys:
             continue
 
@@ -163,7 +164,7 @@ def deduplicate_transactions_in_db(db, user_id: int | None = None) -> int:
     duplicate_ids: list[int] = []
 
     for row in rows:
-        signature = _normalize_transaction_signature(row["date"], row["amount"], row["type"], row["description"])
+        signature = transaction_signature(row["date"], row["amount"], row["type"], row["description"])
         if signature in seen:
             duplicate_ids.append(row["id"])
         else:
@@ -208,6 +209,35 @@ def save_insights(db, user_id: int, insights: dict) -> None:
     db.commit()
 
 
+def get_user_categories(db, user_id: int, limit: int = 20) -> list[str]:
+    """The user's most used categories, most used first, without the blank placeholder."""
+    rows = db.execute(
+        """
+        SELECT category FROM transactions WHERE user_id = ? AND category <> 'Uncategorized'
+        GROUP BY category ORDER BY COUNT(*) DESC, category LIMIT ?
+        """,
+        (user_id, limit),
+    ).fetchall()
+    return [row["category"] for row in rows]
+
+
+def claim_import_token(db, user_id: int, token: str) -> bool:
+    """Mark one reviewed import as saved; False if it already was (a double tap or a resubmitted form).
+
+    Not committed here: the caller's save commits the token together with the rows, and a
+    second request with the same token waits on the first one's lock, then fails.
+    """
+    now = datetime.now(timezone.utc)
+    # A review form expires after an hour, so day-old tokens can never come back.
+    db.execute("DELETE FROM import_tokens WHERE created_at < ?", ((now - timedelta(days=1)).isoformat(timespec="seconds"),))
+    try:
+        db.execute("INSERT INTO import_tokens (user_id, token, created_at) VALUES (?, ?, ?)", (user_id, token, now.isoformat(timespec="seconds")))
+    except IntegrityError:
+        db.rollback()
+        return False
+    return True
+
+
 def get_category_overrides(db, user_id: int) -> dict[str, str]:
     """The categories this user chose for merchants, by merchant key."""
     rows = db.execute("SELECT merchant_key, category FROM category_overrides WHERE user_id = ?", (user_id,)).fetchall()
@@ -230,6 +260,7 @@ def save_category_overrides(db, user_id: int, overrides: dict[str, str]) -> None
 
 def delete_user(db, user_id: int) -> None:
     """Delete a user and everything stored for them (transactions, insights, category corrections) in one commit."""
+    db.execute("DELETE FROM import_tokens WHERE user_id = ?", (user_id,))
     db.execute("DELETE FROM category_overrides WHERE user_id = ?", (user_id,))
     db.execute("DELETE FROM user_insights WHERE user_id = ?", (user_id,))
     db.execute("DELETE FROM transactions WHERE user_id = ?", (user_id,))

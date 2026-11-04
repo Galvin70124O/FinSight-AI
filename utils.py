@@ -9,7 +9,8 @@ import pandas as pd
 from flask import current_app
 
 
-REQUIRED_COLUMNS = ["Date", "Category", "Amount", "Type", "Description"]
+REQUIRED_COLUMNS = ["Date", "Amount", "Type", "Description"]
+COLUMNS = ["Date", "Category", "Amount", "Type", "Description"]  # Category is optional; blank ones are filled in on import
 logger = logging.getLogger(__name__)
 TOP_CATEGORIES = 7
 ANOMALY_LIMIT = 10  # the newest ones; the dashboard says how many more there are
@@ -176,17 +177,19 @@ def clean_transaction_dataframe(df: pd.DataFrame) -> pd.DataFrame:
     missing_columns = [col for col in REQUIRED_COLUMNS if col not in df.columns]
     if missing_columns:
         raise CSVValidationError(f"Missing required columns: {', '.join(missing_columns)}")
+    if "Category" not in df.columns:
+        df["Category"] = ""
 
-    df = df.loc[:, REQUIRED_COLUMNS].copy()
+    df = df.loc[:, COLUMNS].copy()
     df = df.drop_duplicates()
 
     df["Date"] = pd.to_datetime(df["Date"], errors="coerce")
-    df["Category"] = df["Category"].fillna("Uncategorized").astype(str).str.strip()
+    df["Category"] = df["Category"].fillna("").astype(str).str.strip()  # blank: to be categorised
     df["Description"] = df["Description"].fillna("No description").astype(str).str.strip()
     df["Type"] = df["Type"].fillna("Expense").astype(str).str.strip().str.title()
     df["Amount"] = pd.to_numeric(df["Amount"], errors="coerce")
 
-    df = df.dropna(subset=["Date", "Category", "Amount", "Type"])
+    df = df.dropna(subset=["Date", "Amount", "Type"])
     df = df[df["Amount"] > 0].copy()
     df = df[df["Type"].isin(["Income", "Expense"])].copy()
 

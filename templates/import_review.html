@@ -1,0 +1,94 @@
+{% extends 'base.html' %}
+{% from '_macros.html' import icon %}
+{% block title %}Check the categories · FinSight AI{% endblock %}
+{% block description %}Check the categories FinSight suggested for your file before the rows are saved.{% endblock %}
+{% block content %}
+{% set ruled = groups|selectattr('suggestion.source', 'equalto', 'rule')|list|length %}
+{% set modelled = groups|selectattr('suggestion.source', 'equalto', 'model')|selectattr('suggestion.category')|list|length %}
+{% set corrected = groups|selectattr('suggestion.source', 'equalto', 'correction')|list|length %}
+<section class="review" aria-labelledby="pageTitle">
+  <header class="page-head">
+    <div>
+      <h1 class="page-title" id="pageTitle">Check the categories</h1>
+      <p class="sub">{{ row_count|plural('row') }} from {{ filename }}. Nothing is saved until you press Save.</p>
+    </div>
+  </header>
+
+  <div class="review-intro">
+    <p>{{ groups|length|plural('merchant') }} in this file had no category. Changing a merchant changes all its rows, and FinSight remembers your choice next time.</p>
+    <ul class="review-counts">
+      {% if needs_count %}<li class="needs">{{ icon('alert') }}Needs a category <b class="num">{{ needs_count }}</b></li>{% endif %}
+      {% if ruled %}<li>Keyword rule <b class="num">{{ ruled }}</b></li>{% endif %}
+      {% if modelled %}<li>Model <b class="num">{{ modelled }}</b></li>{% endif %}
+      {% if corrected %}<li>Your earlier corrections <b class="num">{{ corrected }}</b></li>{% endif %}
+    </ul>
+    {% if own_category_count or skipped %}
+    <p class="sub">
+      {% if own_category_count %}{{ own_category_count|plural('row') }} with a category in your file {{ 'keeps' if own_category_count == 1 else 'keep' }} it.{% endif %}
+      {% if skipped %}{{ skipped|plural('row') }} imported before {{ 'is' if skipped == 1 else 'are' }} skipped.{% endif %}
+    </p>
+    {% endif %}
+    <p class="sub"><a class="link" href="{{ url_for('main.upload') }}#how-categories">How categories are chosen</a></p>
+  </div>
+
+  <form method="post" action="{{ url_for('main.save_review') }}" class="review-form" data-once>
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="payload" value="{{ payload }}">
+
+    <div class="merchant merchant-head" aria-hidden="true">
+      <span>Merchant</span><span class="r">Rows</span><span class="r">Amount</span><span>How it was chosen</span><span>Category</span>
+    </div>
+    <ol class="merchants">
+      {% for g in groups %}
+      {% set s = g.suggestion %}
+      <li class="merchant{{ ' needs' if not s.category }}">
+        <div class="m-name">
+          <b id="m{{ g.index }}">{{ g.name or 'No name in the description' }}</b>
+          <span class="m-example" title="{{ g.rows[0][3] }}">{{ g.rows[0][3] }}</span>
+        </div>
+        <span class="m-count num">{{ g.count|plural('row') }}</span>
+        <span class="m-total num">{{ g.total|inr }}</span>
+        <span class="m-how" id="h{{ g.index }}">
+          {%- if s.source == 'correction' %}Your earlier correction
+          {%- elif s.source == 'rule' %}Keyword rule: {{ s.keyword }}
+          {%- elif s.category %}Model, {{ (s.confidence * 100)|round(0, 'floor')|int }}% sure
+          {%- else %}{{ icon('alert') }}Needs a category
+          {%- endif -%}
+        </span>
+        <select class="select m-select" name="group-{{ g.index }}" aria-labelledby="m{{ g.index }}" aria-describedby="h{{ g.index }}">
+          <option value=""{{ ' selected' if not s.category }}>{{ 'Choose a category' if not s.category else 'Uncategorized' }}</option>
+          {% for c in categories %}<option{{ ' selected' if c == s.category }}>{{ c }}</option>{% endfor %}
+          {% if own_categories %}
+          <optgroup label="Your categories">
+            {% for c in own_categories %}<option{{ ' selected' if c == s.category }}>{{ c }}</option>{% endfor %}
+          </optgroup>
+          {% endif %}
+        </select>
+        <details class="m-rows">
+          <summary>{{ 'Show the row' if g.count == 1 else ('Show all ' ~ g.count ~ ' rows' if g.count <= g.rows|length else 'Show the latest ' ~ g.rows|length ~ ' rows') }}</summary>
+          <div class="table-wrap">
+            <table class="data-table">
+              <thead><tr><th scope="col">Date</th><th scope="col">Description</th><th scope="col" class="r">Amount</th></tr></thead>
+              <tbody>
+                {%- for date, amount, kind, description, _category, _group in g.rows %}
+                <tr><td class="num muted nowrap">{{ date|day }}</td><td><span class="desc"{% if description|length > 60 %} title="{{ description }}"{% endif %}>{{ description }}</span></td><td class="r"><span class="amount{{ '' if kind == 'Expense' else ' pos' }}">{{ '−' if kind == 'Expense' else '+' }}{{ amount|inr }}</span></td></tr>
+                {%- endfor %}
+              </tbody>
+            </table>
+          </div>
+          {% if g.count > g.rows|length %}<p class="table-foot">And {{ (g.count - g.rows|length)|plural('older row') }} from this merchant.</p>{% endif %}
+        </details>
+      </li>
+      {% endfor %}
+    </ol>
+
+    <div class="review-actions">
+      <p class="sub">Merchants left on “Choose a category” are saved as Uncategorized.</p>
+      <div class="form-actions">
+        <a class="btn btn-secondary" href="{{ url_for('main.upload') }}">Cancel</a>
+        <button class="btn btn-primary" type="submit">Save {{ row_count|plural('transaction') }}</button>
+      </div>
+    </div>
+  </form>
+</section>
+{% endblock %}

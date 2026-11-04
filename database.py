@@ -63,6 +63,14 @@ CREATE TABLE IF NOT EXISTS category_overrides (
     PRIMARY KEY (user_id, merchant_key),
     FOREIGN KEY (user_id) REFERENCES users (id)
 );
+
+CREATE TABLE IF NOT EXISTS import_tokens (
+    user_id INTEGER NOT NULL,
+    token TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    PRIMARY KEY (user_id, token),
+    FOREIGN KEY (user_id) REFERENCES users (id)
+);
 """
 
 POSTGRES_SCHEMA = """
@@ -106,6 +114,13 @@ CREATE TABLE IF NOT EXISTS category_overrides (
     category TEXT NOT NULL,
     updated_at TEXT NOT NULL,
     PRIMARY KEY (user_id, merchant_key)
+);
+
+CREATE TABLE IF NOT EXISTS import_tokens (
+    user_id INTEGER NOT NULL REFERENCES users (id),
+    token TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    PRIMARY KEY (user_id, token)
 );
 """
 

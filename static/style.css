@@ -361,6 +361,46 @@ svg { flex: none; }
 .columns { margin-top: var(--s8); }
 .columns h2 { margin-bottom: var(--s3); }
 
+.how-categories { margin-top: var(--s8); }
+.how-categories h2 { margin-bottom: var(--s2); }
+.how-categories > p, .how-categories li { color: var(--ink-2); font-size: 15px; }
+.how-categories ol { display: grid; gap: var(--s2); margin-top: var(--s3); padding-left: 1.2em; list-style: decimal; }
+.how-categories li::marker { color: var(--muted); }
+.how-categories strong { color: var(--ink); font-weight: 500; }
+
+/* Review: one row per merchant, its category select at the end, Save always in reach. */
+.review { max-width: 1040px; }
+.review-intro { display: grid; gap: var(--s2); max-width: 72ch; margin-bottom: var(--s8); color: var(--ink-2); }
+.review-counts { display: flex; flex-wrap: wrap; gap: var(--s1) var(--s5); color: var(--muted); font-size: 14px; }
+.review-counts li { display: inline-flex; align-items: center; gap: 6px; }
+.review-counts b { color: var(--ink); font-weight: 500; }
+.review-counts .needs { color: var(--ink); }
+.review-counts .icon, .m-how .icon { width: 15px; height: 15px; color: var(--bad); }
+.merchant {
+  display: grid; grid-template-columns: minmax(0, 1fr) 8ch 12ch 13rem 12rem;
+  grid-template-areas: "name count total how select" "rows rows rows rows rows";
+  gap: 0 var(--s4); align-items: center; padding: var(--s3) 0 var(--s1); border-bottom: 1px solid var(--line);
+}
+.merchant-head { padding: 0 0 var(--s2); border-bottom-color: var(--line-strong); color: var(--muted); font-size: 13px; font-weight: 500; }
+.merchant-head .r { text-align: right; }
+.m-name { grid-area: name; display: grid; min-width: 0; }
+.m-name b { font-weight: 500; overflow-wrap: anywhere; }
+.m-example { overflow: hidden; color: var(--muted); font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
+.m-count { grid-area: count; color: var(--ink-2); font-size: 14px; text-align: right; white-space: nowrap; }
+.m-total { grid-area: total; text-align: right; white-space: nowrap; }
+.m-how { grid-area: how; display: inline-flex; align-items: center; gap: 6px; min-width: 0; color: var(--ink-2); font-size: 14px; overflow-wrap: anywhere; }
+.merchant.needs .m-how { color: var(--ink); font-weight: 500; }
+.m-select { grid-area: select; width: 100%; min-width: 0; }
+.m-rows { grid-area: rows; font-size: 14px; }
+.m-rows summary { display: inline-flex; align-items: center; min-height: 32px; color: var(--accent); cursor: pointer; }
+.m-rows .table-wrap { margin: var(--s2) 0 var(--s3); }
+.m-rows .data-table { font-size: 14px; }
+.review-actions {
+  position: sticky; bottom: 0; z-index: 10; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
+  gap: var(--s3) var(--s4); margin-top: var(--s6); padding: var(--s4) 0 calc(var(--s4) + env(safe-area-inset-bottom, 0px));
+  border-top: 1px solid var(--line); background: var(--bg);
+}
+
 .danger-zone { margin-top: var(--s12); padding-top: var(--s8); border-top: 1px solid var(--line); }
 .danger-zone .sub { margin: var(--s1) 0 var(--s5); }
 .danger-zone .flash { margin-bottom: var(--s4); }
@@ -417,6 +457,7 @@ button, .btn, .chip, .seg-btn, .tab, .nav-link, summary { -webkit-user-select: n
 
 /* ---------- Responsive ---------- */
 @media (max-width: 1100px) {
+  .merchant { grid-template-columns: minmax(0, 1fr) 7ch 11ch 11rem 11rem; gap: 0 var(--s3); }
   .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .kpi:nth-child(3) { padding-left: 0; border-left: 0; }
   .kpi:nth-child(n+3) { border-top: 1px solid var(--line); }
@@ -439,6 +480,14 @@ button, .btn, .chip, .seg-btn, .tab, .nav-link, summary { -webkit-user-select: n
   .tab.active { color: var(--accent); }
   .tab .icon { width: 22px; height: 22px; }
   .content { padding: var(--s6) calc(var(--s4) + env(safe-area-inset-right, 0px)) calc(56px + var(--s12) + env(safe-area-inset-bottom, 0px)) calc(var(--s4) + env(safe-area-inset-left, 0px)); }
+  .review-actions { bottom: calc(56px + env(safe-area-inset-bottom, 0px)); padding-bottom: var(--s4); }
+  .merchant-head { display: none; }
+  .merchant {
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    grid-template-areas: "name name name" "how count total" "select select select" "rows rows rows";
+    gap: var(--s2) var(--s3); padding: var(--s4) 0 var(--s1);
+  }
+  .m-rows summary { min-height: 44px; }
 
   .hero, .feature, .how { grid-template-columns: minmax(0, 1fr); gap: var(--s8); }
   .hero { padding: var(--s8) 0 var(--s16); }
@@ -467,6 +516,8 @@ button, .btn, .chip, .seg-btn, .tab, .nav-link, summary { -webkit-user-select: n
   .field-pair { grid-template-columns: 1fr; }
   .auth-card { padding: var(--s6); }
   .hide-sm { display: none; }
+  .review-actions .form-actions { flex: 1; }
+  .review-actions .btn-primary { flex: 1; }
   .cell-sub { display: block; margin-top: 2px; color: var(--muted); font-size: 13px; overflow-wrap: anywhere; }
   .desc-sm { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 }

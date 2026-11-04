@@ -39,7 +39,7 @@ def test_non_csv_extension_is_rejected(client, db, logged_in):
 
 def test_missing_columns_are_reported(client, db, logged_in):
     page = upload(client, b"Date,Amount\n2025-01-02,250\n").get_data(as_text=True)
-    assert "Missing required columns: Category, Type, Description" in page
+    assert "Missing required columns: Type, Description" in page
     assert count(db) == 0
 
 

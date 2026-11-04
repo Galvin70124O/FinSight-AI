@@ -31,7 +31,7 @@
         <thead><tr><th scope="col">Column</th><th scope="col">Example</th><th scope="col" class="hide-sm">Notes</th></tr></thead>
         <tbody>
           <tr><td>Date</td><td class="num">2025-01-31</td><td class="hide-sm muted">Most date formats work. YYYY-MM-DD is safest.</td></tr>
-          <tr><td>Category</td><td>Groceries</td><td class="hide-sm muted">Any name you use.</td></tr>
+          <tr><td>Category <span class="muted">(optional)</span></td><td>Groceries</td><td class="hide-sm muted">Any name you use. Leave it out or blank and FinSight suggests one for you to check.</td></tr>
           <tr><td>Amount</td><td class="num">2450.50</td><td class="hide-sm muted">A positive number, without ₹ or commas.</td></tr>
           <tr><td>Type</td><td>Expense</td><td class="hide-sm muted">Income or Expense.</td></tr>
           <tr><td>Description</td><td>Weekly groceries</td><td class="hide-sm muted">Anything that helps you recognise it.</td></tr>
@@ -40,10 +40,20 @@
     </div>
   </div>
 
+  <section class="how-categories" id="how-categories" aria-labelledby="howTitle">
+    <h2 class="section-title" id="howTitle">How categories are chosen</h2>
+    <p>Bank statements usually have a description such as “UPI/ZOMATO/4521…” but no category. For rows without one, FinSight suggests a category per merchant and shows you every suggestion before anything is saved.</p>
+    <ol>
+      <li><strong>Your corrections come first.</strong> When you change a merchant’s category, it is remembered for your account and always wins next time.</li>
+      <li><strong>Then keyword rules.</strong> After reference numbers, dates and UPI handles are removed, a fixed list of words is checked, such as ZOMATO for Dining or BESCOM for Utilities.</li>
+      <li><strong>Then a small model</strong> that compares letter patterns with about 400 made-up example descriptions. It never learns from your data. If it is less than 60% sure, the merchant is marked “Needs a category” for you to choose.</li>
+    </ol>
+  </section>
+
   {# Deleting cannot be undone, so it asks for the password and a typed confirmation instead of an undo toast. #}
   <section class="danger-zone" id="delete" aria-labelledby="deleteTitle">
     <h2 class="section-title" id="deleteTitle">Delete your account</h2>
-    <p class="sub">Removes your account, every imported transaction and your computed insights straight away. This cannot be undone. <a class="link" href="{{ url_for('main.privacy') }}">What is stored</a></p>
+    <p class="sub">Removes your account, every imported transaction, your computed insights and your category corrections straight away. This cannot be undone. <a class="link" href="{{ url_for('main.privacy') }}">What is stored</a></p>
     {% for message in get_flashed_messages(category_filter=['delete']) %}
     <div class="flash danger" role="alert">{{ icon('alert') }}<span>{{ message }}</span></div>
     {% endfor %}

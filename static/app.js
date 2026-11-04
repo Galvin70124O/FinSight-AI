@@ -216,6 +216,14 @@ document.addEventListener('DOMContentLoaded', () => {
     ['dragleave', 'drop'].forEach((type) => zone.addEventListener(type, () => zone.classList.remove('is-over')));
   });
 
+  // ---------- Forms sent once: a second tap does nothing (the server also refuses a repeat) ----------
+  document.querySelectorAll('form[data-once]').forEach((form) => form.addEventListener('submit', (event) => {
+    if (form.dataset.sent) { event.preventDefault(); return; }
+    form.dataset.sent = 'true';
+    const button = form.querySelector('[type="submit"]');
+    if (button) { button.setAttribute('aria-disabled', 'true'); button.textContent = 'Saving…'; }
+  }));
+
   // ---------- Command palette (Ctrl/Cmd+K, or "/") ----------
   const palette = document.getElementById('palette');
   if (!palette) return;
