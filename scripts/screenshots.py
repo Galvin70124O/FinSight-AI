@@ -7,7 +7,8 @@ sample transactions, then saves:
 
 - static/img/<part>-<theme>.jpg   crops of the dashboard used on the landing page
 - docs/screenshots/<page>-<width>-<theme>.png   full pages for the README, including the
-  import review step for REVIEW_CSV (a made-up statement with no Category column)
+  import review step for REVIEW_CSV (a made-up statement with no Category column) and the
+  Categories page after saving it
 
 Needs the dev requirements (Playwright) and Google Chrome, or Playwright's Chromium.
 Nothing from the run is kept: the database lives in a temporary folder.
@@ -42,7 +43,7 @@ CROP_VIEWPORT = 940
 PAGES = {"landing": "/", "upload": "/upload", "dashboard": "/dashboard"}
 # A made-up statement without categories: keyword rules, model guesses and merchants left for the user.
 REVIEW_CSV = """Date,Amount,Type,Description
-2026-10-01,85000,Income,ACH/SALARY/ACME TECH/OCT2026
+2026-10-01,85000,Income,ACH/SALARY/KAVERI SOFTLABS/OCT2026
 2026-10-02,14000,Expense,IMPS/P2A/412345678901/KAVYA NAIR/HDFC0001234/rent oct
 2026-10-03,486,Expense,UPI/ZOMATO LTD/412345678902/Paid via PhonePe
 2026-10-09,312,Expense,UPI/ZOMATO LTD/412345678903/Paid via PhonePe
@@ -176,10 +177,32 @@ def main() -> None:
                             page.add_style_tag(content=".tabbar { position: static; }")
                             page.screenshot(path=shots_dir / f"{name}-{width}-{theme}.png", full_page=True)
                             context.close()
+
+                # The Categories page needs saved data: save the made-up statement once, after every other
+                # capture, so the overview and landing pictures stay on the sample data. The two people left
+                # Uncategorized are listed first and open.
+                context = browser.new_context(storage_state=storage)
+                page = context.new_page()
+                page.goto(f"{BASE}/upload")
+                page.set_input_files("input[type=file]", str(review_csv))
+                page.click("form.form button[type=submit]")
+                page.wait_for_load_state("networkidle")
+                page.click("form.review-form button[type=submit]")
+                page.wait_for_load_state("networkidle")
+                context.close()
+                for theme in THEMES:
+                    for width, height in WIDTHS.items():
+                        context = themed_context(browser, theme, width, height, 1, storage)
+                        page = context.new_page()
+                        page.goto(f"{BASE}/categories")
+                        settle(page)
+                        page.add_style_tag(content=".tabbar { position: static; }")
+                        page.screenshot(path=shots_dir / f"categories-{width}-{theme}.png", full_page=True)
+                        context.close()
                 browser.close()
         finally:
             server.shutdown()
-    print(f"Saved {(len(CROPS) + 1) * len(THEMES) * 2} crops to {img_dir} and {(len(PAGES) + 1) * len(WIDTHS) * len(THEMES)} pages to {shots_dir}")
+    print(f"Saved {(len(CROPS) + 1) * len(THEMES) * 2} crops to {img_dir} and {(len(PAGES) + 2) * len(WIDTHS) * len(THEMES)} pages to {shots_dir}")
 
 
 if __name__ == "__main__":
