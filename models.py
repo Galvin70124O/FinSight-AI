@@ -42,18 +42,21 @@ class Transaction:
     source_file: str | None = None
 
 
-def _normalize_transaction_signature(date_value: Any, category: Any, amount: Any, transaction_type: Any, description: Any) -> tuple[str, str, float, str, str]:
-    """Create a stable signature for transaction deduplication."""
+def _normalize_transaction_signature(date_value: Any, amount: Any, transaction_type: Any, description: Any) -> tuple[str, float, str, str]:
+    """Create a stable signature for transaction deduplication.
+
+    The category is left out on purpose: it can be filled in automatically or
+    corrected, so the same bank row may arrive with a different category.
+    """
     if hasattr(date_value, "date"):
         normalized_date = date_value.date().isoformat()
     else:
         normalized_date = str(date_value).strip()
 
-    normalized_category = str(category or "").strip().lower()
     normalized_amount = round(float(amount), 2)
     normalized_type = str(transaction_type or "Expense").strip().title()
-    normalized_description = str(description or "").strip().lower()
-    return (normalized_date, normalized_category, normalized_amount, normalized_type, normalized_description)
+    normalized_description = " ".join(str(description or "").split()).lower()
+    return (normalized_date, normalized_amount, normalized_type, normalized_description)
 
 
 def create_user(db, username: str, email: str, password: str) -> int:
@@ -93,11 +96,11 @@ def verify_password(user: User, password: str) -> bool:
 def save_transactions(db, user_id: int, transactions_df, source_file: str | None = None) -> int:
     """Insert cleaned transaction rows into the database without duplicates."""
     existing_rows = db.execute(
-        "SELECT date, category, amount, type, description FROM transactions WHERE user_id = ?",
+        "SELECT date, amount, type, description FROM transactions WHERE user_id = ?",
         (user_id,),
     ).fetchall()
     existing_keys = {
-        _normalize_transaction_signature(row["date"], row["category"], row["amount"], row["type"], row["description"])
+        _normalize_transaction_signature(row["date"], row["amount"], row["type"], row["description"])
         for row in existing_rows
     }
 
@@ -127,7 +130,7 @@ def save_transactions(db, user_id: int, transactions_df, source_file: str | None
             metadata.get("tags") if isinstance(metadata, dict) and "tags" in metadata else None,
             metadata_json,
         )
-        signature = _normalize_transaction_signature(payload[0], payload[1], payload[2], payload[3], payload[4])
+        signature = _normalize_transaction_signature(payload[0], payload[2], payload[3], payload[4])
         if signature in existing_keys:
             continue
 
@@ -149,18 +152,18 @@ def save_transactions(db, user_id: int, transactions_df, source_file: str | None
 
 def deduplicate_transactions_in_db(db, user_id: int | None = None) -> int:
     """Remove duplicate transactions from the database using a canonical signature."""
-    query = "SELECT id, user_id, date, category, amount, type, description FROM transactions"
+    query = "SELECT id, user_id, date, amount, type, description FROM transactions"
     params: tuple[Any, ...] = ()
     if user_id is not None:
         query += " WHERE user_id = ?"
         params = (user_id,)
 
     rows = db.execute(query, params).fetchall()
-    seen: set[tuple[str, str, float, str, str]] = set()
+    seen: set[tuple[str, float, str, str]] = set()
     duplicate_ids: list[int] = []
 
     for row in rows:
-        signature = _normalize_transaction_signature(row["date"], row["category"], row["amount"], row["type"], row["description"])
+        signature = _normalize_transaction_signature(row["date"], row["amount"], row["type"], row["description"])
         if signature in seen:
             duplicate_ids.append(row["id"])
         else:
