@@ -187,3 +187,21 @@ def test_businesses_are_not_mistaken_for_people(description):
 
     keys, suggestions = categorise([description], {})
     assert not suggestions[keys[0]].person
+
+
+@pytest.mark.parametrize(
+    ("description", "person"),
+    [
+        ("DINNER OUT", False),  # plain notes about spending, no payment rail: businesses
+        ("Lunch with friends", False),
+        ("UPI/ANITA K/412345678913/split dinner", True),
+        ("IMPS/412345678901/KAVYA NAIR", True),
+        ("NEFT-HDFCN52026110412345678-ARJUN MENON", True),
+        ("ravi.kumar@oksbi", True),
+    ],
+)
+def test_the_name_rule_needs_a_payment_rail(description, person):
+    from ml.categorise import categorise
+
+    keys, suggestions = categorise([description], {})
+    assert suggestions[keys[0]].person is person

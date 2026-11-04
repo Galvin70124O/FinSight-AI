@@ -56,6 +56,9 @@ _P2A = re.compile(r"\bP2A\b")  # person-to-account transfers (IMPS/P2A, UPI/P2A)
 _BUSINESS_HANDLE = re.compile(r"(?:\bQ\d{6,}|\bPAYTMQR|\bBHARATPE)[\w.]*@|@OKBIZ")
 # Handles people use: a phone number (often masked) at any UPI app, or a name at Google Pay's personal suffixes.
 _PERSONAL_HANDLE = re.compile(r"(?<![0-9X])[0-9X]{10}@[A-Z]+|[A-Z][A-Z0-9._-]*@OK(?:AXIS|HDFCBANK|SBI|ICICI)\b")
+# A payment-rail format. Only a description that has one can be a transfer to a person; plain text such
+# as "Dinner out" is a note about spending, so it counts as a business.
+_RAIL = re.compile(r"\b(?:UPI|IMPS|NEFT|P2A)\b|@")
 _PUNCTUATION = re.compile(r"[^A-Z0-9&]+")
 _WITHOUT_DIGITS = str.maketrans("", "", "0123456789")
 
@@ -156,7 +159,8 @@ def looks_like_person(key: str, descriptions: list[str], model_sure: bool = Fals
         return False
     if any(_P2A.search(text) or _PERSONAL_HANDLE.search(text) for text in upper):
         return True
-    return not model_sure and 2 <= len(words) <= 3 and all(word.isalpha() for word in words)
+    has_rail = any(_RAIL.search(text) for text in upper)
+    return has_rail and not model_sure and 2 <= len(words) <= 3 and all(word.isalpha() for word in words)
 
 
 @dataclass
