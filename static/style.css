@@ -185,6 +185,12 @@ svg { flex: none; }
 .shot picture { display: block; }
 .shot .shot-dark { display: none; }
 .csv-table td { white-space: nowrap; }
+.csv-sub { display: none; }
+/* Narrow screens: Date, Category and Amount only, with Type as a second line, so nothing is cut off. */
+@media (max-width: 600px) {
+  .csv-table .csv-wide { display: none; }
+  .csv-table .csv-sub { display: block; color: var(--muted); font-size: 13px; }
+}
 .brand span, .site-link { white-space: nowrap; }
 [data-theme="dark"] .shot .shot-light { display: none; }
 [data-theme="dark"] .shot .shot-dark { display: block; }
