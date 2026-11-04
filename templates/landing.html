@@ -29,53 +29,40 @@
 <div class="feature-list">
   <section class="feature" data-reveal aria-labelledby="f1">
     <div class="feature-text">
-      <h2 id="f1">Your month at a glance</h2>
-      <p>Balance, income, spending and what you saved, each compared with last month, so you can see which way things are moving.</p>
+      <h2 id="f1">Where each rupee went</h2>
+      <p>Rent, groceries, mess fees, the auto to college: every category ranked by how much of your spending it took.</p>
     </div>
-    {{ shot('kpis', 'Balance of ₹3,62,201 with income, spending and savings for April, each showing the change from March.') }}
+    {{ shot('categories', 'Spending by category, ranked: rent first, then groceries, shopping, utilities and the rest, each with its amount and share.') }}
   </section>
 
   <section class="feature" data-reveal aria-labelledby="f2">
     <div class="feature-text">
-      <h2 id="f2">Where each rupee went</h2>
-      <p>Rent, groceries, mess fees, the auto to college: every category ranked by how much of your spending it took.</p>
-    </div>
-    {{ shot('categories', 'Spending by category, ranked: rent first, then groceries, shopping, utilities and the rest, each with its share.') }}
-  </section>
-
-  <section class="feature" data-reveal aria-labelledby="f3">
-    <div class="feature-text">
-      <h2 id="f3">Next month, with an honest range</h2>
+      <h2 id="f2">Next month, with an honest range</h2>
       <p>A forecast from your own history, drawn as a band rather than one confident number. When your spending is too uneven to predict, it tells you so.</p>
     </div>
     {{ shot('spending', 'Monthly spending as a line, continued by a shaded band for next month’s likely range.') }}
   </section>
 
-  <section class="feature" data-reveal aria-labelledby="f4">
+  <section class="feature" data-reveal aria-labelledby="f3">
     <div class="feature-text">
-      <h2 id="f4">Spending that stands out</h2>
-      <p>An expense far above what is usual for its category gets flagged, so one ₹46,999 phone does not hide among ₹2,000 shopping trips.</p>
-    </div>
-    {{ shot('unusual', 'A table of unusual transactions: a ₹46,999 phone in Shopping, about 18 times the usual amount.') }}
-  </section>
-
-  <section class="feature" data-reveal aria-labelledby="f5">
-    <div class="feature-text">
-      <h2 id="f5">A health score you can check</h2>
+      <h2 id="f3">A health score you can check</h2>
       <p>Out of 100, with every part shown: how much you saved, how often income covered spending, and how steady your spending was.</p>
     </div>
-    {{ shot('health', 'A health score of 92 out of 100, broken into savings rate, months covered and steady spending, with the points each part cost.') }}
+    {{ shot('health', 'A health score of 92 out of 100, split into savings rate, months covered and steady spending, with the points each part cost.') }}
   </section>
 </div>
 
 <section class="how" aria-labelledby="howTitle" data-reveal>
-  <h2 id="howTitle">How it works</h2>
   <div>
+    <h2 id="howTitle">How it works</h2>
     <ol class="steps">
       <li><p>Download a CSV from your bank or expense app.</p><span class="sub">It needs five columns: Date, Category, Amount, Type and Description.</span></li>
       <li><p>Upload it to FinSight.</p><span class="sub">The file is read in memory and never saved on disk. Uploading the same rows again adds nothing twice.</span></li>
       <li><p>Read your overview.</p><span class="sub">Or load 8 months of sample data first and look around.</span></li>
     </ol>
+  </div>
+  <figure class="csv-example">
+    <figcaption class="section-title">A CSV that works</figcaption>
     <div class="table-wrap csv-table">
       <table class="data-table">
         <caption class="sr-only">Example CSV rows</caption>
@@ -84,9 +71,11 @@
           <tr><td class="num">2025-01-01</td><td>Salary</td><td class="r">85000</td><td>Income</td><td>Monthly salary</td></tr>
           <tr><td class="num">2025-01-03</td><td>Rent</td><td class="r">22000</td><td>Expense</td><td>Flat rent</td></tr>
           <tr><td class="num">2025-01-04</td><td>Groceries</td><td class="r">2450.50</td><td>Expense</td><td>Weekly groceries</td></tr>
+          <tr><td class="num">2025-01-06</td><td>Transport</td><td class="r">180</td><td>Expense</td><td>Auto to college</td></tr>
+          <tr><td class="num">2025-01-09</td><td>Utilities</td><td class="r">1240</td><td>Expense</td><td>Electricity bill</td></tr>
         </tbody>
       </table>
     </div>
-  </div>
+  </figure>
 </section>
 {% endblock %}

@@ -26,12 +26,29 @@ PORT = 5077
 BASE = f"http://127.0.0.1:{PORT}"
 USER = {"username": "sample", "email": "sample@example.com", "password": "sample-password-2025"}
 
-# Landing-page crops: name -> CSS selector of the dashboard part to capture.
-# "overview" is the whole first screen of the app instead of one part.
-CROPS = {"kpis": ".kpis", "categories": "#categories", "spending": "#spending", "unusual": "#unusual", "health": "#health"}
+# Landing-page crops: name -> (first, last) element of one dashboard component. Each crop runs from
+# the top of the first to the bottom of the last, with a thin margin of page. "overview" (the hero) is
+# the whole first screen instead.
+CROPS = {
+    "categories": ("#categories", "#categories .bars"),
+    "spending": ("#spending .section-head", "#spending .chart"),
+    "health": ("#health .section-head", "#health .health"),
+}
+CROP_MARGIN = 12
+# At 940px the app shows one 660px column beside the sidebar, about the width the landing page
+# displays a crop at (~750px), so the smallest chart text (12px) still shows at 13px or more.
+CROP_VIEWPORT = 940
 PAGES = {"landing": "/", "upload": "/upload", "dashboard": "/dashboard"}
 WIDTHS = {1440: 900, 390: 844}
 THEMES = ("light", "dark")
+
+
+def save_crop(page, path, first: str, last: str) -> None:
+    top, bottom = page.locator(first).first.bounding_box(), page.locator(last).first.bounding_box()
+    left = min(top["x"], bottom["x"]) - CROP_MARGIN
+    right = max(top["x"] + top["width"], bottom["x"] + bottom["width"]) + CROP_MARGIN
+    clip = {"x": max(left, 0), "y": top["y"] - CROP_MARGIN, "width": right - max(left, 0), "height": bottom["y"] + bottom["height"] - top["y"] + 2 * CROP_MARGIN}
+    page.screenshot(path=path, type="jpeg", quality=82, clip=clip, full_page=True)
 
 
 def settle(page) -> None:
@@ -92,29 +109,24 @@ def main() -> None:
                 signup.close()
 
                 for theme in THEMES:
-                    # Crops for the landing page at desktop width, 1.5x for sharp text, JPEG to keep them small.
+                    # The hero: the whole first screen of the app at desktop width, 1.5x for sharp text.
                     context = themed_context(browser, theme, 1440, 900, 1.5, storage)
                     page = context.new_page()
                     page.goto(f"{BASE}/dashboard")
                     settle(page)
                     page.screenshot(path=img_dir / f"overview-{theme}.jpg", type="jpeg", quality=82)
-                    for name, selector in CROPS.items():
-                        box = page.locator(selector).first.bounding_box()
-                        # A margin of page around each part, so it reads as a crop of the app, not a cut-out.
-                        clip = {"x": box["x"] - 24, "y": box["y"] - 24, "width": box["width"] + 48, "height": box["height"] + 48}
-                        page.screenshot(path=img_dir / f"{name}-{theme}.jpg", type="jpeg", quality=82, clip=clip, full_page=True)
                     context.close()
-                    # The same parts at phone width, so the landing page stays readable on a phone.
-                    context = themed_context(browser, theme, 390, 844, 2, storage)
-                    page = context.new_page()
-                    page.goto(f"{BASE}/dashboard")
-                    settle(page)
-                    page.screenshot(path=img_dir / f"overview-phone-{theme}.jpg", type="jpeg", quality=80)
-                    for name, selector in CROPS.items():
-                        box = page.locator(selector).first.bounding_box()
-                        clip = {"x": 0, "y": box["y"] - 16, "width": 390, "height": box["height"] + 32}
-                        page.screenshot(path=img_dir / f"{name}-phone-{theme}.jpg", type="jpeg", quality=80, clip=clip, full_page=True)
-                    context.close()
+                    # Tight crops of single components, at 2x (JPEG keeps them small).
+                    for suffix, width in (("", CROP_VIEWPORT), ("-phone", 390)):
+                        context = themed_context(browser, theme, width, 900, 2, storage)
+                        page = context.new_page()
+                        page.goto(f"{BASE}/dashboard")
+                        settle(page)
+                        if suffix == "-phone":
+                            page.screenshot(path=img_dir / f"overview-phone-{theme}.jpg", type="jpeg", quality=80)
+                        for name, (first, last) in CROPS.items():
+                            save_crop(page, img_dir / f"{name}{suffix}-{theme}.jpg", first, last)
+                        context.close()
 
                 for theme in THEMES:
                     for width, height in WIDTHS.items():

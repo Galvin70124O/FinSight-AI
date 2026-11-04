@@ -189,20 +189,22 @@ svg { flex: none; }
 [data-theme="dark"] .shot .shot-light { display: none; }
 [data-theme="dark"] .shot .shot-dark { display: block; }
 
-.feature-list { display: grid; gap: var(--s24); }
-.feature { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: var(--s12); align-items: center; }
-.feature:nth-child(even) { grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); }
-.feature:nth-child(even) .feature-text { order: 2; }
+.feature-list { display: grid; gap: var(--s16); }
+/* Every feature has the same shape: words on the left, a tight crop of the app on the right. */
+.feature { display: grid; grid-template-columns: minmax(0, 4fr) minmax(0, 8fr); gap: var(--s12); align-items: start; }
+.feature .shot { padding: var(--s2); }
 .feature h2 { font: 500 36px/1.12 var(--font-display); letter-spacing: -0.015em; text-wrap: balance; }
 .feature p { margin-top: var(--s4); max-width: 42ch; color: var(--ink-2); font-size: 17px; }
 
-.how { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: var(--s12); margin-top: var(--s24); padding-top: var(--s12); border-top: 1px solid var(--line); }
+/* Same shape as the features: words on the left, the example on the right. */
+.how { display: grid; grid-template-columns: minmax(0, 4fr) minmax(0, 8fr); gap: var(--s12); align-items: start; margin-top: var(--s16); padding-top: var(--s12); border-top: 1px solid var(--line); }
 .how h2 { font: 500 36px/1.12 var(--font-display); letter-spacing: -0.015em; text-wrap: balance; }
-.steps { display: grid; gap: var(--s6); list-style: decimal inside; font-size: 17px; }
+.steps { display: grid; gap: var(--s5); margin-top: var(--s6); list-style: decimal inside; font-size: 17px; }
 .steps li::marker { color: var(--muted); }
 .steps p { display: inline; }
 .steps .sub { display: block; margin-top: var(--s1); padding-left: 1.4em; }
-.csv-table { margin-top: var(--s4); font-size: 14px; }
+.csv-example { padding: var(--s6); border-radius: var(--r-md); background: var(--surface-2); }
+.csv-table { margin-top: var(--s4); font-size: 15px; }
 
 /* ---------- Auth ---------- */
 .auth { display: grid; place-items: center; padding: var(--s12) 0; }
@@ -433,8 +435,6 @@ button, .btn, .chip, .seg-btn, .tab, .nav-link, summary { -webkit-user-select: n
   .content { padding: var(--s6) calc(var(--s4) + env(safe-area-inset-right, 0px)) calc(56px + var(--s12) + env(safe-area-inset-bottom, 0px)) calc(var(--s4) + env(safe-area-inset-left, 0px)); }
 
   .hero, .feature, .how { grid-template-columns: minmax(0, 1fr); gap: var(--s8); }
-  .feature:nth-child(even) { grid-template-columns: minmax(0, 1fr); }
-  .feature:nth-child(even) .feature-text { order: 0; }
   .hero { padding: var(--s8) 0 var(--s16); }
   .hero-title { font-size: 44px; line-height: 1.02; }
   .feature h2, .how h2 { font-size: 30px; }
