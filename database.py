@@ -152,6 +152,11 @@ class _PostgresConnection:
         cursor.execute(sql.replace("?", "%s"), tuple(params))
         return cursor
 
+    def executemany(self, sql: str, params_seq) -> None:
+        # psycopg 3 sends the whole batch in pipeline mode, not one round trip per row.
+        with self._conn.cursor() as cursor:
+            cursor.executemany(sql.replace("?", "%s"), [tuple(params) for params in params_seq])
+
     def executescript(self, script: str) -> None:
         for statement in script.split(";"):
             if statement.strip():

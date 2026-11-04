@@ -105,8 +105,8 @@ def save_transactions(db, user_id: int, transactions_df, source_file: str | None
     """Insert cleaned transaction rows into the database without duplicates."""
     existing_keys = imported_signatures(db, user_id)
 
-    count = 0
-    for _, row in transactions_df.iterrows():
+    new_rows = []
+    for row in transactions_df.to_dict("records"):
         transaction_date = row["Date"].date().isoformat() if hasattr(row["Date"], "date") else str(row["Date"])
         transaction_type = str(row.get("Transaction_Type", row.get("Type", "Expense")))
         metadata = {}
@@ -134,8 +134,12 @@ def save_transactions(db, user_id: int, transactions_df, source_file: str | None
         signature = transaction_signature(payload[0], payload[2], payload[3], payload[4])
         if signature in existing_keys:
             continue
+        existing_keys.add(signature)
+        new_rows.append((user_id, *payload))
 
-        db.execute(
+    # One batch: a 2 MB file is ~30,000 rows, and one statement per row is ~30,000 round trips to Postgres.
+    if new_rows:
+        db.executemany(
             """
             INSERT INTO transactions (
                 user_id, date, category, amount, type, description, source_file,
@@ -143,12 +147,10 @@ def save_transactions(db, user_id: int, transactions_df, source_file: str | None
             )
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
-            (user_id, *payload),
+            new_rows,
         )
-        existing_keys.add(signature)
-        count += 1
     db.commit()
-    return count
+    return len(new_rows)
 
 
 def deduplicate_transactions_in_db(db, user_id: int | None = None) -> int:
