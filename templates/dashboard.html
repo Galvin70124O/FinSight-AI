@@ -95,7 +95,7 @@
       {% for c in cats %}
         {% set share = (c.Total / m.total_expense * 100) if m.total_expense else 0 %}
         <li class="bar-row{{ ' is-rest' if c.Category == 'Everything else' }}">
-          <span class="name">{{ c.Category }}</span>
+          <span class="name cat-cell">{{ category_icon(c.Category) }}<span>{{ c.Category }}</span></span>
           <span class="num">{{ c.Total|inr(0) }}</span>
           <span class="num share">{{ share|round(1) }}%</span>
           <span class="bar-track" aria-hidden="true"><span class="bar-fill" style="width: {{ (c.Total / top * 100)|round(2) if top else 0 }}%"></span></span>
