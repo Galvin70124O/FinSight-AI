@@ -5,7 +5,8 @@ __pycache__/
 venv/
 .pytest_cache/
 
-# Local data: never commit databases, uploads or trained models
+# Local data: never commit databases, uploads or trained models.
+# (ml/categoriser.joblib is the one shipped model: trained on fictional seed data only.)
 instance/*
 !instance/README.md
 *.db

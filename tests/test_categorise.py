@@ -76,3 +76,57 @@ def test_every_rule_category_has_a_matching_case_above():
 def test_keywords_match_whole_words_only():
     assert match_rule(normalise("UPI/COCA COLA/412345678901")) is None  # OLA inside COLA
     assert match_rule(normalise("UPI/PARENTS/412345678901")) is None  # RENT inside PARENTS
+
+
+def test_rules_and_model_beat_rules_alone_on_held_out_merchants():
+    import pandas as pd
+
+    from ml.categorise import train
+    from scripts.train_categoriser import SEED, accuracies, held_out_split
+
+    fit_rows, held_out = held_out_split(pd.read_csv(SEED))
+    rules_only, combined = accuracies(train(list(fit_rows["description"]), list(fit_rows["category"])), held_out)
+
+    print(f"\nHeld-out {len(held_out)} rows. Rules alone: {rules_only:.1%}. Rules + model: {combined:.1%}.")
+    assert combined > rules_only
+
+
+def test_the_shipped_model_loads_with_the_pinned_scikit_learn():
+    import ml.categorise
+
+    assert ml.categorise.MODEL is not None
+    keys, suggestions = ml.categorise.categorise(["POS 4591XXXXXX1234 NEW HEALTH MEDICALS PUNE"], {})
+    assert suggestions[keys[0]].source == "model" and suggestions[keys[0]].category == "Healthcare"
+
+
+def test_a_correction_beats_rules_and_model():
+    from ml.categorise import categorise
+
+    descriptions = ["UPI/ZOMATO/412345678901", "POS 4591XXXXXX1234 NEW HEALTH MEDICALS PUNE"]
+    keys, suggestions = categorise(descriptions, {"ZOMATO": "Groceries", "NEW HEALTH MEDICALS": "Shopping"})
+
+    assert keys == ["ZOMATO", "NEW HEALTH MEDICALS"]
+    assert [(suggestions[k].category, suggestions[k].source) for k in keys] == [("Groceries", "correction"), ("Shopping", "correction")]
+
+
+def test_low_confidence_and_nameless_rows_need_a_category():
+    from ml.categorise import categorise
+
+    keys, suggestions = categorise(["UPI/RAHUL S/412345678901", "412345678901"], {"": "Dining"})
+    assert [suggestions[k].category for k in keys] == [None, None]
+
+
+def test_a_broken_or_mismatched_model_file_falls_back_to_rules(tmp_path, monkeypatch):
+    import joblib
+
+    import ml.categorise
+    from ml.categorise import categorise, load_model
+
+    (tmp_path / "broken.joblib").write_bytes(b"not a model")
+    joblib.dump({"model": None, "sklearn": "0.0.1"}, tmp_path / "old.joblib")
+    assert load_model(tmp_path / "broken.joblib") is None
+    assert load_model(tmp_path / "old.joblib") is None
+
+    monkeypatch.setattr(ml.categorise, "MODEL", None)
+    keys, suggestions = categorise(["UPI/ZOMATO/412345678901", "POS 4591XXXXXX1234 NEW HEALTH MEDICALS PUNE"], {})
+    assert [(suggestions[k].category, suggestions[k].source) for k in keys] == [("Dining", "rule"), (None, "none")]

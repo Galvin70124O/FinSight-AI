@@ -102,7 +102,7 @@ def train(descriptions: list[str], categories: list[str]):
     """Fit the model on raw descriptions. Used by the training script and the tests."""
     model = make_pipeline(
         TfidfVectorizer(analyzer="char_wb", ngram_range=(3, 5), sublinear_tf=True),
-        LogisticRegression(C=20, max_iter=2000),
+        LogisticRegression(C=50, max_iter=2000),  # chosen on 10 merchant splits: ~2% wrong, half left for the user
     )
     return model.fit([normalise(d) for d in descriptions], categories)
 
