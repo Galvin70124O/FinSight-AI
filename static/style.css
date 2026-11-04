@@ -64,6 +64,7 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 h1, h2, h3, p, ol, ul, figure { margin: 0; }
+p, li { text-wrap: pretty; }  /* no single word left alone on a last line */
 ol, ul { padding: 0; list-style: none; }
 a { color: inherit; text-decoration: none; }
 img { display: block; max-width: 100%; height: auto; }
@@ -324,7 +325,7 @@ svg { flex: none; }
 .not-found p { margin-top: var(--s3); color: var(--ink-2); }
 .not-found .page-actions { margin-top: var(--s6); }
 
-.legal { max-width: 68ch; padding: var(--s8) 0 var(--s12); }
+.legal { max-width: 38rem; padding: var(--s8) 0 var(--s12); }  /* about 75 characters of body text */
 .legal > p, .legal li { color: var(--ink-2); }
 .legal > p { margin-top: var(--s3); }
 .legal h2 { margin-top: var(--s10); font-size: 20px; line-height: 28px; font-weight: 500; text-wrap: balance; }
