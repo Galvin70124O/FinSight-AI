@@ -6,9 +6,10 @@ Starts the app on a throwaway database, signs up a sample user, loads the
 sample transactions, then saves:
 
 - static/img/<part>-<theme>.jpg   crops of the dashboard used on the landing page
-- docs/screenshots/<page>-<width>-<theme>.png   full pages for the README
+- docs/screenshots/<page>-<width>-<theme>.png   full pages for the README, including the
+  import review step for REVIEW_CSV (a made-up statement with no Category column)
 
-Needs the dev requirements (Playwright) and an installed Google Chrome.
+Needs the dev requirements (Playwright) and Google Chrome, or Playwright's Chromium.
 Nothing from the run is kept: the database lives in a temporary folder.
 """
 from __future__ import annotations
@@ -39,6 +40,27 @@ CROP_MARGIN = 12
 # displays a crop at (~750px), so the smallest chart text (12px) still shows at 13px or more.
 CROP_VIEWPORT = 940
 PAGES = {"landing": "/", "upload": "/upload", "dashboard": "/dashboard"}
+# A made-up statement without categories: keyword rules, model guesses and merchants left for the user.
+REVIEW_CSV = """Date,Amount,Type,Description
+2026-10-01,85000,Income,ACH/SALARY/ACME TECH/OCT2026
+2026-10-02,14000,Expense,IMPS/P2A/412345678901/KAVYA NAIR/HDFC0001234/rent oct
+2026-10-03,486,Expense,UPI/ZOMATO LTD/412345678902/Paid via PhonePe
+2026-10-09,312,Expense,UPI/ZOMATO LTD/412345678903/Paid via PhonePe
+2026-10-17,655,Expense,UPI/ZOMATO LTD/412345678904/Paid via PhonePe
+2026-10-04,1240,Expense,UPI/SWIGGY INSTAMART/412345678905/Order
+2026-10-11,968,Expense,UPI/SWIGGY INSTAMART/412345678906/Order
+2026-10-05,214,Expense,UPI/UBER INDIA/412345678907/Ride
+2026-10-12,187,Expense,UPI/UBER INDIA/412345678908/Ride
+2026-10-06,1890,Expense,BIL/BPAY/000123456/BESCOM
+2026-10-07,399,Expense,UPI/JIO PREPAID/412345678909/Recharge
+2026-10-08,649,Expense,NACH AUTO DEBIT/NETFLIX.COM/SI 7788
+2026-10-10,90,Expense,UPI/SRI GANAPATHI TIFFIN ROOM/412345678910
+2026-10-18,120,Expense,UPI/SRI GANAPATHI TIFFIN ROOM/412345678911
+2026-10-13,740,Expense,POS 4591XXXXXX1234 NEW HEALTH MEDICALS PUNE
+2026-10-14,2000,Expense,UPI/RAHUL S/412345678912
+2026-10-15,450,Expense,UPI/ANITA K/412345678913/split dinner
+2026-10-16,3000,Expense,ATM WDL/SBI ATM ANNA NAGAR/123456
+"""
 WIDTHS = {1440: 900, 390: 844}
 THEMES = ("light", "dark")
 
@@ -102,7 +124,10 @@ def main() -> None:
         threading.Thread(target=server.serve_forever, daemon=True).start()
         try:
             with sync_playwright() as p:
-                browser = p.chromium.launch(channel="chrome")
+                try:
+                    browser = p.chromium.launch(channel="chrome")
+                except Exception:  # no Google Chrome installed: Playwright's own Chromium (`playwright install chromium`)
+                    browser = p.chromium.launch()
                 signup = browser.new_context()
                 sign_up(signup)
                 storage = signup.storage_state()
@@ -128,8 +153,20 @@ def main() -> None:
                             save_crop(page, img_dir / f"{name}{suffix}-{theme}.jpg", first, last)
                         context.close()
 
+                review_csv = Path(tmp) / "statement-october.csv"
+                review_csv.write_text(REVIEW_CSV, encoding="utf-8")
                 for theme in THEMES:
                     for width, height in WIDTHS.items():
+                        # The review step only exists after an upload; nothing is saved until Save.
+                        context = themed_context(browser, theme, width, height, 1, storage)
+                        page = context.new_page()
+                        page.goto(f"{BASE}/upload")
+                        page.set_input_files("input[type=file]", str(review_csv))
+                        page.click("form.form button[type=submit]")
+                        settle(page)
+                        page.add_style_tag(content=".tabbar { position: static; } .review-actions { position: static; }")
+                        page.screenshot(path=shots_dir / f"import-review-{width}-{theme}.png", full_page=True)
+                        context.close()
                         for name, path in PAGES.items():
                             context = themed_context(browser, theme, width, height, 1, None if name == "landing" else storage)
                             page = context.new_page()
@@ -142,7 +179,7 @@ def main() -> None:
                 browser.close()
         finally:
             server.shutdown()
-    print(f"Saved {(len(CROPS) + 1) * len(THEMES) * 2} crops to {img_dir} and {len(PAGES) * len(WIDTHS) * len(THEMES)} pages to {shots_dir}")
+    print(f"Saved {(len(CROPS) + 1) * len(THEMES) * 2} crops to {img_dir} and {(len(PAGES) + 1) * len(WIDTHS) * len(THEMES)} pages to {shots_dir}")
 
 
 if __name__ == "__main__":
