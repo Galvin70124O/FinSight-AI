@@ -63,7 +63,10 @@ def shift_to_recent_months(df: pd.DataFrame, today: date | None = None) -> pd.Da
 
 def format_day(value: Any) -> str:
     """An ISO date as people read it: '2025-04-27' -> '27 Apr 2025'. CSV examples keep ISO."""
-    day = pd.to_datetime(value)
+    try:
+        day = date.fromisoformat(str(value)[:10])  # stored dates are ISO; pandas guessing a format each time is slow
+    except ValueError:
+        day = pd.to_datetime(value)
     return f"{day.day} {day:%b %Y}"
 
 

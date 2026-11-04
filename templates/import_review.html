@@ -31,6 +31,8 @@
     <p class="sub"><a class="link" href="{{ url_for('main.upload') }}#how-categories">How categories are chosen</a></p>
   </div>
 
+  {# Keep this form URL-encoded (no enctype): Flask 3.1 caps a multipart text field at 500 KB, and the
+     payload for a 2 MB file is about 880 KB. A URL-encoded form is only bound by MAX_CONTENT_LENGTH. #}
   <form method="post" action="{{ url_for('main.save_review') }}" class="review-form" data-once>
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <input type="hidden" name="payload" value="{{ payload }}">

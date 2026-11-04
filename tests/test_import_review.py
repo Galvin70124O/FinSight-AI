@@ -1,6 +1,8 @@
 import io
+import random
 import re
 import threading
+from urllib.parse import urlencode
 
 from conftest import csrf_token, register_and_login
 
@@ -174,3 +176,32 @@ def test_one_users_corrections_never_reach_another(app, db):
     ravi.post("/upload/save", data=review_form(ravi_page))
     assert dict(rows(db, ravi_id))["UPI/ZOMATO LTD/412345678901/Paid via PhonePe"] == "Dining"
     assert dict(rows(db, asha_id))["UPI/ZOMATO LTD/412345678901/Paid via PhonePe"] == "Shopping"
+
+
+def test_the_largest_accepted_file_round_trips_under_the_request_limit(app, client, db, logged_in):
+    """A statement just under 2 MB with no Category column: about 31,000 rows, 300 merchants and a
+    unique reference on every row (the worst case for compressing the review payload)."""
+    rng = random.Random(1)
+    names = [f"{a} {b}" for a in ("SRI LAKSHMI", "NEW", "ROYAL", "CITY", "GREEN", "SUNRISE", "GANESH", "ANNAPURNA", "RAJ", "STAR")
+             for b in ("TIFFINS", "MEDICALS", "STORES", "TRAVELS", "BAKERY", "FASHION", "ELECTRONICS", "DAIRY", "CHEMISTS", "OPTICALS",
+                       "TAILORS", "SWEETS", "MOTORS", "AGENCIES", "TRADERS", "PHOTO STUDIO", "FURNITURE", "HARDWARE", "BOOK HOUSE",
+                       "FLOWERS", "JEWELLERS", "LAUNDRY", "SALON", "GYM", "MOBILES", "CANTEEN", "PAN SHOP", "FRUITS", "TEA STALL", "PRINTERS")]
+    lines, size = ["Date,Amount,Type,Description"], 30
+    while True:
+        line = (f"2025-{rng.randint(1, 12):02d}-{rng.randint(1, 28):02d},{rng.randint(20, 5000)}.{rng.randint(0, 99):02d},Expense,"
+                f"UPI/{rng.choice(names)}/{rng.randint(10 ** 11, 10 ** 12 - 1)}/{rng.choice(['Paid via PhonePe', 'UPI', ''])}")
+        if size + len(line) + 1 > 2_090_000:
+            break
+        lines.append(line)
+        size += len(line) + 1
+
+    page = upload(client, ("\n".join(lines) + "\n").encode()).get_data(as_text=True)
+    assert "Check the categories" in page
+    assert '<form method="post" action="/upload/save" class="review-form" data-once>' in page  # URL-encoded: see the template
+    form = review_form(page)
+    request_size = len(urlencode(form))
+    print(f"\n{len(lines) - 1} rows: payload {len(form['payload']):,} B, Save request {request_size:,} B of {app.config['MAX_CONTENT_LENGTH']:,}")
+    assert request_size < app.config["MAX_CONTENT_LENGTH"]
+
+    assert f"Imported {len(lines) - 1} transactions." in client.post("/upload/save", data=form, follow_redirects=True).get_data(as_text=True)
+    assert db.execute("SELECT COUNT(*) FROM transactions").fetchone()[0] == len(lines) - 1
