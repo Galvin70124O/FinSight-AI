@@ -1,0 +1,35 @@
+{
+  "about": "Keyword rules for filling in a missing category. Checked top to bottom: the first rule with a keyword in the cleaned description wins, so put the more specific rule first (a Zomato refund is Income, Amazon Prime is Entertainment, Swiggy Instamart is Groceries). Keywords are upper case and match whole words.",
+  "categories": [
+    "Dining", "Groceries", "Transport", "Utilities", "Rent", "Shopping",
+    "Entertainment", "Healthcare", "Education", "Cash", "Income", "Other"
+  ],
+  "rules": [
+    {"category": "Income", "keywords": ["SALARY", "STIPEND", "REFUND", "CASHBACK"]},
+    {"category": "Entertainment", "keywords": [
+      "NETFLIX", "SPOTIFY", "HOTSTAR", "JIOHOTSTAR", "AMAZON PRIME", "PRIME VIDEO", "PRIMEVIDEO",
+      "YOUTUBE", "BOOKMYSHOW", "PVR", "INOX", "SONYLIV", "ZEE5"
+    ]},
+    {"category": "Groceries", "keywords": [
+      "BIGBASKET", "BIG BASKET", "ZEPTO", "BLINKIT", "INSTAMART", "DMART", "D MART", "AVENUE SUPERMARTS",
+      "JIOMART", "RELIANCE FRESH", "KIRANA", "SUPERMARKET", "GROCERY", "GROCERIES"
+    ]},
+    {"category": "Rent", "keywords": ["RENT", "HOSTEL", "MESS FEE", "MESS BILL", "PG FEE", "PAYING GUEST"]},
+    {"category": "Education", "keywords": ["COLLEGE", "UNIVERSITY", "TUITION", "SCHOOL", "EXAM FEE", "COURSERA", "UDEMY", "UNACADEMY"]},
+    {"category": "Healthcare", "keywords": ["PHARMACY", "HOSPITAL", "CLINIC", "APOLLO", "PHARMEASY", "NETMEDS", "1MG"]},
+    {"category": "Cash", "keywords": ["ATM", "CASH WDL", "CASH WITHDRAWAL", "NFS"]},
+    {"category": "Transport", "keywords": [
+      "UBER", "OLA", "RAPIDO", "AUTO", "METRO", "IRCTC", "PETROL", "FUEL", "HPCL", "IOCL", "BPCL",
+      "INDIAN OIL", "BHARAT PETROLEUM", "FASTAG", "REDBUS", "NAMMA YATRI"
+    ]},
+    {"category": "Utilities", "keywords": [
+      "JIO", "AIRTEL", "VI RECHARGE", "VI PREPAID", "VI POSTPAID", "VODAFONE", "BSNL", "ELECTRICITY", "BESCOM",
+      "TNEB", "TANGEDCO", "BSES", "BROADBAND", "WIFI", "WI FI", "FIBERNET", "GAS", "LPG", "INDANE"
+    ]},
+    {"category": "Dining", "keywords": [
+      "ZOMATO", "SWIGGY", "RESTAURANT", "CAFE", "DOMINOS", "MCDONALDS", "KFC", "STARBUCKS", "PIZZA HUT",
+      "BURGER KING"
+    ]},
+    {"category": "Shopping", "keywords": ["AMAZON", "FLIPKART", "MYNTRA", "AJIO", "MEESHO", "NYKAA", "CROMA", "DECATHLON"]}
+  ]
+}
