@@ -50,6 +50,8 @@ _NOISE = {"UPI", "NEFT", "IMPS", "RTGS", "ACH", "NACH", "ECS", "POS", "P2M", "P2
 # Direction words banks put in front: noise only at the start ("DR MEHTA" later on is a doctor).
 _LEADING_NOISE = {"CR", "DR", "D", "C", "TO", "BY", "TRF", "TRANSFER", "REF", "SENT", "RECEIVED"}
 _COMPANY_SUFFIX = {"LTD", "LIMITED", "PVT", "PRIVATE", "LLP", "INC", "CO"}
+_PUNCTUATION = re.compile(r"[^A-Z0-9&]+")
+_WITHOUT_DIGITS = str.maketrans("", "", "0123456789")
 
 
 def _clean_segments(description: object) -> list[str]:
@@ -58,9 +60,9 @@ def _clean_segments(description: object) -> list[str]:
         text = pattern.sub(" ", text)
     segments = []
     for segment in _SEGMENT.split(text):
-        tokens = re.sub(r"[^A-Z0-9&]+", " ", segment).split()
+        tokens = _PUNCTUATION.sub(" ", segment).split()
         # References, account and card numbers: any word that is all digits or has three or more.
-        tokens = [t for t in tokens if not t.isdigit() and sum(ch.isdigit() for ch in t) < 3 and t not in _NOISE]
+        tokens = [t for t in tokens if not t.isdigit() and len(t) - len(t.translate(_WITHOUT_DIGITS)) < 3 and t not in _NOISE]
         if not segments:
             while tokens and tokens[0] in _LEADING_NOISE:
                 tokens.pop(0)
@@ -74,18 +76,21 @@ def normalise(description: object) -> str:
     return " ".join(_clean_segments(description))
 
 
-def merchant_key(description: object) -> str:
-    """The merchant a row belongs to: the first meaningful part of the description, e.g. "ZOMATO".
-
-    Empty when the description has no name in it at all.
-    """
-    segments = _clean_segments(description)
+def _key(segments: list[str]) -> str:
     if not segments:
         return ""
     words = segments[0].split()
     while len(words) > 1 and words[-1] in _COMPANY_SUFFIX:
         words.pop()
     return " ".join(words[:3])[:40]
+
+
+def merchant_key(description: object) -> str:
+    """The merchant a row belongs to: the first meaningful part of the description, e.g. "ZOMATO".
+
+    Empty when the description has no name in it at all.
+    """
+    return _key(_clean_segments(description))
 
 
 def match_rule(normalised: str) -> tuple[str, str] | None:
@@ -143,31 +148,39 @@ def categorise(descriptions: list[str], overrides: dict[str, str], model=None) -
     Returns each row's merchant key and a suggestion per key.
     """
     model = MODEL if model is None else model
-    keys = [merchant_key(d) for d in descriptions]
-    texts = [normalise(d) for d in descriptions]
-    groups: dict[str, list[int]] = {}
-    for index, key in enumerate(keys):
-        groups.setdefault(key, []).append(index)
+    keys = []
+    # Per merchant, how many rows share each cleaned text. With references stripped, a year of
+    # statements has a few hundred distinct texts, so rules and model run once per text, not per row.
+    texts: dict[str, Counter] = {}
+    for description in descriptions:
+        segments = _clean_segments(description)
+        key = _key(segments)
+        keys.append(key)
+        texts.setdefault(key, Counter())[" ".join(segments)] += 1
 
     suggestions: dict[str, Suggestion] = {}
-    for_model: dict[str, list[int]] = {}
-    for key, rows in groups.items():
+    for_model: dict[str, Counter] = {}
+    for key, counts in texts.items():
         if key and key in overrides:
             suggestions[key] = Suggestion(overrides[key], "correction")
             continue
-        matches = [match for match in (match_rule(texts[i]) for i in rows) if match]
+        matches: Counter = Counter()
+        for text, rows in counts.items():
+            match = match_rule(text)
+            if match:
+                matches[match] += rows
         if matches:
-            category, keyword = Counter(matches).most_common(1)[0][0]
+            category, keyword = matches.most_common(1)[0][0]
             suggestions[key] = Suggestion(category, "rule", keyword=keyword)
         else:
-            for_model[key] = rows
+            for_model[key] = counts
 
     if for_model and model is not None:
-        probabilities = model.predict_proba([texts[i] for rows in for_model.values() for i in rows])
-        start = 0
-        for key, rows in for_model.items():
-            mean = probabilities[start:start + len(rows)].mean(axis=0)
-            start += len(rows)
+        unique = sorted({text for counts in for_model.values() for text in counts})
+        probabilities = dict(zip(unique, model.predict_proba(unique)))
+        for key, counts in for_model.items():
+            # The mean over the merchant's rows.
+            mean = sum(probabilities[text] * rows for text, rows in counts.items()) / sum(counts.values())
             best = int(mean.argmax())
             confidence = float(mean[best])
             category = str(model.classes_[best]) if confidence >= CONFIDENCE_THRESHOLD else None
