@@ -14,7 +14,7 @@
     <li><strong>Your transactions:</strong> for each row you import, the date, category, amount, type (income or expense) and description, plus the name of the file it came from. These are what the overview is built from.</li>
     <li><strong>Your insights:</strong> the forecast, unusual transactions and health score worked out from your transactions, saved so the overview loads quickly. They are recalculated whenever your transactions change.</li>
     <li><strong>Your category corrections:</strong> when you change the category FinSight suggested for a merchant while importing (say, ZOMATO to Groceries), the merchant name and the category you chose are saved for your account, so your next import uses your choice. Only your account uses them.</li>
-    <li><strong>A receipt for each import:</strong> a random code and the time, kept for a day, so pressing Save twice cannot import the same rows twice. It says nothing about the rows themselves.</li>
+    <li><strong>A receipt for each import:</strong> a random code and the time, so pressing Save twice cannot import the same rows twice. It says nothing about the rows themselves. Receipts older than a day are cleared whenever anyone saves an import.</li>
   </ul>
 
   <h2>Your CSV file</h2>
@@ -35,7 +35,7 @@
   <p>One cookie keeps you signed in. It is signed, cannot be read by scripts on the page, and is only sent over HTTPS on the live site. Your choice of light or dark theme is saved in your browser and never sent to us.</p>
 
   <h2>How long we keep it</h2>
-  <p>Until you delete your account. There is no automatic expiry.</p>
+  <p>Until you delete your account. Apart from import receipts (see above), nothing expires automatically.</p>
 
   <h2>Getting your data, and deleting it</h2>
   <p>Your transactions are the CSV files you uploaded, so you already have a copy; FinSight does not have an export button yet. To delete everything, sign in, open <strong>Import a CSV</strong> and use <strong>Delete your account</strong> at the bottom of the page. Your account, every transaction, your insights, your category corrections and your import receipts are deleted straight away. Render’s request logs expire under Render’s own schedule.</p>
