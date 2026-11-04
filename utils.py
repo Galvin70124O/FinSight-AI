@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import math
+from datetime import date
 from typing import Any
 
 import pandas as pd
@@ -44,6 +45,19 @@ def inr_axis(max_value: float, ticks: int = 5) -> dict[str, list]:
     step = next(m * magnitude for m in (1, 2, 2.5, 5, 10) if m * magnitude >= raw_step)
     values = [step * i for i in range(math.ceil(max_value / step) + 1)]
     return {"tickvals": values, "ticktext": [format_inr(v, 0) for v in values]}
+
+
+def shift_to_recent_months(df: pd.DataFrame, today: date | None = None) -> pd.DataFrame:
+    """Move every row by the same whole number of months so the latest month is the last full month.
+
+    Used for the sample data, so it always covers the months just before ``today``. Amounts and
+    days of the month stay the same (a 31st becomes the 30th in a shorter month).
+    """
+    dates = pd.to_datetime(df["Date"])
+    months = ((pd.Period(today or date.today(), "M") - 1) - dates.max().to_period("M")).n
+    shifted = df.copy()
+    shifted["Date"] = (dates + pd.DateOffset(months=months)).dt.strftime("%Y-%m-%d")
+    return shifted
 
 
 def plural(count: int, word: str) -> str:

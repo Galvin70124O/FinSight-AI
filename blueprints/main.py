@@ -10,7 +10,7 @@ from werkzeug.utils import secure_filename
 from database import get_db
 from ml.pipeline import INSIGHTS_VERSION, compute_insights
 from models import get_cached_insights, get_user_transactions, save_insights, save_transactions
-from utils import CSVValidationError, plural, allowed_file, build_dashboard_payload, clean_transaction_dataframe, read_uploaded_csv, validate_uploaded_csv
+from utils import CSVValidationError, plural, allowed_file, build_dashboard_payload, clean_transaction_dataframe, read_uploaded_csv, shift_to_recent_months, validate_uploaded_csv
 
 main_bp = Blueprint("main", __name__)
 logger = logging.getLogger(__name__)
@@ -87,7 +87,8 @@ def dashboard():
 def load_demo_data():
     """Import the bundled sample transactions into the current user's account only."""
     demo_path = os.path.join(current_app.config["DATASET_DIR"], "sample_transactions.csv")
-    cleaned_df = clean_transaction_dataframe(pd.read_csv(demo_path))
+    # The sample covers the 8 full months before today, so it always looks current.
+    cleaned_df = clean_transaction_dataframe(shift_to_recent_months(pd.read_csv(demo_path)))
     db = get_db()
     saved_rows = save_transactions(db, session["user_id"], cleaned_df, source_file="demo_data")
     refresh_insights(db, session["user_id"])

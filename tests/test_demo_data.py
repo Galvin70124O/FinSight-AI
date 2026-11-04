@@ -40,3 +40,20 @@ def test_demo_data_loads_into_current_user_only(app, db):
     before = count(db, second_id)
     second.post("/demo-data", data={"csrf_token": csrf_token(second, "/dashboard")})
     assert count(db, second_id) == before
+
+
+def test_sample_data_covers_the_eight_full_months_before_today():
+    from datetime import date
+    from pathlib import Path
+
+    import pandas as pd
+
+    from utils import shift_to_recent_months
+
+    raw = pd.read_csv(Path(__file__).resolve().parents[1] / "dataset" / "sample_transactions.csv")
+    shifted = shift_to_recent_months(raw, today=date(2026, 11, 4))
+    months = pd.to_datetime(shifted["Date"]).dt.to_period("M")
+
+    assert (months.min(), months.max()) == (pd.Period("2026-03"), pd.Period("2026-10"))
+    assert shifted["Amount"].tolist() == raw["Amount"].tolist()  # same amounts, same order
+    assert pd.to_datetime(shifted["Date"]).dt.day.tolist() == pd.to_datetime(raw["Date"]).dt.day.tolist()
