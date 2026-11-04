@@ -414,6 +414,26 @@ svg { flex: none; }
 .row-edit .select { min-width: 0; max-width: 100%; }
 .tx-edit .row-edit { margin: var(--s1) 0 var(--s2); }
 
+/* Categories: the review step's merchant rows, a change form for all of a merchant's transactions, and
+   each merchant's transactions on request, each with its own change form. */
+.categories { max-width: 1040px; }
+.categories .page-head .sub { max-width: 72ch; }
+.cat-search { display: flex; gap: var(--s2); max-width: 32rem; margin-bottom: var(--s4); }
+.cat-search .input { flex: 1; min-width: 0; }
+.cat-needs { display: flex; align-items: center; gap: 6px; margin-bottom: var(--s6); font-size: 14px; }
+.cat-needs .icon { width: 15px; height: 15px; color: var(--bad); }
+.categories .merchant { grid-template-columns: minmax(0, 1fr) 7.5rem 8.5rem 11rem 17rem; }
+.merchant[hidden] { display: none; }
+.m-how .cat-icon svg { margin-top: 0; }
+.m-toggle { display: inline-flex; align-items: center; min-height: 32px; color: var(--accent); font-size: 14px; }
+.cat-rows { margin: var(--s2) 0 var(--s3); border-top: 1px solid var(--line); }
+.cat-row { display: grid; grid-template-columns: minmax(0, 1fr) auto 17rem; gap: var(--s2) var(--s4); align-items: center; padding: var(--s2) 0; border-bottom: 1px solid var(--line); font-size: 14px; }
+.cat-row-text { display: grid; min-width: 0; }
+.cat-desc { color: var(--ink-2); overflow-wrap: anywhere; }
+.cat-date { color: var(--muted); font-size: 13px; }
+.cat-row .amount { white-space: nowrap; }
+.row-edit .select { flex: 1; }
+
 .danger-zone { margin-top: var(--s12); padding-top: var(--s8); border-top: 1px solid var(--line); }
 .danger-zone .sub { margin: var(--s1) 0 var(--s5); }
 .danger-zone .flash { margin-bottom: var(--s4); }
@@ -462,7 +482,7 @@ button, .btn, .chip, .seg-btn, .tab, .nav-link, summary { -webkit-user-select: n
 
 /* Fingers need 44px targets and 16px fields (iOS zooms into anything smaller). */
 @media (pointer: coarse) {
-  .btn, .seg-btn, .chip, .select, .search-trigger, .skip-link, .m-rows summary, .m-remember, .tx-edit summary { min-height: 44px; }
+  .btn, .seg-btn, .chip, .select, .search-trigger, .skip-link, .m-rows summary, .m-remember, .tx-edit summary, .m-toggle { min-height: 44px; }
   .chip { min-width: 44px; }
   .icon-button { width: 44px; height: 44px; }
   .select, .input { font-size: 16px; }
@@ -480,6 +500,7 @@ button, .btn, .chip, .seg-btn, .tab, .nav-link, summary { -webkit-user-select: n
   }
   .m-total { align-self: start; }
   .m-choose { max-width: 24rem; }
+  .categories .merchant { grid-template-columns: minmax(0, 1fr) auto; }
 }
 
 @media (max-width: 1100px) {
@@ -534,6 +555,8 @@ button, .btn, .chip, .seg-btn, .tab, .nav-link, summary { -webkit-user-select: n
   .field-pair { grid-template-columns: 1fr; }
   .auth-card { padding: var(--s6); }
   .hide-sm { display: none; }
+  .cat-row { grid-template-columns: minmax(0, 1fr) auto; }
+  .cat-row .row-edit { grid-column: 1 / -1; }
   .review-actions .form-actions { flex: 1; }
   .review-actions .btn-primary { flex: 1; }
   .cell-sub { display: block; margin-top: 2px; color: var(--muted); font-size: 13px; overflow-wrap: anywhere; }

@@ -1,0 +1,106 @@
+{% extends 'base.html' %}
+{% from '_macros.html' import icon, category_icon, category_options, row_category_form %}
+{% block title %}Categories · FinSight AI{% endblock %}
+{% block description %}Every merchant in your transactions with its category. Change a whole merchant or a single transaction.{% endblock %}
+
+{# Hidden fields that bring the page back as it was: the search, the open merchants, "Show more". #}
+{% macro state() -%}
+  {%- if query %}<input type="hidden" name="q" value="{{ query }}">{% endif -%}
+  {%- for a in opened %}<input type="hidden" name="open" value="{{ a }}">{% else %}<input type="hidden" name="open" value="none">{% endfor -%}
+  {%- if more %}<input type="hidden" name="more" value="{{ more }}"><input type="hidden" name="rows" value="{{ rows }}">{% endif -%}
+{%- endmacro %}
+
+{% block content %}
+<section class="categories" aria-labelledby="pageTitle">
+  <header class="page-head">
+    <div>
+      <h1 class="page-title" id="pageTitle">Categories</h1>
+      <p class="sub">{{ merchant_count|plural('merchant') }} in your transactions. Changing a merchant changes all its transactions and is remembered for future imports. Changing one transaction changes only that one.</p>
+    </div>
+  </header>
+
+  {% if not merchant_count %}
+  <section class="empty-state" aria-labelledby="emptyTitle">
+    <h2 id="emptyTitle">No transactions yet</h2>
+    <p>Import a CSV, or load the sample data from the overview. Your merchants and their categories appear here.</p>
+    <div class="page-actions"><a class="btn btn-primary" href="{{ url_for('main.upload') }}">{{ icon('upload') }}<span>Import a CSV</span></a></div>
+  </section>
+  {% else %}
+  <form method="get" action="{{ url_for('main.categories') }}" class="cat-search" role="search">
+    <label class="sr-only" for="merchantSearch">Search merchants and categories</label>
+    <input class="input" id="merchantSearch" type="search" name="q" value="{{ query }}" placeholder="Search a merchant or category" autocomplete="off" data-merchant-filter>
+    <button class="btn btn-secondary" type="submit">Search</button>
+  </form>
+  {% if needing_count and not query %}<p class="cat-needs">{{ icon('alert') }}<span>{{ needing_count|plural('merchant') }} with Uncategorized transactions, listed first.</span></p>{% endif %}
+
+  {% if not merchants %}
+  <p class="empty">No merchant or category matches “{{ query }}”. <a class="link" href="{{ url_for('main.categories') }}">Show all merchants</a></p>
+  {% else %}
+  <div class="merchant merchant-head cat-head" aria-hidden="true">
+    <span>Merchant</span><span class="r">Transactions</span><span class="r">Amount</span><span>Category now</span><span>Change all to</span>
+  </div>
+  <ol class="merchants">
+    {% for m in merchants %}
+    {% set label = m.key or 'No name in the description' %}
+    {% set count = m.rows|length %}
+    <li class="merchant cat-merchant{{ ' needs' if m.uncategorised }}" id="{{ m.anchor }}" data-search="{{ (m.key ~ ' ' ~ m.category ~ ' ' ~ m.rows[0].description)|lower }}">
+      <div class="m-name">
+        <b id="{{ m.anchor }}-name">{{ label }}</b>
+        <span class="m-example" title="{{ m.rows[0].description }}">{{ m.rows[0].description }}</span>
+      </div>
+      <span class="m-count num">{{ count|plural('transaction') }}</span>
+      <span class="m-total num">{{ m.total|inr }}</span>
+      <span class="m-how" id="{{ m.anchor }}-now">
+        {%- if m.category == 'Uncategorized' %}{{ icon('alert') }}Uncategorized{% else %}{{ category_icon(m.category) }}{{ m.category }}{% endif -%}
+        {%- if m.categories|length > 1 %}<span class="muted">&nbsp;· {{ m.categories|length }} categories</span>{% endif -%}
+      </span>
+      <div class="m-choose">
+        {% if m.key %}
+        <form method="post" action="{{ url_for('main.categories') }}" class="row-edit">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="merchant" value="{{ m.key }}">
+          {{ state() }}
+          <select class="select" name="category" required aria-label="Category for all {{ label }} transactions" aria-describedby="{{ m.anchor }}-now">
+            <option value="">Choose a category</option>
+            {{ category_options(m.category, categories, own_categories) }}
+          </select>
+          <button class="btn btn-secondary" type="submit">Save</button>
+        </form>
+        {% else %}
+        <p class="sub">No name to remember them by: change these one at a time.</p>
+        {% endif %}
+      </div>
+      <div class="m-rows">
+        {% if m.open %}
+        {% set others = opened|reject('equalto', m.anchor)|list %}
+        <a class="m-toggle" href="{{ url_for('main.categories', q=query or None, open=others or ['none'], _anchor=m.anchor) }}">Hide transactions</a>
+        <ul class="cat-rows">
+          {% for row in m.rows[:m.limit] %}
+          {% set expense = row.type == 'Expense' %}
+          <li class="cat-row" id="{{ m.anchor }}-r{{ loop.index }}">
+            <div class="cat-row-text">
+              <span class="cat-desc">{{ row.description }}</span>
+              <span class="cat-date">{{ row.date|day }}</span>
+            </div>
+            <span class="amount num{{ '' if expense else ' pos' }}">{{ '−' if expense else '+' }}{{ row.amount|inr }}</span>
+            {% call row_category_form(row.id, row.category, row.description, categories, own_categories) %}
+              <input type="hidden" name="return_to" value="categories"><input type="hidden" name="anchor" value="{{ m.anchor }}">{{ state() }}
+            {% endcall %}
+          </li>
+          {% endfor %}
+        </ul>
+        {% if count > m.limit %}
+        <p class="table-foot">Showing {{ m.limit }} of {{ count|digits }}. <a class="link" href="{{ url_for('main.categories', q=query or None, open=opened, more=m.anchor, rows=m.limit + 20, _anchor=m.anchor ~ '-r' ~ (m.limit + 1)) }}">Show {{ [20, count - m.limit]|min }} more</a></p>
+        {% endif %}
+        {% else %}
+        <a class="m-toggle" href="{{ url_for('main.categories', q=query or None, open=opened + [m.anchor], _anchor=m.anchor) }}">{{ 'Show the transaction' if count == 1 else 'Show its ' ~ count ~ ' transactions' }}</a>
+        {% endif %}
+      </div>
+    </li>
+    {% endfor %}
+  </ol>
+  <p class="empty" data-merchant-filter-empty hidden>No merchant or category matches that. Clear the search to see them all.</p>
+  {% endif %}
+  {% endif %}
+</section>
+{% endblock %}

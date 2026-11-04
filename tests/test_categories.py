@@ -81,3 +81,120 @@ def test_a_change_without_a_csrf_token_changes_nothing(client, db, logged_in):
     before = categories(db, logged_in)
     response = change_row(client, tx_id(db, "UPI/ZOMATO LTD", logged_in), "Groceries", token=False)
     assert response.status_code == 200 and categories(db, logged_in) == before
+
+
+def add(db, user_id, description, category="Uncategorized", amount=100, date="2026-03-01", kind="Expense"):
+    db.execute("INSERT INTO transactions (user_id, date, category, amount, type, description) VALUES (?, ?, ?, ?, ?, ?)",
+               (user_id, date, category, amount, kind, description))
+    db.commit()
+
+
+def merchant_order(page):
+    return re.findall(r'<b id="m[0-9a-f]+-name">([^<]+)</b>', page)
+
+
+def change_merchant(client, merchant, category, **extra):
+    data = {"merchant": merchant, "category": category, "csrf_token": csrf_token(client, "/categories"), **extra}
+    return client.post("/categories", data=data, follow_redirects=True)
+
+
+def test_merchants_are_listed_uncategorized_first_and_searchable(client, db, logged_in):
+    add(db, logged_in, "UPI/ZOMATO LTD/412345678901", "Dining", 900)
+    add(db, logged_in, "UPI/RAHUL S/412345678902", "Uncategorized", 50)
+    add(db, logged_in, "UPI/BLINKIT/412345678903", "Groceries", 300)
+
+    page = client.get("/categories").get_data(as_text=True)
+    assert merchant_order(page) == ["RAHUL S", "ZOMATO", "BLINKIT"]  # Uncategorized first, then by amount
+    assert "1 merchant with Uncategorized transactions" in page and "₹900" in page
+
+    assert merchant_order(client.get("/categories?q=grocer").get_data(as_text=True)) == ["BLINKIT"]
+    assert "No merchant or category matches" in client.get("/categories?q=nothing-like-this").get_data(as_text=True)
+
+
+def test_changing_a_merchant_changes_all_its_rows_and_is_remembered_for_that_user_only(app, db):
+    asha, ravi = app.test_client(), app.test_client()
+    asha_id, ravi_id = register_and_login(asha, "asha"), register_and_login(ravi, "ravi")
+    for user in (asha_id, ravi_id):
+        add(db, user, "UPI/ZOMATO LTD/412345678901", "Dining")
+        add(db, user, "UPI/ZOMATO LTD/412345678902", "Uncategorized", date="2026-03-02")
+    add(db, asha_id, "UPI/BLINKIT/412345678903", "Groceries")
+
+    page = change_merchant(asha, "ZOMATO", "Groceries").get_data(as_text=True)
+
+    assert "ZOMATO: 2 transactions now in Groceries." in page
+    assert [c for _, c in categories(db, asha_id)] == ["Groceries", "Groceries", "Groceries"]
+    assert [c for _, c in categories(db, ravi_id)] == ["Dining", "Uncategorized"]
+    assert [tuple(r) for r in db.execute("SELECT user_id, merchant_key, category FROM category_overrides")] == [(asha_id, "ZOMATO", "Groceries")]
+
+
+def test_a_merchant_the_user_does_not_have_changes_nothing_and_saves_no_correction(app, db):
+    asha, ravi = app.test_client(), app.test_client()
+    asha_id, _ = register_and_login(asha, "asha"), register_and_login(ravi, "ravi")
+    add(db, asha_id, "UPI/ZOMATO LTD/412345678901", "Dining")
+
+    assert "not in your transactions" in change_merchant(ravi, "ZOMATO", "Groceries").get_data(as_text=True)
+    assert categories(db, asha_id) == [("UPI/ZOMATO LTD/412345678901", "Dining")]
+    assert db.execute("SELECT COUNT(*) FROM category_overrides").fetchone()[0] == 0
+
+
+def test_an_unknown_or_blank_category_for_a_merchant_is_rejected(client, db, logged_in):
+    add(db, logged_in, "UPI/ZOMATO LTD/412345678901", "Dining")
+    for value in ("Free money", "", "Uncategorized"):
+        assert "Choose a category from the list" in change_merchant(client, "ZOMATO", value).get_data(as_text=True)
+    assert categories(db, logged_in) == [("UPI/ZOMATO LTD/412345678901", "Dining")]
+    assert db.execute("SELECT COUNT(*) FROM category_overrides").fetchone()[0] == 0
+
+
+def test_a_merchant_change_without_a_csrf_token_changes_nothing(client, db, logged_in):
+    add(db, logged_in, "UPI/ZOMATO LTD/412345678901", "Dining")
+    response = client.post("/categories", data={"merchant": "ZOMATO", "category": "Groceries"}, follow_redirects=True)
+    assert response.status_code == 200 and "Categories" in response.get_data(as_text=True)
+    assert categories(db, logged_in) == [("UPI/ZOMATO LTD/412345678901", "Dining")]
+
+
+def test_one_row_changed_from_the_categories_page_changes_alone_and_comes_back_open(client, db, logged_in):
+    add(db, logged_in, "UPI/ZOMATO LTD/412345678901", "Dining")
+    add(db, logged_in, "UPI/ZOMATO LTD/412345678902", "Dining", date="2026-03-02")
+    row = tx_id(db, "UPI/ZOMATO LTD/412345678901", logged_in)
+    anchor = re.search(r'<li class="merchant cat-merchant" id="(m[0-9a-f]+)"', client.get("/categories").get_data(as_text=True)).group(1)
+
+    response = client.post(f"/transactions/{row}/category", data={
+        "category": "Groceries", "return_to": "categories", "anchor": anchor, "open": anchor, "q": "zom",
+        "csrf_token": csrf_token(client, "/categories"),
+    })
+
+    assert response.headers["Location"] == f"/categories?q=zom&open={anchor}#{anchor}"
+    assert [c for _, c in categories(db, logged_in)] == ["Groceries", "Dining"]
+    assert db.execute("SELECT COUNT(*) FROM category_overrides").fetchone()[0] == 0
+
+
+def test_merchants_with_uncategorized_rows_open_by_default_only_when_there_are_five_or_fewer(client, db, logged_in):
+    names = ["RAHUL S", "ANITA K", "KAVYA NAIR", "ARJUN MENON", "PRIYA RAO", "DIVYA DAS"]
+    for i, name in enumerate(names[:5]):
+        add(db, logged_in, f"UPI/{name}/41234567890{i}")
+    page = client.get("/categories").get_data(as_text=True)
+    assert page.count('class="cat-rows"') == 5 and page.count("Hide transactions") == 5
+
+    add(db, logged_in, f"UPI/{names[5]}/412345678909")
+    page = client.get("/categories").get_data(as_text=True)
+    assert 'class="cat-rows"' not in page and page.count("Show the transaction") == 6
+
+
+def test_a_merchants_rows_show_twenty_at_a_time(client, db, logged_in):
+    for i in range(45):
+        add(db, logged_in, f"UPI/ZOMATO LTD/4123456789{i:02d}", "Dining", date=f"2026-0{1 + i % 9}-{1 + i % 28:02d}")
+    page = client.get("/categories").get_data(as_text=True)
+    anchor = re.search(r'id="(m[0-9a-f]+)"', page).group(1)
+    assert "Show its 45 transactions" in page
+
+    opened = client.get(f"/categories?open={anchor}").get_data(as_text=True)
+    assert opened.count('class="cat-row"') == 20 and "Showing 20 of 45" in opened and "Show 20 more" in opened
+    more = client.get(f"/categories?open={anchor}&more={anchor}&rows=40").get_data(as_text=True)
+    assert more.count('class="cat-row"') == 40 and "Show 5 more" in more
+
+
+def test_rows_without_a_merchant_name_have_no_merchant_wide_change(client, db, logged_in):
+    add(db, logged_in, "412345678901")
+    page = client.get("/categories").get_data(as_text=True)
+    assert "No name in the description" in page and "change these one at a time" in page
+    assert 'name="merchant" value=""' not in page

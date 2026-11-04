@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 import secrets
+import zlib
 from collections import Counter
 
 import pandas as pd
@@ -11,7 +13,7 @@ from itsdangerous import BadSignature, URLSafeTimedSerializer
 from werkzeug.utils import secure_filename
 
 from database import get_db
-from ml.categorise import CATEGORIES, UNCATEGORISED, categorise
+from ml.categorise import CATEGORIES, UNCATEGORISED, categorise, merchant_key
 from ml.pipeline import INSIGHTS_VERSION, compute_insights
 from models import (
     claim_import_token, get_cached_insights, get_category_overrides, get_user_categories, get_user_transactions,
@@ -23,6 +25,7 @@ main_bp = Blueprint("main", __name__)
 logger = logging.getLogger(__name__)
 
 REVIEW_MAX_AGE = 3600  # seconds a review form stays valid
+MERCHANT_ROWS_PAGE = 20  # transactions shown per merchant on the Categories page, then "Show more"
 ROWS_SHOWN_PER_MERCHANT = 10  # enough to recognise a merchant; keeps a 2 MB file's review page light
 TOO_MANY_ROWS = (
     "This file has too many rows to review in one go. Split it into smaller CSV files (for example one per "
@@ -174,11 +177,96 @@ def _allowed_categories(db, user_id: int) -> set[str]:
     return (set(CATEGORIES) | {row["category"] for row in rows}) - {UNCATEGORISED}
 
 
+_ANCHOR = re.compile(r"m[0-9a-f]{1,8}")
+
+
+def _anchor(key: str) -> str:
+    """A stable HTML id for a merchant; keys contain spaces."""
+    return f"m{zlib.crc32(key.encode()):x}"
+
+
+def _merchants(db, user_id: int) -> list[dict]:
+    """The user's transactions grouped by merchant. Merchants with any Uncategorized row come first."""
+    rows = db.execute(
+        "SELECT id, date, category, amount, type, description FROM transactions WHERE user_id = ? ORDER BY date DESC, id DESC",
+        (user_id,),
+    ).fetchall()
+    merchants: dict[str, dict] = {}
+    for row in rows:
+        key = merchant_key(row["description"])
+        merchant = merchants.setdefault(key, {"key": key, "anchor": _anchor(key), "rows": [], "categories": Counter(), "total": 0.0})
+        merchant["rows"].append(row)
+        merchant["categories"][row["category"]] += 1
+        merchant["total"] += float(row["amount"])
+    for merchant in merchants.values():
+        merchant["category"] = merchant["categories"].most_common(1)[0][0]  # the "current" category: the most common
+        merchant["uncategorised"] = merchant["categories"][UNCATEGORISED]
+    return sorted(merchants.values(), key=lambda m: (m["uncategorised"] == 0, -m["uncategorised"], -m["total"], m["key"]))
+
+
+def _categories_url(values, anchor: str | None = None) -> str:
+    """The Categories page with its search, open merchants and "Show more" kept. Only known shapes pass."""
+    query = values.get("q", "").strip()[:100]
+    opened = [a for a in values.getlist("open") if a == "none" or _ANCHOR.fullmatch(a)]
+    more = values.get("more", "") if _ANCHOR.fullmatch(values.get("more", "")) else None
+    rows = values.get("rows", type=int)
+    return url_for(
+        "main.categories", q=query or None, open=opened or None, more=more, rows=rows if more and rows else None,
+        _anchor=anchor if anchor and _ANCHOR.fullmatch(anchor) else None,
+    )
+
+
+@main_bp.route("/categories", methods=["GET", "POST"])
+def categories():
+    """Every merchant with its current category; change a whole merchant (remembered) or single rows."""
+    user_id, db = session["user_id"], get_db()
+    merchants = _merchants(db, user_id)
+    if request.method == "POST":
+        key = request.form.get("merchant", "")
+        target = next((m for m in merchants if key and m["key"] == key), None)
+        back = _categories_url(request.form, target["anchor"] if target else None)
+        category = request.form.get("category", "").strip()
+        if target is None:  # ids always come from this user's own rows, never from the form
+            flash("That merchant is not in your transactions. Nothing was changed.", "danger")
+        elif category not in _allowed_categories(db, user_id):
+            flash("Choose a category from the list. Nothing was changed.", "danger")
+        else:
+            changed = recategorise(db, user_id, [row["id"] for row in target["rows"]], category, remember_as=key)
+            refresh_insights(db, user_id)
+            flash(f"{key}: {plural(changed, 'transaction')} now in {category}. Future imports use it too.", "success")
+        return redirect(back)
+
+    query = request.args.get("q", "").strip()[:100]
+    needing = [m["anchor"] for m in merchants if m["uncategorised"]]
+    # First visit: a few merchants with Uncategorized rows open, ready to fix. "open=none" means "all closed".
+    opened = [a for a in request.args.getlist("open") if a == "none" or _ANCHOR.fullmatch(a)]
+    if not opened:
+        opened = needing if len(needing) <= 5 else ["none"]
+    more = request.args.get("more", "")
+    rows = max(MERCHANT_ROWS_PAGE, request.args.get("rows", MERCHANT_ROWS_PAGE, type=int))
+    needle = query.lower()
+    shown = [
+        m for m in merchants
+        if not needle or needle in m["key"].lower() or needle in m["category"].lower() or needle in m["rows"][0]["description"].lower()
+    ]
+    for merchant in shown:
+        merchant["open"] = merchant["anchor"] in opened
+        merchant["limit"] = rows if merchant["anchor"] == more else MERCHANT_ROWS_PAGE
+    return render_template(
+        "categories.html", merchants=shown, merchant_count=len(merchants), needing_count=len(needing), query=query,
+        opened=[a for a in opened if a != "none"], categories=CATEGORIES, own_categories=_own_categories(db, user_id),
+        more=more if _ANCHOR.fullmatch(more) else "", rows=rows,
+    )
+
+
 @main_bp.route("/transactions/<int:transaction_id>/category", methods=["POST"])
 def change_transaction_category(transaction_id: int):
     """Change one of the user's transactions. Never remembered for its merchant."""
     user_id, db = session["user_id"], get_db()
-    back = url_for("main.dashboard", _anchor="transactions")
+    if request.form.get("return_to") == "categories":
+        back = _categories_url(request.form, request.form.get("anchor"))
+    else:
+        back = url_for("main.dashboard", _anchor="transactions")
     category = request.form.get("category", "").strip()
     if category not in _allowed_categories(db, user_id):
         flash("Choose a category from the list. Nothing was changed.", "danger")

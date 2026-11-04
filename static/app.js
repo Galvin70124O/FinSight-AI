@@ -224,6 +224,19 @@ document.addEventListener('DOMContentLoaded', () => {
     if (button) { button.setAttribute('aria-disabled', 'true'); button.textContent = 'Saving…'; }
   }));
 
+  // ---------- Categories: filter merchants as you type (the Search button does the same on the server) ----------
+  const merchantFilter = document.querySelector('[data-merchant-filter]');
+  if (merchantFilter) {
+    const merchants = [...document.querySelectorAll('[data-search]')];
+    const none = document.querySelector('[data-merchant-filter-empty]');
+    merchantFilter.addEventListener('input', () => {
+      const query = merchantFilter.value.trim().toLowerCase();
+      let shown = 0;
+      merchants.forEach((item) => { item.hidden = !item.dataset.search.includes(query); shown += item.hidden ? 0 : 1; });
+      if (none) none.hidden = shown > 0;
+    });
+  }
+
   // ---------- Command palette (Ctrl/Cmd+K, or "/") ----------
   const palette = document.getElementById('palette');
   if (!palette) return;
