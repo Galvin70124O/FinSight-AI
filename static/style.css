@@ -17,6 +17,7 @@
   --good: #17703F;        /* change in your favour (always with an arrow and sign) */
   --bad: #B3261E;         /* overspend, unusual (always with an arrow, sign or label) */
   --chart-muted: #7C8594; /* the second, quiet series */
+  --band-alpha: 0.24;     /* forecast band fill: 1.5:1 on the page, the forecast line on it 5:1 */
   --scrim: rgba(20, 23, 28, 0.32);
   --shadow-pop: 0 12px 32px -12px rgba(20, 23, 28, 0.28);
 
@@ -50,6 +51,7 @@
   --good: #4CC38A;
   --bad: #F28B82;
   --chart-muted: #6F7785;
+  --band-alpha: 0.40;     /* 1.9:1 on the dark page; the forecast line on it stays at 3:1 */
   --scrim: rgba(0, 0, 0, 0.55);
   --shadow-pop: 0 16px 40px -12px rgba(0, 0, 0, 0.7);
 }
@@ -270,7 +272,7 @@ svg { flex: none; }
 .legend span { display: inline-flex; align-items: center; gap: 6px; }
 .swatch { width: 12px; height: 12px; border-radius: 3px; background: var(--chart-muted); }
 .swatch.accent { background: var(--accent); }
-.swatch.band { background: var(--accent-soft); outline: 1px dashed var(--accent); outline-offset: -1px; }
+.swatch.band { background: color-mix(in srgb, var(--accent) calc(var(--band-alpha) * 100%), transparent); outline: 1px solid var(--accent); outline-offset: -1px; }
 .chart-data { margin-top: var(--s3); font-size: 14px; }
 .chart-data summary { display: inline-flex; align-items: center; min-height: 44px; color: var(--accent); cursor: pointer; }
 

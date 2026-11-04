@@ -82,8 +82,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const quiet = cssVar('--chart-muted');
     const roles = {
       actual: { line: { color: accent, width: 2 }, marker: { size: 8, color: accent, line: { color: surface, width: 2 } } },
-      'band-low': { line: { width: 0, color: 'rgba(0,0,0,0)' } },
-      band: { line: { width: 0, color: 'rgba(0,0,0,0)' }, fillcolor: alpha(accent, 0.16) },
+      // The band's fill is per theme (--band-alpha); its 1px edges keep the shape visible at 3:1 or more.
+      'band-low': { line: { width: 1, color: accent } },
+      band: { line: { width: 1, color: accent }, fillcolor: alpha(accent, parseFloat(cssVar('--band-alpha')) || 0.24) },
       forecast: { line: { color: accent, width: 2, dash: 'dot' }, marker: { size: [0, 8], color: surface, line: { color: accent, width: 2 } } },
       income: { marker: { color: accent } },
       spending: { marker: { color: quiet } },
