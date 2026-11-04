@@ -43,7 +43,7 @@
   {# Deleting cannot be undone, so it asks for the password and a typed confirmation instead of an undo toast. #}
   <section class="danger-zone" id="delete" aria-labelledby="deleteTitle">
     <h2 class="section-title" id="deleteTitle">Delete your account</h2>
-    <p class="sub">Removes your account, every imported transaction and your computed insights straight away. This cannot be undone.</p>
+    <p class="sub">Removes your account, every imported transaction and your computed insights straight away. This cannot be undone. <a class="link" href="{{ url_for('main.privacy') }}">What is stored</a></p>
     {% for message in get_flashed_messages(category_filter=['delete']) %}
     <div class="flash danger" role="alert">{{ icon('alert') }}<span>{{ message }}</span></div>
     {% endfor %}

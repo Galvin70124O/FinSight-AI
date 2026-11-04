@@ -36,3 +36,19 @@ def test_pages_load_nothing_from_other_sites(client, logged_in):
         assert not re.search(r'(src|href)="(https?:)?//', html), path
         assert "/static/fonts/fonts.css" in html
     assert "/static/vendor/plotly-basic-2.27.0.min.js" in client.get("/dashboard").get_data(as_text=True)
+
+
+def test_privacy_and_terms_are_public_and_linked(client):
+    for path, heading in (("/privacy", "Privacy"), ("/terms", "Terms")):
+        page = client.get(path)
+        assert page.status_code == 200
+        assert f'id="{heading.lower()}Title">{heading}</h1>' in page.get_data(as_text=True)
+
+    privacy = client.get("/privacy").get_data(as_text=True)
+    assert "never saved on disk" in privacy
+    assert "Render" in privacy and "Neon" in privacy
+    assert "Delete your account" in privacy
+
+    for path in ("/", "/register"):
+        html = client.get(path).get_data(as_text=True)
+        assert 'href="/privacy"' in html and 'href="/terms"' in html

@@ -324,6 +324,15 @@ svg { flex: none; }
 .not-found p { margin-top: var(--s3); color: var(--ink-2); }
 .not-found .page-actions { margin-top: var(--s6); }
 
+.legal { max-width: 68ch; padding: var(--s8) 0 var(--s12); }
+.legal > p, .legal li { color: var(--ink-2); }
+.legal > p { margin-top: var(--s3); }
+.legal h2 { margin-top: var(--s10); font-size: 20px; line-height: 28px; font-weight: 500; text-wrap: balance; }
+.legal ul { display: grid; gap: var(--s3); margin-top: var(--s3); padding-left: 1.2em; list-style: disc; }
+.legal strong { color: var(--ink); font-weight: 500; }
+.legal-links { color: var(--muted); font-size: 13px; }
+.legal-links a { display: inline-flex; align-items: center; min-height: 32px; color: var(--ink-2); }
+
 /* ---------- Import ---------- */
 .import { max-width: 640px; }
 .dropzone {
@@ -430,6 +439,7 @@ button, .btn, .chip, .seg-btn, .tab, .nav-link, summary { -webkit-user-select: n
 
 @media (max-width: 640px) {
   .site-bar, .site-main, .footer-inner { width: calc(100% - 2 * var(--s4)); }
+  .footer-inner nav { margin-left: 0; width: 100%; }
   .site-bar { gap: var(--s1); }
   .site-bar .btn { min-height: 40px; padding: 0 var(--s3); }
   .page-title { font-size: 28px; }

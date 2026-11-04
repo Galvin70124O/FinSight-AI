@@ -1,0 +1,31 @@
+{% extends 'base.html' %}
+{% block title %}Terms · FinSight AI{% endblock %}
+{% block description %}The plain-language terms for using FinSight AI.{% endblock %}
+{% macro body() %}
+<article class="legal" aria-labelledby="termsTitle">
+  <h1 class="page-title" id="termsTitle">Terms</h1>
+  <p class="sub">Last updated 4 November 2026</p>
+
+  <p>By creating an account you agree to these terms. They are short on purpose.</p>
+
+  <h2>What FinSight is</h2>
+  <p>A free tool that reads the transactions you upload and shows your income, spending, a forecast for next month, unusual expenses and a health score.</p>
+
+  <h2>It is not financial advice</h2>
+  <p>The figures come only from the data you upload. The forecast is an estimate with a range, and the health score uses weights we chose, not an official standard. Check anything important yourself before acting on it.</p>
+
+  <h2>Your data stays yours</h2>
+  <p>Only upload transactions you have the right to use. We use them only to run your overview, as described on the <a class="link" href="{{ url_for('main.privacy') }}">Privacy</a> page. You can delete your account and all its data at any time from the Import page.</p>
+
+  <h2>Your account</h2>
+  <p>Keep your password to yourself. Do not try to reach other people’s data, overload the service or break its security; we may close accounts that do.</p>
+
+  <h2>No guarantees</h2>
+  <p>FinSight is provided as it is. We try to keep it running and correct, but we cannot promise it will always be available or free of mistakes, and we are not responsible for decisions made using it.</p>
+
+  <h2>Changes</h2>
+  <p>If these terms change, the date at the top changes too. Keeping your account after that means you accept the new version; you can delete it instead.</p>
+</article>
+{% endmacro %}
+{% block content %}{{ body() }}{% endblock %}
+{% block public %}{{ body() }}{% endblock %}

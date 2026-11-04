@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 @main_bp.before_request
 def require_login():
     """Protect application routes from unauthenticated access."""
-    allowed_routes = {"auth.login", "auth.register", "static", "main.index"}
+    allowed_routes = {"auth.login", "auth.register", "static", "main.index", "main.privacy", "main.terms"}
     if request.endpoint in allowed_routes:
         return None
     if "user_id" not in session:
@@ -33,6 +33,16 @@ def index():
     if "user_id" in session:
         return dashboard()
     return render_template("landing.html")
+
+
+@main_bp.route("/privacy")
+def privacy():
+    return render_template("privacy.html")
+
+
+@main_bp.route("/terms")
+def terms():
+    return render_template("terms.html")
 
 
 def _transactions_frame(rows: list[dict[str, object]]) -> pd.DataFrame:

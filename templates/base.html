@@ -70,6 +70,7 @@
           <a class="nav-link{% if request.endpoint == 'main.upload' %} active{% endif %}" href="{{ url_for('main.upload') }}">{{ icon('upload') }}<span>Import a CSV</span></a>
         </nav>
         <div class="sidebar-foot">
+          <p class="legal-links"><a href="{{ url_for('main.privacy') }}">Privacy</a> · <a href="{{ url_for('main.terms') }}">Terms</a></p>
           {{ theme_button() }}
           <div class="user-row">
             <span class="avatar" aria-hidden="true">{{ username[:1]|upper }}</span>
@@ -122,6 +123,8 @@
             <a href="{{ url_for('main.index') }}">Home</a>
             <a href="{{ url_for('auth.login') }}">Sign in</a>
             <a href="{{ url_for('auth.register') }}">Create account</a>
+            <a href="{{ url_for('main.privacy') }}">Privacy</a>
+            <a href="{{ url_for('main.terms') }}">Terms</a>
           </nav>
         </div>
       </footer>
