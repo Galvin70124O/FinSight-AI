@@ -128,6 +128,7 @@ def test_health_score_penalises_overspending():
     assert health.components[0]["points"] == 0
     assert health.components[1]["points"] == 0
     assert health.label == "Needs attention"
+    assert health.components[0]["detail"].startswith("You spent 20.0% more than your income")
 
 
 def test_insights_are_plain_json_data():
