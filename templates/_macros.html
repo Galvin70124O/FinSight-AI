@@ -57,6 +57,28 @@
 </span>
 {%- endmacro %}
 
+{# Options for a category select: the fixed list, then the user's own. The current category is always
+   offered, so an uncommon one is never silently swapped for the first option. #}
+{% macro category_options(current, categories, own) -%}
+{%- if current and current != 'Uncategorized' and current not in categories and current not in own %}<option selected>{{ current }}</option>{% endif -%}
+{%- for c in categories %}<option{{ ' selected' if c == current }}>{{ c }}</option>{% endfor -%}
+{%- if own %}<optgroup label="Your categories">{% for c in own %}<option{{ ' selected' if c == current }}>{{ c }}</option>{% endfor %}</optgroup>{% endif -%}
+{%- endmacro %}
+
+{# Change one transaction's category; never remembered for its merchant. #}
+{% macro row_category_form(tx_id, current, label, categories, own) -%}
+<form method="post" action="{{ url_for('main.change_transaction_category', transaction_id=tx_id) }}" class="row-edit">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  {{ caller() if caller }}
+  <label class="sr-only" for="rc{{ tx_id }}">Category for {{ label }}</label>
+  <select class="select" id="rc{{ tx_id }}" name="category" required>
+    <option value="">Choose a category</option>
+    {{ category_options(current, categories, own) }}
+  </select>
+  <button class="btn btn-secondary" type="submit">Save</button>
+</form>
+{%- endmacro %}
+
 {# Month-on-month change: an arrow and a sign carry the meaning; colour only repeats it.
    `up_is_good` is False for spending, where a rise is bad news. #}
 {% macro change(amount, previous_month, up_is_good=True) -%}

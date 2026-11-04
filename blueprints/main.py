@@ -6,7 +6,7 @@ import secrets
 from collections import Counter
 
 import pandas as pd
-from flask import Blueprint, current_app, flash, redirect, render_template, request, session, url_for
+from flask import Blueprint, abort, current_app, flash, redirect, render_template, request, session, url_for
 from itsdangerous import BadSignature, URLSafeTimedSerializer
 from werkzeug.utils import secure_filename
 
@@ -15,7 +15,7 @@ from ml.categorise import CATEGORIES, UNCATEGORISED, categorise
 from ml.pipeline import INSIGHTS_VERSION, compute_insights
 from models import (
     claim_import_token, get_cached_insights, get_category_overrides, get_user_categories, get_user_transactions,
-    imported_signatures, save_category_overrides, save_insights, save_transactions, transaction_signature,
+    imported_signatures, recategorise, save_category_overrides, save_insights, save_transactions, transaction_signature,
 )
 from utils import CSVValidationError, plural, allowed_file, build_dashboard_payload, clean_transaction_dataframe, read_uploaded_csv, shift_to_recent_months, validate_uploaded_csv
 
@@ -63,6 +63,7 @@ def _transactions_frame(rows: list[dict[str, object]]) -> pd.DataFrame:
     return pd.DataFrame(
         [
             {
+                "Id": row["id"],  # for editing one row; the insights only read the named columns
                 "Date": row["date"],
                 "Category": row["category"],
                 "Amount": row["amount"],
@@ -93,8 +94,9 @@ def dashboard():
     if insights is None or insights.get("version") != INSIGHTS_VERSION:
         insights = refresh_insights(db, session["user_id"])
     payload = build_dashboard_payload(df, insights)
+    own_categories = _own_categories(db, session["user_id"])
 
-    return render_template("dashboard.html", payload=payload, transactions=transactions)
+    return render_template("dashboard.html", payload=payload, transactions=transactions, categories=CATEGORIES, own_categories=own_categories)
 
 
 @main_bp.route("/demo-data", methods=["POST"])
@@ -163,6 +165,29 @@ def _review_serializer() -> URLSafeTimedSerializer:
 def _own_categories(db, user_id: int) -> list[str]:
     """Up to 20 of the user's own categories that are not in the fixed list, offered after it."""
     return [category for category in get_user_categories(db, user_id) if category not in CATEGORIES]
+
+
+def _allowed_categories(db, user_id: int) -> set[str]:
+    """What a row or merchant may be changed to: the fixed list and every category the user already has
+    (a select always offers a row's own category, even one outside the 20 listed)."""
+    rows = db.execute("SELECT DISTINCT category FROM transactions WHERE user_id = ?", (user_id,)).fetchall()
+    return (set(CATEGORIES) | {row["category"] for row in rows}) - {UNCATEGORISED}
+
+
+@main_bp.route("/transactions/<int:transaction_id>/category", methods=["POST"])
+def change_transaction_category(transaction_id: int):
+    """Change one of the user's transactions. Never remembered for its merchant."""
+    user_id, db = session["user_id"], get_db()
+    back = url_for("main.dashboard", _anchor="transactions")
+    category = request.form.get("category", "").strip()
+    if category not in _allowed_categories(db, user_id):
+        flash("Choose a category from the list. Nothing was changed.", "danger")
+        return redirect(back)
+    if not recategorise(db, user_id, [transaction_id], category):
+        abort(404)  # not one of this user's transactions
+    refresh_insights(db, user_id)
+    flash(f"Changed one transaction to {category}.", "success")
+    return redirect(back)
 
 
 def _review(db, user_id: int, df: pd.DataFrame, filename: str):

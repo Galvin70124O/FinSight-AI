@@ -407,6 +407,13 @@ svg { flex: none; }
   border-top: 1px solid var(--line); background: var(--bg);
 }
 
+/* Changing one row's category: a quiet "Change" under the category, the form only when opened. */
+.tx-edit { margin-top: 2px; font-size: 14px; }
+.tx-edit summary { display: inline-flex; align-items: center; min-height: 28px; color: var(--accent); cursor: pointer; }
+.row-edit { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2); }
+.row-edit .select { min-width: 0; max-width: 100%; }
+.tx-edit .row-edit { margin: var(--s1) 0 var(--s2); }
+
 .danger-zone { margin-top: var(--s12); padding-top: var(--s8); border-top: 1px solid var(--line); }
 .danger-zone .sub { margin: var(--s1) 0 var(--s5); }
 .danger-zone .flash { margin-bottom: var(--s4); }
@@ -455,7 +462,7 @@ button, .btn, .chip, .seg-btn, .tab, .nav-link, summary { -webkit-user-select: n
 
 /* Fingers need 44px targets and 16px fields (iOS zooms into anything smaller). */
 @media (pointer: coarse) {
-  .btn, .seg-btn, .chip, .select, .search-trigger, .skip-link, .m-rows summary, .m-remember { min-height: 44px; }
+  .btn, .seg-btn, .chip, .select, .search-trigger, .skip-link, .m-rows summary, .m-remember, .tx-edit summary { min-height: 44px; }
   .chip { min-width: 44px; }
   .icon-button { width: 44px; height: 44px; }
   .select, .input { font-size: 16px; }

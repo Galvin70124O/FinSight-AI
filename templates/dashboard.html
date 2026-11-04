@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% from '_macros.html' import icon, category_icon, change %}
+{% from '_macros.html' import icon, category_icon, change, row_category_form %}
 
 {% block title %}Overview · FinSight AI{% endblock %}
 {% block description %}Your balance, income and spending this month, where your money went, next month's forecast and unusual expenses.{% endblock %}
@@ -281,6 +281,10 @@
             <span class="cat-cell">{{ category_icon(tx['Category']) }}<span>{{ tx['Category'] }}
               <span class="cell-sub desc-sm" title="{{ tx['Description'] }}">{{ tx['Description'] }}</span>
               <span class="cell-sub">{{ tx['Date']|day }}</span></span></span>
+            <details class="tx-edit">
+              <summary>Change</summary>
+              {{ row_category_form(tx['Id'], tx['Category'], tx['Description'], categories, own_categories) }}
+            </details>
           </td>
           <td class="hide-sm"><span class="desc" title="{{ tx['Description'] }}">{{ tx['Description'] }}</span></td>
           <td class="r"><span class="amount{{ '' if is_exp else ' pos' }}">{{ '−' if is_exp else '+' }}{{ tx['Amount']|inr }}</span></td>
