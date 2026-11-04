@@ -7,6 +7,8 @@ or by position, like ``sqlite3.Row``.
 
 import sqlite3
 
+from datetime import datetime, timezone
+
 from flask import current_app, g
 
 try:
@@ -41,6 +43,7 @@ CREATE TABLE IF NOT EXISTS transactions (
     currency TEXT,
     tags TEXT,
     metadata TEXT,
+    merchant_key TEXT,
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users (id)
 );
@@ -71,6 +74,11 @@ CREATE TABLE IF NOT EXISTS import_tokens (
     PRIMARY KEY (user_id, token),
     FOREIGN KEY (user_id) REFERENCES users (id)
 );
+
+CREATE TABLE IF NOT EXISTS migrations (
+    name TEXT PRIMARY KEY,
+    applied_at TEXT NOT NULL
+);
 """
 
 POSTGRES_SCHEMA = """
@@ -96,6 +104,7 @@ CREATE TABLE IF NOT EXISTS transactions (
     currency TEXT,
     tags TEXT,
     metadata TEXT,
+    merchant_key TEXT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -121,6 +130,13 @@ CREATE TABLE IF NOT EXISTS import_tokens (
     token TEXT NOT NULL,
     created_at TEXT NOT NULL,
     PRIMARY KEY (user_id, token)
+);
+
+ALTER TABLE transactions ADD COLUMN IF NOT EXISTS merchant_key TEXT;
+
+CREATE TABLE IF NOT EXISTS migrations (
+    name TEXT PRIMARY KEY,
+    applied_at TEXT NOT NULL
 );
 """
 
@@ -199,19 +215,41 @@ def close_db(_error: Exception | None = None) -> None:
 
 
 def init_db() -> None:
-    """Create application tables if they do not already exist."""
+    """Create application tables if they do not already exist, then run the one-time data steps."""
     db = get_db()
     if is_postgres():
         db.executescript(POSTGRES_SCHEMA)
-        db.commit()
-        return
-
-    db.executescript(SQLITE_SCHEMA)
+    else:
+        db.executescript(SQLITE_SCHEMA)
+        # Older local databases were created before these columns existed.
+        columns = {row[1] for row in db.execute("PRAGMA table_info(transactions)")}
+        for column_name in ("transaction_type", "account", "currency", "tags", "metadata", "merchant_key"):
+            if column_name not in columns:
+                db.execute(f"ALTER TABLE transactions ADD COLUMN {column_name} TEXT")
+    db.execute("CREATE INDEX IF NOT EXISTS idx_transactions_user_merchant ON transactions(user_id, merchant_key)")
     db.commit()
+    backfill_merchant_keys(db)
 
-    # Older local databases were created before these columns existed.
-    columns = {row[1] for row in db.execute("PRAGMA table_info(transactions)")}
-    for column_name in ("transaction_type", "account", "currency", "tags", "metadata"):
-        if column_name not in columns:
-            db.execute(f"ALTER TABLE transactions ADD COLUMN {column_name} TEXT")
+
+def backfill_merchant_keys(db) -> int:
+    """Give rows saved before the merchant_key column its value. Only empty (NULL) keys are filled, so this
+    is a no-op after the first start; after changing merchant_key(), set the column to NULL to recompute."""
+    from ml.categorise import merchant_key  # here, not at the top: it loads the model
+
+    rows = db.execute("SELECT id, description FROM transactions WHERE merchant_key IS NULL").fetchall()
+    if rows:
+        db.executemany("UPDATE transactions SET merchant_key = ? WHERE id = ?", [(merchant_key(row["description"]), row["id"]) for row in rows])
+        db.commit()
+    return len(rows)
+
+
+def _once(db, name: str, step) -> None:
+    """Run a data step exactly once per database. A second worker starting at the same moment waits on the
+    first one's insert, then finds the name taken and skips."""
+    try:
+        db.execute("INSERT INTO migrations (name, applied_at) VALUES (?, ?)", (name, datetime.now(timezone.utc).isoformat(timespec="seconds")))
+    except IntegrityError:
+        db.rollback()
+        return
+    step(db)
     db.commit()

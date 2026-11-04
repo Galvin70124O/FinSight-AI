@@ -9,6 +9,7 @@ import pandas as pd
 from werkzeug.security import check_password_hash, generate_password_hash
 
 from database import IntegrityError
+from ml.categorise import merchant_key
 
 
 @dataclass
@@ -135,7 +136,7 @@ def save_transactions(db, user_id: int, transactions_df, source_file: str | None
         if signature in existing_keys:
             continue
         existing_keys.add(signature)
-        new_rows.append((user_id, *payload))
+        new_rows.append((user_id, *payload, merchant_key(payload[4])))
 
     # One batch: a 2 MB file is ~30,000 rows, and one statement per row is ~30,000 round trips to Postgres.
     if new_rows:
@@ -143,9 +144,9 @@ def save_transactions(db, user_id: int, transactions_df, source_file: str | None
             """
             INSERT INTO transactions (
                 user_id, date, category, amount, type, description, source_file,
-                transaction_type, account, currency, tags, metadata
+                transaction_type, account, currency, tags, metadata, merchant_key
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             new_rows,
         )
@@ -211,6 +212,13 @@ def save_insights(db, user_id: int, insights: dict) -> None:
     db.commit()
 
 
+def clear_insights(db, user_id: int) -> None:
+    """Drop a user's cached insights; the overview recomputes them on its next visit. Cheaper than recomputing
+    after every category change (about a second for a 31,000-row account)."""
+    db.execute("DELETE FROM user_insights WHERE user_id = ?", (user_id,))
+    db.commit()
+
+
 def get_user_categories(db, user_id: int, limit: int = 20) -> list[str]:
     """The user's most used categories, most used first, without the blank placeholder."""
     rows = db.execute(
@@ -262,6 +270,12 @@ def save_category_overrides(db, user_id: int, overrides: dict[str, str]) -> None
     for merchant_key, category in overrides.items():
         _remember(db, user_id, merchant_key, category)
     db.commit()
+
+
+def merchant_rows(db, user_id: int, key: str, limit: int | None = None) -> list:
+    """This user's transactions from one merchant, newest first."""
+    sql = "SELECT id, date, category, amount, type, description FROM transactions WHERE user_id = ? AND merchant_key = ? ORDER BY date DESC, id DESC"
+    return db.execute(sql + (" LIMIT ?" if limit else ""), (user_id, key, limit) if limit else (user_id, key)).fetchall()
 
 
 def recategorise(db, user_id: int, transaction_ids: list[int], category: str, remember_as: str = "") -> int:

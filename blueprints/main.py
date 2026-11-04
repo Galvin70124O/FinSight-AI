@@ -13,11 +13,11 @@ from itsdangerous import BadSignature, URLSafeTimedSerializer
 from werkzeug.utils import secure_filename
 
 from database import get_db
-from ml.categorise import CATEGORIES, UNCATEGORISED, categorise, merchant_key
+from ml.categorise import CATEGORIES, UNCATEGORISED, categorise, looks_like_person
 from ml.pipeline import INSIGHTS_VERSION, compute_insights
 from models import (
     claim_import_token, get_cached_insights, get_category_overrides, get_user_categories, get_user_transactions,
-    imported_signatures, recategorise, save_category_overrides, save_insights, save_transactions, transaction_signature,
+    clear_insights, imported_signatures, merchant_rows, recategorise, save_category_overrides, save_insights, save_transactions, transaction_signature,
 )
 from utils import CSVValidationError, plural, allowed_file, build_dashboard_payload, clean_transaction_dataframe, read_uploaded_csv, shift_to_recent_months, validate_uploaded_csv
 
@@ -191,20 +191,24 @@ def _anchor(key: str) -> str:
 
 
 def _merchants(db, user_id: int) -> list[dict]:
-    """The user's transactions grouped by merchant. Merchants with any Uncategorized row come first."""
-    # shortcut: regroups every row on each request (about 2.5 s locally for a 31,441-row account, well under
-    # 0.5 s for a year of normal use); store the merchant key on each transaction if large accounts get slow.
-    rows = db.execute(
-        "SELECT id, date, category, amount, type, description FROM transactions WHERE user_id = ? ORDER BY date DESC, id DESC",
-        (user_id,),
-    ).fetchall()
+    """The user's merchants, from the stored merchant_key, with counts, totals and categories (no rows).
+    Merchants with any Uncategorized row come first."""
     merchants: dict[str, dict] = {}
-    for row in rows:
-        key = merchant_key(row["description"])
-        merchant = merchants.setdefault(key, {"key": key, "anchor": _anchor(key), "rows": [], "categories": Counter(), "total": 0.0})
-        merchant["rows"].append(row)
-        merchant["categories"][row["category"]] += 1
-        merchant["total"] += float(row["amount"])
+    for row in db.execute(
+        "SELECT merchant_key, category, COUNT(*) AS n, SUM(amount) AS total FROM transactions WHERE user_id = ? GROUP BY merchant_key, category",
+        (user_id,),
+    ).fetchall():
+        key = row["merchant_key"] or ""
+        merchant = merchants.setdefault(key, {"key": key, "anchor": _anchor(key), "categories": Counter(), "total": 0.0, "count": 0, "rows": []})
+        merchant["categories"][row["category"]] += int(row["n"])
+        merchant["count"] += int(row["n"])
+        merchant["total"] += float(row["total"])
+    # One example description per merchant: its latest saved row.
+    for row in db.execute(
+        "SELECT merchant_key, description FROM transactions WHERE id IN (SELECT MAX(id) FROM transactions WHERE user_id = ? GROUP BY merchant_key)",
+        (user_id,),
+    ).fetchall():
+        merchants[row["merchant_key"] or ""]["example"] = row["description"]
     for merchant in merchants.values():
         merchant["category"] = merchant["categories"].most_common(1)[0][0]  # the "current" category: the most common
         merchant["uncategorised"] = merchant["categories"][UNCATEGORISED]
@@ -227,21 +231,25 @@ def _categories_url(values, anchor: str | None = None) -> str:
 def categories():
     """Every merchant with its current category; change a whole merchant (remembered) or single rows."""
     user_id, db = session["user_id"], get_db()
-    merchants = _merchants(db, user_id)
     if request.method == "POST":
         key = request.form.get("merchant", "")
-        target = next((m for m in merchants if key and m["key"] == key), None)
-        back = _categories_url(request.form, target["anchor"] if target else None)
+        rows = merchant_rows(db, user_id, key) if key else []  # this user's own rows, never ids from the form
+        anchor = _anchor(key) if rows else None
+        back = _categories_url(request.form, anchor)
         category = request.form.get("category", "").strip()
-        if target is None:  # ids always come from this user's own rows, never from the form
+        remember = bool(request.form.get("remember"))  # ticked by default for businesses, unticked for people
+        if not rows:
             flash("That merchant is not in your transactions. Nothing was changed.", "danger")
         elif category not in _allowed_categories(db, user_id):
-            _flash_at(target["anchor"], "Choose a category from the list. Nothing was changed.", "danger")
+            _flash_at(anchor, "Choose a category from the list. Nothing was changed.", "danger")
         else:
-            changed = recategorise(db, user_id, [row["id"] for row in target["rows"]], category, remember_as=key)
-            refresh_insights(db, user_id)
-            _flash_at(target["anchor"], f"{key}: {plural(changed, 'transaction')} now in {category}. Future imports use it too.", "success")
+            changed = recategorise(db, user_id, [row["id"] for row in rows], category, remember_as=key if remember else "")
+            clear_insights(db, user_id)
+            note = "Future imports use it too." if remember else "Not remembered for future imports."
+            _flash_at(anchor, f"{key}: {plural(changed, 'transaction')} now in {category}. {note}", "success")
         return redirect(back)
+
+    merchants = _merchants(db, user_id)
 
     query = request.args.get("q", "").strip()[:100]
     needing = [m["anchor"] for m in merchants if m["uncategorised"]]
@@ -257,11 +265,14 @@ def categories():
     shown = [
         m for m in merchants
         if not needle or m["anchor"] in just_changed
-        or needle in m["key"].lower() or needle in m["category"].lower() or needle in m["rows"][0]["description"].lower()
+        or needle in m["key"].lower() or needle in m["category"].lower() or needle in m["example"].lower()
     ]
     for merchant in shown:
+        merchant["person"] = looks_like_person(merchant["key"], [merchant["example"]])
         merchant["open"] = merchant["anchor"] in opened
         merchant["limit"] = rows if merchant["anchor"] == more else MERCHANT_ROWS_PAGE
+        if merchant["open"]:  # only open merchants fetch their rows
+            merchant["rows"] = merchant_rows(db, user_id, merchant["key"], merchant["limit"])
     return render_template(
         "categories.html", merchants=shown, merchant_count=len(merchants), needing_count=len(needing), query=query,
         opened=[a for a in opened if a != "none"], categories=CATEGORIES, own_categories=_own_categories(db, user_id),
@@ -285,7 +296,7 @@ def change_transaction_category(transaction_id: int):
         return redirect(back)
     if not recategorise(db, user_id, [transaction_id], category):
         abort(404)  # not one of this user's transactions
-    refresh_insights(db, user_id)
+    clear_insights(db, user_id)
     _flash_at(anchor, f"Changed one transaction to {category}.", "success")
     return redirect(back)
 

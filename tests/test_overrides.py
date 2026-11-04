@@ -69,3 +69,38 @@ def test_recategorise_handles_more_rows_than_one_query_can_list(db, user_id):
     ids = _add_rows(db, user_id, 1200)
     assert recategorise(db, user_id, ids, "Dining") == 1200
     assert db.execute("SELECT COUNT(*) FROM transactions WHERE category = 'Dining'").fetchone()[0] == 1200
+
+
+def test_an_older_database_gains_merchant_keys_and_their_index_on_start(tmp_path):
+    path = tmp_path / "old.db"
+    old = sqlite3.connect(path)
+    old.executescript(
+        "CREATE TABLE users (id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT NOT NULL UNIQUE, email TEXT NOT NULL UNIQUE,"
+        " password_hash TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);"
+        "CREATE TABLE transactions (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, date TEXT NOT NULL,"
+        " category TEXT NOT NULL, amount REAL NOT NULL, type TEXT NOT NULL, description TEXT NOT NULL, source_file TEXT,"
+        " created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);"
+        "INSERT INTO users (username, email, password_hash) VALUES ('asha', 'asha@example.com', 'x');"
+        "INSERT INTO transactions (user_id, date, category, amount, type, description)"
+        " VALUES (1, '2026-01-01', 'Dining', 100, 'Expense', 'UPI/ZOMATO LTD/412345678901'), (1, '2026-01-02', 'Other', 5, 'Expense', '412345678902');"
+    )
+    old.commit()
+    old.close()
+
+    create_app({"TESTING": True, "DATABASE_PATH": str(path)})
+
+    conn = sqlite3.connect(path)
+    assert [r[0] for r in conn.execute("SELECT merchant_key FROM transactions ORDER BY id")] == ["ZOMATO", ""]
+    indexes = {r[1] for r in conn.execute("PRAGMA index_list(transactions)")}
+    assert "idx_transactions_user_merchant" in indexes
+    conn.close()
+
+
+def test_saved_rows_get_their_merchant_key(db, user_id):
+    import pandas as pd
+
+    from models import save_transactions
+
+    save_transactions(db, user_id, pd.DataFrame([{"Date": "2026-01-01", "Category": "Dining", "Amount": 100.0, "Type": "Expense",
+                                                   "Description": "UPI-SWIGGY-swiggy@icici-ICIC0000001-412345678901-Order"}]))
+    assert db.execute("SELECT merchant_key FROM transactions").fetchone()[0] == "SWIGGY"

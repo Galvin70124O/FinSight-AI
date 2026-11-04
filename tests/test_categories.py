@@ -85,8 +85,10 @@ def test_a_change_without_a_csrf_token_changes_nothing(client, db, logged_in):
 
 
 def add(db, user_id, description, category="Uncategorized", amount=100, date="2026-03-01", kind="Expense"):
-    db.execute("INSERT INTO transactions (user_id, date, category, amount, type, description) VALUES (?, ?, ?, ?, ?, ?)",
-               (user_id, date, category, amount, kind, description))
+    from ml.categorise import merchant_key
+
+    db.execute("INSERT INTO transactions (user_id, date, category, amount, type, description, merchant_key) VALUES (?, ?, ?, ?, ?, ?, ?)",
+               (user_id, date, category, amount, kind, description, merchant_key(description)))
     db.commit()
 
 
@@ -94,8 +96,10 @@ def merchant_order(page):
     return re.findall(r'<b id="m[0-9a-f]+-name">([^<]+)</b>', page)
 
 
-def change_merchant(client, merchant, category, **extra):
+def change_merchant(client, merchant, category, remember=True, **extra):
     data = {"merchant": merchant, "category": category, "csrf_token": csrf_token(client, "/categories"), **extra}
+    if remember:
+        data["remember"] = "1"  # what the ticked box sends
     return client.post("/categories", data=data, follow_redirects=True)
 
 
@@ -232,3 +236,21 @@ def test_a_change_made_while_searching_still_shows_its_merchant_and_result(clien
         "q": "uncategorized", "csrf_token": csrf_token(client, "/categories"),
     }, follow_redirects=True).get_data(as_text=True)
     assert "Changed one transaction to Dining." in page
+
+
+def test_changing_all_of_a_person_is_remembered_only_when_ticked(client, db, logged_in):
+    add(db, logged_in, "UPI/RAHUL S/412345678901")
+    add(db, logged_in, "UPI/BLINKIT/412345678902", "Uncategorized", date="2026-03-02")
+    page = client.get("/categories").get_data(as_text=True)
+    rahul = re.search(r'id="m[0-9a-f]+-name">RAHUL S<.*?</li>', page, re.S).group(0)
+    blinkit = re.search(r'id="m[0-9a-f]+-name">BLINKIT<.*?</li>', page, re.S).group(0)
+    assert 'name="remember" value="1">Remember for this person' in rahul  # unticked
+    assert 'name="remember" value="1" checked>Remember for this merchant' in blinkit
+
+    assert "Not remembered for future imports" in change_merchant(client, "RAHUL S", "Rent", remember=False).get_data(as_text=True)
+    assert ("UPI/RAHUL S/412345678901", "Rent") in categories(db, logged_in)
+    assert db.execute("SELECT COUNT(*) FROM category_overrides").fetchone()[0] == 0
+
+    change_merchant(client, "RAHUL S", "Rent", remember=True)
+    change_merchant(client, "BLINKIT", "Groceries", remember=False)
+    assert [tuple(r) for r in db.execute("SELECT merchant_key, category FROM category_overrides")] == [("RAHUL S", "Rent")]

@@ -42,11 +42,11 @@
   <ol class="merchants">
     {% for m in merchants %}
     {% set label = m.key or 'No name in the description' %}
-    {% set count = m.rows|length %}
-    <li class="merchant cat-merchant{{ ' needs' if m.uncategorised }}" id="{{ m.anchor }}" data-search="{{ (m.key ~ ' ' ~ m.category ~ ' ' ~ m.rows[0].description)|lower }}">
+    {% set count = m.count %}
+    <li class="merchant cat-merchant{{ ' needs' if m.uncategorised }}" id="{{ m.anchor }}" data-search="{{ (m.key ~ ' ' ~ m.category ~ ' ' ~ m.example)|lower }}">
       <div class="m-name">
         <b id="{{ m.anchor }}-name">{{ label }}</b>
-        <span class="m-example" title="{{ m.rows[0].description }}">{{ m.rows[0].description }}</span>
+        <span class="m-example" title="{{ m.example }}">{{ m.example }}</span>
       </div>
       <span class="m-count num">{{ count|plural('transaction') }}</span>
       <span class="m-total num">{{ m.total|inr }}</span>
@@ -66,6 +66,8 @@
             {{ category_options(m.category, categories, own_categories) }}
           </select>
           <button class="btn btn-secondary" type="submit">Save</button>
+          {# A person's transfers are not remembered unless asked: next month's may be for something else. #}
+          <label class="m-remember"><input type="checkbox" name="remember" value="1"{{ ' checked' if not m.person }}>Remember for this {{ 'person' if m.person else 'merchant' }}</label>
         </form>
         {% else %}
         <p class="sub">No name to remember them by: change these one at a time.</p>
@@ -78,7 +80,7 @@
         <a class="m-toggle" href="{{ url_for('main.categories', q=query or None, open=others or ['none'], _anchor=m.anchor) }}">Hide transactions</a>
         <p class="cat-rows-note">One at a time: these changes are not remembered for future imports.</p>
         <ul class="cat-rows">
-          {% for row in m.rows[:m.limit] %}
+          {% for row in m.rows %}
           {% set expense = row.type == 'Expense' %}
           <li class="cat-row" id="{{ m.anchor }}-r{{ loop.index }}">
             <div class="cat-row-text">
