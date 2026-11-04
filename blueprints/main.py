@@ -192,6 +192,8 @@ def _anchor(key: str) -> str:
 
 def _merchants(db, user_id: int) -> list[dict]:
     """The user's transactions grouped by merchant. Merchants with any Uncategorized row come first."""
+    # shortcut: regroups every row on each request (about 2.5 s locally for a 31,441-row account, well under
+    # 0.5 s for a year of normal use); store the merchant key on each transaction if large accounts get slow.
     rows = db.execute(
         "SELECT id, date, category, amount, type, description FROM transactions WHERE user_id = ? ORDER BY date DESC, id DESC",
         (user_id,),
