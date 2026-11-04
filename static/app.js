@@ -106,8 +106,8 @@ document.addEventListener('DOMContentLoaded', () => {
       hovermode: 'x unified',
       hoverlabel: { bgcolor: cssVar('--surface'), bordercolor: cssVar('--line-strong'), font: { family: font, color: cssVar('--ink'), size: 13 } },
       xaxis: { showgrid: false, zeroline: false, showline: false, fixedrange: true, tickfont, tickangle: 0, automargin: true, ...xTicks(labels) },
-      // Money axes start at ₹0, so a small change never looks like a big one.
-      yaxis: { ...(figure.layout.yaxis || {}), rangemode: 'tozero', automargin: true, gridcolor: cssVar('--line'), zeroline: false, showline: false, fixedrange: true, tickfont, ticks: '' },
+      // Money axes start at ₹0 (so a small change never looks big), drawn as a baseline under its label.
+      yaxis: { ...(figure.layout.yaxis || {}), rangemode: 'tozero', automargin: true, gridcolor: cssVar('--line'), zeroline: true, zerolinecolor: cssVar('--line-strong'), zerolinewidth: 1, showline: false, fixedrange: true, tickfont, ticks: '' },
     };
   }
 
