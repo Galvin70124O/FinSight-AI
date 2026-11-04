@@ -246,18 +246,39 @@ def get_category_overrides(db, user_id: int) -> dict[str, str]:
     return {row["merchant_key"]: row["category"] for row in rows}
 
 
+def _remember(db, user_id: int, merchant_key: str, category: str) -> None:
+    """Upsert one correction; the caller commits."""
+    db.execute(
+        """
+        INSERT INTO category_overrides (user_id, merchant_key, category, updated_at) VALUES (?, ?, ?, ?)
+        ON CONFLICT (user_id, merchant_key) DO UPDATE SET category = excluded.category, updated_at = excluded.updated_at
+        """,
+        (user_id, merchant_key, category, datetime.now(timezone.utc).isoformat(timespec="seconds")),
+    )
+
+
 def save_category_overrides(db, user_id: int, overrides: dict[str, str]) -> None:
     """Remember the user's category for each merchant, replacing any earlier choice."""
-    now = datetime.now(timezone.utc).isoformat(timespec="seconds")
     for merchant_key, category in overrides.items():
-        db.execute(
-            """
-            INSERT INTO category_overrides (user_id, merchant_key, category, updated_at) VALUES (?, ?, ?, ?)
-            ON CONFLICT (user_id, merchant_key) DO UPDATE SET category = excluded.category, updated_at = excluded.updated_at
-            """,
-            (user_id, merchant_key, category, now),
-        )
+        _remember(db, user_id, merchant_key, category)
     db.commit()
+
+
+def recategorise(db, user_id: int, transaction_ids: list[int], category: str, remember_as: str = "") -> int:
+    """Set the category of some of this user's transactions and, given a merchant key, remember it for that
+    merchant, all in one commit. Rows of other users are never touched. Returns how many rows changed."""
+    changed = 0
+    for start in range(0, len(transaction_ids), 500):  # well under SQLite's limit on query parameters
+        chunk = transaction_ids[start:start + 500]
+        cursor = db.execute(
+            f"UPDATE transactions SET category = ? WHERE user_id = ? AND id IN ({', '.join('?' * len(chunk))})",
+            (category, user_id, *chunk),
+        )
+        changed += cursor.rowcount
+    if remember_as:
+        _remember(db, user_id, remember_as, category)
+    db.commit()
+    return changed
 
 
 def delete_user(db, user_id: int) -> None:

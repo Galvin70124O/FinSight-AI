@@ -52,10 +52,9 @@ _NOISE = {"UPI", "NEFT", "IMPS", "RTGS", "ACH", "NACH", "ECS", "POS", "P2M", "P2
 _LEADING_NOISE = {"CR", "DR", "D", "C", "TO", "BY", "TRF", "TRANSFER", "REF", "SENT", "RECEIVED"}
 _COMPANY_SUFFIX = {"LTD", "LIMITED", "PVT", "PRIVATE", "LLP", "INC", "CO"}
 _P2A = re.compile(r"\bP2A\b")  # person-to-account transfers (IMPS/P2A, UPI/P2A)
-# Handles people use: a phone number (often masked) at any UPI app, or a name at Google Pay's personal
-# suffixes. Business handles look different (zomato@hdfcbank, shop@okbizaxis, Q123456789@ybl).
 # Merchant QR and business handles: PhonePe Q-codes, Paytm and BharatPe QR, Google Pay for Business.
 _BUSINESS_HANDLE = re.compile(r"(?:\bQ\d{6,}|\bPAYTMQR|\bBHARATPE)[\w.]*@|@OKBIZ")
+# Handles people use: a phone number (often masked) at any UPI app, or a name at Google Pay's personal suffixes.
 _PERSONAL_HANDLE = re.compile(r"(?<![0-9X])[0-9X]{10}@[A-Z]+|[A-Z][A-Z0-9._-]*@OK(?:AXIS|HDFCBANK|SBI|ICICI)\b")
 _PUNCTUATION = re.compile(r"[^A-Z0-9&]+")
 _WITHOUT_DIGITS = str.maketrans("", "", "0123456789")

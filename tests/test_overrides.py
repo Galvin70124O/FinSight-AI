@@ -33,3 +33,39 @@ def test_saving_an_override_again_replaces_it_for_that_user_only(db, user_id):
 
     assert get_category_overrides(db, user_id) == {"ZOMATO": "Groceries", "RAJ MEDICALS": "Healthcare"}
     assert get_category_overrides(db, other) == {"ZOMATO": "Shopping"}
+
+
+def _add_rows(db, user_id, n, description="UPI/ZOMATO LTD/412345678901", category="Uncategorized"):
+    ids = []
+    for i in range(n):
+        ids.append(db.execute(
+            "INSERT INTO transactions (user_id, date, category, amount, type, description) VALUES (?, ?, ?, ?, 'Expense', ?) RETURNING id",
+            (user_id, f"2026-01-{i % 28 + 1:02d}", category, 100 + i, f"{description}{i}"),
+        ).fetchone()[0])
+    db.commit()
+    return ids
+
+
+def test_recategorise_changes_only_this_users_rows_and_remembers_on_request(db, user_id):
+    from models import recategorise
+
+    other = db.execute("INSERT INTO users (username, email, password_hash) VALUES ('ravi', 'ravi@example.com', 'x') RETURNING id").fetchone()[0]
+    mine, theirs = _add_rows(db, user_id, 3), _add_rows(db, other, 2)
+
+    # Another user's ids slipped into the list are ignored.
+    assert recategorise(db, user_id, mine[:2] + theirs, "Dining") == 2
+    assert recategorise(db, user_id, mine[2:], "Groceries", remember_as="ZOMATO") == 1
+
+    categories = dict(db.execute("SELECT id, category FROM transactions").fetchall())
+    assert [categories[i] for i in mine] == ["Dining", "Dining", "Groceries"]
+    assert [categories[i] for i in theirs] == ["Uncategorized", "Uncategorized"]
+    assert get_category_overrides(db, user_id) == {"ZOMATO": "Groceries"}
+    assert get_category_overrides(db, other) == {}
+
+
+def test_recategorise_handles_more_rows_than_one_query_can_list(db, user_id):
+    from models import recategorise
+
+    ids = _add_rows(db, user_id, 1200)
+    assert recategorise(db, user_id, ids, "Dining") == 1200
+    assert db.execute("SELECT COUNT(*) FROM transactions WHERE category = 'Dining'").fetchone()[0] == 1200
