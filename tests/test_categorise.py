@@ -32,6 +32,7 @@ def test_no_reference_number_handle_or_branch_code_survives():
         ("UPI/ZOMATO LTD/412345678901/Paid via PhonePe", "ZOMATO"),
         ("VISA POS 4321XXXXXXXX9876 AMAZON PAY INDIA PRIVATE LIMITED", "AMAZON PAY INDIA"),
         ("UPI/P2M/412345678901/zomato@hdfcbank/REFUND", "ZOMATO"),
+        ("POS 4591XXXXXX1234 ANNAPOORNA PROVISION AND GENERAL STORES", "ANNAPOORNA PROVISION"),
         ("412345678901", ""),
     ],
 )
@@ -130,3 +131,18 @@ def test_a_broken_or_mismatched_model_file_falls_back_to_rules(tmp_path, monkeyp
     monkeypatch.setattr(ml.categorise, "MODEL", None)
     keys, suggestions = categorise(["UPI/ZOMATO/412345678901", "POS 4591XXXXXX1234 NEW HEALTH MEDICALS PUNE"], {})
     assert [(suggestions[k].category, suggestions[k].source) for k in keys] == [("Dining", "rule"), (None, "none")]
+
+
+def test_a_payment_to_a_person_is_rarely_given_a_confident_category():
+    # Transfers to people have no category a rule or the model could know; a confident guess would be a
+    # wrong one the user might not notice. (It was 19 of 280 when seed rows contained people's names.)
+    from ml.categorise import categorise
+
+    first = ["RAHUL", "ANITA", "KAVYA", "ARJUN", "PRIYA", "VIKRAM", "MEERA", "SURESH", "DIVYA", "KARTHIK", "LAKSHMI", "NAVEEN", "POOJA", "SANJAY"]
+    last = ["S", "K", "NAIR", "IYER", "REDDY", "SHARMA", "MENON", "RAO", "PILLAI", "DAS", "GUPTA", "JOSHI", "BOSE", "PATEL", "SINGH", "VERMA", "KUMAR", "NAIDU", "SHETTY", "KHAN"]
+    people = [f"UPI/{a} {b}/412345678901/" for a in first for b in last]
+    _, suggestions = categorise(people, {})
+
+    guessed = [key for key, s in suggestions.items() if s.category]
+    print(f"\n{len(guessed)} of {len(people)} people given a category: {guessed}")
+    assert len(guessed) <= len(people) * 0.02

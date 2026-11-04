@@ -82,7 +82,10 @@ def _key(segments: list[str]) -> str:
     words = segments[0].split()
     while len(words) > 1 and words[-1] in _COMPANY_SUFFIX:
         words.pop()
-    return " ".join(words[:3])[:40]
+    words = words[:3]
+    while len(words) > 1 and words[-1] in {"AND", "&", "OF", "THE"}:  # "ANNAPOORNA PROVISION AND", cut at three words
+        words.pop()
+    return " ".join(words)[:40]
 
 
 def merchant_key(description: object) -> str:
