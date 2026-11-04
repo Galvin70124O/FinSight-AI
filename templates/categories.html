@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% from '_macros.html' import icon, category_icon, category_options, row_category_form %}
+{% from '_macros.html' import icon, category_icon, category_options, row_category_form, flashes_at %}
 {% block title %}Categories · FinSight AI{% endblock %}
 {% block description %}Every merchant in your transactions with its category. Change a whole merchant or a single transaction.{% endblock %}
 
@@ -55,6 +55,7 @@
         {%- if m.categories|length > 1 %}<span class="muted">&nbsp;· {{ m.categories|length }} categories</span>{% endif -%}
       </span>
       <div class="m-choose">
+        <span class="m-choose-label" aria-hidden="true">Change all to</span>
         {% if m.key %}
         <form method="post" action="{{ url_for('main.categories') }}" class="row-edit">
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -71,9 +72,11 @@
         {% endif %}
       </div>
       <div class="m-rows">
+        {{ flashes_at(m.anchor) }}
         {% if m.open %}
         {% set others = opened|reject('equalto', m.anchor)|list %}
         <a class="m-toggle" href="{{ url_for('main.categories', q=query or None, open=others or ['none'], _anchor=m.anchor) }}">Hide transactions</a>
+        <p class="cat-rows-note">One at a time: these changes are not remembered for future imports.</p>
         <ul class="cat-rows">
           {% for row in m.rows[:m.limit] %}
           {% set expense = row.type == 'Expense' %}

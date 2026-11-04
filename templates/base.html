@@ -32,11 +32,11 @@
     {% set username = session.get('username', '') %}
 
     {% macro flashes() %}
-      {% with messages = get_flashed_messages(with_categories=true) %}
-        {% if messages|rejectattr(0, 'equalto', 'delete')|list %}
+      {% with messages = get_flashed_messages(with_categories=true)|selectattr(0, 'in', ['success', 'danger', 'info'])|list %}
+        {% if messages %}
           <div class="flash-stack">
-            {# "delete" messages belong next to the delete form on the import page. #}
-            {% for category, message in messages if category != 'delete' %}
+            {# "delete" messages sit by the delete form, and "at-..." ones by the merchant or section they are about. #}
+            {% for category, message in messages %}
               <div class="flash {{ category }}" role="{{ 'alert' if category == 'danger' else 'status' }}">
                 {{ icon('alert' if category == 'danger' else 'check-circle') }}<span>{{ message }}</span>
               </div>

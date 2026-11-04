@@ -104,6 +104,7 @@ svg { flex: none; }
 .btn-danger { border-color: var(--bad); background: none; color: var(--bad); }
 .btn-lg { min-height: 48px; padding: 0 var(--s6); font-size: 16px; }
 .btn-block { width: 100%; }
+.btn[aria-disabled="true"] { opacity: 0.6; cursor: progress; }  /* sent once: the press was heard */
 
 .icon-button {
   display: inline-grid; place-items: center; width: 40px; height: 40px;
@@ -426,6 +427,9 @@ svg { flex: none; }
 .merchant[hidden] { display: none; }
 .m-how .cat-icon svg { margin-top: 0; }
 .m-toggle { display: inline-flex; align-items: center; min-height: 32px; color: var(--accent); font-size: 14px; }
+.m-choose-label { display: none; color: var(--muted); font-size: 13px; }
+.m-rows > .flash, .section-head .flash { margin: var(--s2) 0; }
+.cat-rows-note { margin-top: var(--s1); color: var(--muted); font-size: 13px; }
 .cat-rows { margin: var(--s2) 0 var(--s3); border-top: 1px solid var(--line); }
 .cat-row { display: grid; grid-template-columns: minmax(0, 1fr) auto 17rem; gap: var(--s2) var(--s4); align-items: center; padding: var(--s2) 0; border-bottom: 1px solid var(--line); font-size: 14px; }
 .cat-row-text { display: grid; min-width: 0; }
@@ -478,6 +482,7 @@ button, .btn, .chip, .seg-btn, .tab, .nav-link, summary { -webkit-user-select: n
   .footer-inner a:hover { color: var(--ink); }
   .nav-link:hover { background: var(--surface-2); color: var(--ink); }
   .btn-danger:hover { background: color-mix(in srgb, var(--bad) 10%, transparent); }
+  .m-toggle:hover, .tx-edit summary:hover, .m-rows summary:hover { text-decoration: underline; text-underline-offset: 3px; }
 }
 
 /* Fingers need 44px targets and 16px fields (iOS zooms into anything smaller). */
@@ -501,6 +506,7 @@ button, .btn, .chip, .seg-btn, .tab, .nav-link, summary { -webkit-user-select: n
   .m-total { align-self: start; }
   .m-choose { max-width: 24rem; }
   .categories .merchant { grid-template-columns: minmax(0, 1fr) auto; }
+  .m-choose-label { display: block; }  /* the column header that said it is hidden here */
 }
 
 @media (max-width: 1100px) {

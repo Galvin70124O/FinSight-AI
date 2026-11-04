@@ -180,6 +180,11 @@ def _allowed_categories(db, user_id: int) -> set[str]:
 _ANCHOR = re.compile(r"m[0-9a-f]{1,8}")
 
 
+def _flash_at(anchor: str | None, message: str, kind: str) -> None:
+    """A message shown beside the merchant or section the page scrolls back to, not at the top out of view."""
+    flash(message, f"at-{anchor} {kind}" if anchor else kind)
+
+
 def _anchor(key: str) -> str:
     """A stable HTML id for a merchant; keys contain spaces."""
     return f"m{zlib.crc32(key.encode()):x}"
@@ -229,11 +234,11 @@ def categories():
         if target is None:  # ids always come from this user's own rows, never from the form
             flash("That merchant is not in your transactions. Nothing was changed.", "danger")
         elif category not in _allowed_categories(db, user_id):
-            flash("Choose a category from the list. Nothing was changed.", "danger")
+            _flash_at(target["anchor"], "Choose a category from the list. Nothing was changed.", "danger")
         else:
             changed = recategorise(db, user_id, [row["id"] for row in target["rows"]], category, remember_as=key)
             refresh_insights(db, user_id)
-            flash(f"{key}: {plural(changed, 'transaction')} now in {category}. Future imports use it too.", "success")
+            _flash_at(target["anchor"], f"{key}: {plural(changed, 'transaction')} now in {category}. Future imports use it too.", "success")
         return redirect(back)
 
     query = request.args.get("q", "").strip()[:100]
@@ -264,17 +269,19 @@ def change_transaction_category(transaction_id: int):
     """Change one of the user's transactions. Never remembered for its merchant."""
     user_id, db = session["user_id"], get_db()
     if request.form.get("return_to") == "categories":
-        back = _categories_url(request.form, request.form.get("anchor"))
+        anchor = request.form.get("anchor", "")
+        anchor = anchor if _ANCHOR.fullmatch(anchor) else None
+        back = _categories_url(request.form, anchor)
     else:
-        back = url_for("main.dashboard", _anchor="transactions")
+        anchor, back = "transactions", url_for("main.dashboard", _anchor="transactions")
     category = request.form.get("category", "").strip()
     if category not in _allowed_categories(db, user_id):
-        flash("Choose a category from the list. Nothing was changed.", "danger")
+        _flash_at(anchor, "Choose a category from the list. Nothing was changed.", "danger")
         return redirect(back)
     if not recategorise(db, user_id, [transaction_id], category):
         abort(404)  # not one of this user's transactions
     refresh_insights(db, user_id)
-    flash(f"Changed one transaction to {category}.", "success")
+    _flash_at(anchor, f"Changed one transaction to {category}.", "success")
     return redirect(back)
 
 

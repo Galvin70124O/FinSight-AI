@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% from '_macros.html' import icon, category_icon, change, row_category_form %}
+{% from '_macros.html' import icon, category_icon, change, row_category_form, flashes_at %}
 
 {% block title %}Overview · FinSight AI{% endblock %}
 {% block description %}Your balance, income and spending this month, where your money went, next month's forecast and unusual expenses.{% endblock %}
@@ -249,6 +249,7 @@
     <div>
       <h2 class="section-title" id="txTitle">Recent transactions</h2>
       <p class="sub">Your latest {{ payload.recent_transactions|length }}. <a class="link" href="{{ url_for('main.categories') }}">Fix categories</a> for all your merchants.</p>
+      {{ flashes_at('transactions') }}
     </div>
     <div class="table-controls">
       <div class="chips" role="group" aria-label="Show">

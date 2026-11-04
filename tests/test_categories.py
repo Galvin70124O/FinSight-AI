@@ -206,3 +206,14 @@ def test_the_categories_page_is_reachable_from_the_sidebar_palette_and_transacti
     assert overview.count('href="/categories"') >= 2  # sidebar and the Transactions section
     assert '"label": "Categories"' in overview  # command palette
     assert 'nav-link active" href="/categories"' in client.get("/categories").get_data(as_text=True)
+
+
+def test_the_result_of_a_change_is_shown_beside_what_changed(client, db, logged_in):
+    add(db, logged_in, "UPI/ZOMATO LTD/412345678901", "Dining")
+    page = change_merchant(client, "ZOMATO", "Groceries").get_data(as_text=True)
+    merchant = re.search(r'<li class="merchant cat-merchant" id="m[0-9a-f]+".*?</li>', page, re.S).group(0)
+    assert "now in Groceries" in merchant and 'class="flash-stack"' not in page
+
+    overview = change_row(client, tx_id(db, "UPI/ZOMATO", logged_in), "Dining").get_data(as_text=True)
+    section = overview[overview.index('id="transactions"'):]
+    assert "Changed one transaction to Dining." in section.split("</table>")[0] and 'class="flash-stack"' not in overview

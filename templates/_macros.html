@@ -66,6 +66,14 @@
 {%- if own %}<optgroup label="Your categories">{% for c in own %}<option{{ ' selected' if c == current }}>{{ c }}</option>{% endfor %}</optgroup>{% endif -%}
 {%- endmacro %}
 
+{# Messages about one merchant or section, shown where the page scrolls back to (see _flash_at). #}
+{% macro flashes_at(anchor) -%}
+{%- for category, message in get_flashed_messages(with_categories=true) if category.startswith('at-' ~ anchor ~ ' ') %}
+{%- set kind = category.split(' ')[1] %}
+<div class="flash {{ kind }}" role="{{ 'alert' if kind == 'danger' else 'status' }}">{{ icon('alert' if kind == 'danger' else 'check-circle') }}<span>{{ message }}</span></div>
+{%- endfor %}
+{%- endmacro %}
+
 {# Change one transaction's category; never remembered for its merchant. #}
 {% macro row_category_form(tx_id, current, label, categories, own) -%}
 <form method="post" action="{{ url_for('main.change_transaction_category', transaction_id=tx_id) }}" class="row-edit">
