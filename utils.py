@@ -66,6 +66,36 @@ def format_day(value: Any) -> str:
     return f"{day.day} {day:%b %Y}"
 
 
+def half_up(value: float) -> int:
+    """Round .5 up, as people expect (Python's round() sends 92.5 to 92)."""
+    return math.floor(value + 0.5)
+
+
+def whole_health(health: dict[str, Any] | None) -> dict[str, Any] | None:
+    """The health score with every part in whole points that still add up to the score shown.
+
+    Parts are rounded down, then the points left over go to the parts with the largest remainders
+    (largest-remainder rounding). With all three parts measured they total 100, so the shown parts
+    add up to the shown score; with fewer parts the score is scaled up to 100 and the parts add up
+    to the points measured.
+    """
+    if not health or health.get("score") is None:
+        return health
+    parts = health["components"]
+    measured = sum(part["max_points"] for part in parts)
+    total = half_up(health["score"]) if measured == 100 else half_up(sum(part["points"] for part in parts))
+    shown = [math.floor(part["points"]) for part in parts]
+    by_remainder = sorted(range(len(parts)), key=lambda i: parts[i]["points"] - shown[i], reverse=True)
+    for i in by_remainder[: total - sum(shown)]:
+        shown[i] += 1
+    return {
+        **health,
+        "shown_score": half_up(health["score"]),
+        "measured_points": measured,
+        "components": [{**part, "shown": n, "lost": part["max_points"] - n} for part, n in zip(parts, shown)],
+    }
+
+
 def plural(count: int, word: str) -> str:
     """'1 month', '8 months': English plurals for the counts the app prints."""
     return f"{count} {word}" + ("" if count == 1 else "s")
@@ -384,7 +414,7 @@ def build_dashboard_payload(transactions_df: pd.DataFrame, insights: dict[str, A
     current_balance = total_income - total_expense
     savings_rate = round((current_balance / total_income * 100), 1) if total_income else 0.0
     insights = insights or {}
-    health = insights.get("health")
+    health = whole_health(insights.get("health"))
 
     # Every series spans the same months, from the first to the last transaction.
     first_month = transactions_df["Date"].min().to_period("M")

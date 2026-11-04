@@ -190,16 +190,16 @@
   {% if health and health.score is not none %}
   <div class="health">
     <div class="score">
-      <p class="figure">{{ health.score|round|int }}<span> / 100</span></p>
+      <p class="figure">{{ health.shown_score }}<span> / 100</span></p>
       <p>{{ health.label }}</p>
+      {% if health.measured_points != 100 %}<p class="sub">Scaled to 100 from the {{ health.measured_points }} points that could be measured so far.</p>{% endif %}
     </div>
     <ul class="parts">
       {% for part in health.components %}
-        {% set lost = part.max_points - part.points %}
         <li class="part">
-          <div class="part-head"><span>{{ part.name }}</span><span class="num">{{ '%g'|format(part.points) }} of {{ part.max_points }}</span></div>
+          <div class="part-head"><span>{{ part.name }}</span><span class="num">{{ part.shown }} of {{ part.max_points }}</span></div>
           <div class="meter" aria-hidden="true"><span style="width: {{ (part.points / part.max_points * 100)|round(1) }}%"></span></div>
-          <p>{{ part.detail }} <span class="effect{{ ' bad' if lost > 0 }}">{% if lost > 0 %}Cost you {{ '%g'|format(lost|round(1)) }} points.{% else %}Full marks.{% endif %}</span></p>
+          <p>{{ part.detail }} <span class="effect{{ ' bad' if part.lost > 0 }}">{% if part.lost > 0 %}Cost you {{ part.lost|plural('point') }}.{% else %}Full marks.{% endif %}</span></p>
         </li>
       {% endfor %}
     </ul>
