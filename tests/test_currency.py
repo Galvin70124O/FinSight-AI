@@ -35,3 +35,22 @@ def test_dashboard_shows_rupees_not_dollars(client, logged_in):
 
     assert "₹" in html
     assert "$" not in html.replace("${", "")  # ignore JS template literals
+
+
+def test_dates_read_as_day_month_year():
+    from utils import format_day
+
+    assert format_day("2025-04-27") == "27 Apr 2025"
+    assert format_day("2025-04-03") == "3 Apr 2025"
+
+
+def test_tables_show_readable_dates_but_sort_on_iso(client, logged_in):
+    import re
+
+    from conftest import csrf_token
+
+    html = client.post("/demo-data", data={"csrf_token": csrf_token(client, "/dashboard")}, follow_redirects=True).get_data(as_text=True)
+    table = html[html.index('id="transactionsTable"'):]
+    assert re.search(r'data-date="\d{4}-\d{2}-\d{2}"', table)  # sorting key stays ISO
+    assert re.search(r'tx-date">\d{1,2} [A-Z][a-z]{2} \d{4}</td>', table)
+    assert not re.search(r">\d{4}-\d{2}-\d{2}<", table)

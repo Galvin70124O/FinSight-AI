@@ -223,11 +223,11 @@
       <tbody>
         {% for item in payload.insights.anomalies %}
         <tr>
-          <td class="num muted hide-sm">{{ item.date }}</td>
+          <td class="num muted hide-sm nowrap">{{ item.date|day }}</td>
           <td>
             <span class="cat-cell">{{ category_icon(item.category) }}<span>{{ item.category }}
               <span class="cell-sub desc-sm" title="{{ item.description }}">{{ item.description }}</span>
-              <span class="cell-sub">{{ item.date }} · usually {{ item.typical|inr(0) }}</span></span></span>
+              <span class="cell-sub">{{ item.date|day }} · usually {{ item.typical|inr(0) }}</span></span></span>
           </td>
           <td class="hide-sm"><span class="desc" title="{{ item.description }}">{{ item.description }}</span></td>
           <td class="r muted hide-sm">{{ item.typical|inr(0) }}</td>
@@ -276,11 +276,11 @@
         {% for tx in payload.recent_transactions %}
         {% set is_exp = tx['Type'] == 'Expense' %}
         <tr data-type="{{ tx['Type'] }}" data-date="{{ tx['Date'] }}" data-amount="{{ tx['Amount'] }}" data-category="{{ tx['Category'] }}">
-          <td class="num muted hide-sm">{{ tx['Date'] }}</td>
+          <td class="num muted hide-sm nowrap tx-date">{{ tx['Date']|day }}</td>
           <td>
             <span class="cat-cell">{{ category_icon(tx['Category']) }}<span>{{ tx['Category'] }}
               <span class="cell-sub desc-sm" title="{{ tx['Description'] }}">{{ tx['Description'] }}</span>
-              <span class="cell-sub">{{ tx['Date'] }}</span></span></span>
+              <span class="cell-sub">{{ tx['Date']|day }}</span></span></span>
           </td>
           <td class="hide-sm"><span class="desc" title="{{ tx['Description'] }}">{{ tx['Description'] }}</span></td>
           <td class="r"><span class="amount{{ '' if is_exp else ' pos' }}">{{ '−' if is_exp else '+' }}{{ tx['Amount']|inr }}</span></td>

@@ -303,6 +303,7 @@ svg { flex: none; }
 .data-table th:first-child, .data-table td:first-child { padding-left: 0; }
 .data-table th:last-child, .data-table td:last-child { padding-right: 0; }
 .data-table .r { text-align: right; white-space: nowrap; }
+.data-table .nowrap { white-space: nowrap; }
 .data-table tr.flash-row td { background: var(--accent-soft); }
 .cat-cell { display: flex; align-items: flex-start; gap: var(--s2); }
 .cat-icon svg { width: 16px; height: 16px; margin-top: 3px; fill: none; stroke: var(--muted); stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; }

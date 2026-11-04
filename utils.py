@@ -60,6 +60,12 @@ def shift_to_recent_months(df: pd.DataFrame, today: date | None = None) -> pd.Da
     return shifted
 
 
+def format_day(value: Any) -> str:
+    """An ISO date as people read it: '2025-04-27' -> '27 Apr 2025'. CSV examples keep ISO."""
+    day = pd.to_datetime(value)
+    return f"{day.day} {day:%b %Y}"
+
+
 def plural(count: int, word: str) -> str:
     """'1 month', '8 months': English plurals for the counts the app prints."""
     return f"{count} {word}" + ("" if count == 1 else "s")

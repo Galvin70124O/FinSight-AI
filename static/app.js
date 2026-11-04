@@ -237,7 +237,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const txItems = rows.map((row) => ({
     group: 'Transactions',
     label: row.querySelector('.desc')?.textContent.trim() || row.dataset.category,
-    meta: `${row.dataset.category} · ${row.dataset.date} · ${row.querySelector('.amount')?.textContent.trim() || ''}`,
+    meta: `${row.dataset.category} · ${row.querySelector('.tx-date')?.textContent.trim() || row.dataset.date} · ${row.querySelector('.amount')?.textContent.trim() || ''}`,
     row,
     iconHtml: row.querySelector('.cat-icon')?.outerHTML,
   }));
