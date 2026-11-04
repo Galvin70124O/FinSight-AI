@@ -54,3 +54,11 @@ def test_tables_show_readable_dates_but_sort_on_iso(client, logged_in):
     assert re.search(r'data-date="\d{4}-\d{2}-\d{2}"', table)  # sorting key stays ISO
     assert re.search(r'tx-date">\d{1,2} [A-Z][a-z]{2} \d{4}</td>', table)
     assert not re.search(r">\d{4}-\d{2}-\d{2}<", table)
+
+
+def test_counts_use_indian_digit_grouping():
+    from utils import plural
+
+    assert plural(31441, "transaction") == "31,441 transactions"
+    assert plural(123456, "row") == "1,23,456 rows"
+    assert plural(1, "row") == "1 row"

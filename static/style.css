@@ -377,15 +377,16 @@ svg { flex: none; }
 .review-counts .needs { color: var(--ink); }
 .review-counts .icon, .m-how .icon { width: 15px; height: 15px; color: var(--bad); }
 .merchant {
-  display: grid; grid-template-columns: minmax(0, 1fr) 8ch 12ch 13rem 12rem;
+  display: grid; grid-template-columns: minmax(0, 1fr) 4.5rem 8.5rem 13rem 12rem;  /* rem, so the 13px header row lines up; 8.5rem fits ₹1,23,45,678.90 */
   grid-template-areas: "name count total how select" "rows rows rows rows rows";
-  gap: 0 var(--s4); align-items: center; padding: var(--s3) 0 var(--s1); border-bottom: 1px solid var(--line);
+  gap: 0 var(--s4); align-items: center; padding: var(--s3) 0; border-bottom: 1px solid var(--line);
 }
 .merchant-head { padding: 0 0 var(--s2); border-bottom-color: var(--line-strong); color: var(--muted); font-size: 13px; font-weight: 500; }
 .merchant-head .r { text-align: right; }
 .m-name { grid-area: name; display: grid; min-width: 0; }
 .m-name b { font-weight: 500; overflow-wrap: anywhere; }
 .m-example { overflow: hidden; color: var(--muted); font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
+.merchant.single .m-example { white-space: normal; overflow-wrap: anywhere; }  /* its only row: shown in full, phones cannot hover */
 .m-count { grid-area: count; color: var(--ink-2); font-size: 14px; text-align: right; white-space: nowrap; }
 .m-total { grid-area: total; text-align: right; white-space: nowrap; }
 .m-how { grid-area: how; display: inline-flex; align-items: center; gap: 6px; min-width: 0; color: var(--ink-2); font-size: 14px; overflow-wrap: anywhere; }
@@ -395,6 +396,8 @@ svg { flex: none; }
 .m-rows summary { display: inline-flex; align-items: center; min-height: 32px; color: var(--accent); cursor: pointer; }
 .m-rows .table-wrap { margin: var(--s2) 0 var(--s3); }
 .m-rows .data-table { font-size: 14px; }
+.m-rows .desc { display: block; max-width: 60ch; }  /* opened on purpose: the full description, no clamp */
+.review .page-head .sub { overflow-wrap: anywhere; }  /* bank file names can be one long word */
 .review-actions {
   position: sticky; bottom: 0; z-index: 10; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
   gap: var(--s3) var(--s4); margin-top: var(--s6); padding: var(--s4) 0 calc(var(--s4) + env(safe-area-inset-bottom, 0px));
@@ -449,15 +452,27 @@ button, .btn, .chip, .seg-btn, .tab, .nav-link, summary { -webkit-user-select: n
 
 /* Fingers need 44px targets and 16px fields (iOS zooms into anything smaller). */
 @media (pointer: coarse) {
-  .btn, .seg-btn, .chip, .select, .search-trigger, .skip-link { min-height: 44px; }
+  .btn, .seg-btn, .chip, .select, .search-trigger, .skip-link, .m-rows summary { min-height: 44px; }
   .chip { min-width: 44px; }
   .icon-button { width: 44px; height: 44px; }
   .select, .input { font-size: 16px; }
 }
 
 /* ---------- Responsive ---------- */
+/* Below 1280px (sidebar included) five columns leave merchant names under ~300px: each merchant
+   stacks instead, name and amount first, as in a statement. */
+@media (max-width: 1280px) {
+  .merchant-head { display: none; }
+  .merchant {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas: "name total" "how count" "select select" "rows rows";
+    gap: var(--s2) var(--s4); padding: var(--s4) 0;
+  }
+  .m-total { align-self: start; }
+  .m-select { max-width: 24rem; }
+}
+
 @media (max-width: 1100px) {
-  .merchant { grid-template-columns: minmax(0, 1fr) 7ch 11ch 11rem 11rem; gap: 0 var(--s3); }
   .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .kpi:nth-child(3) { padding-left: 0; border-left: 0; }
   .kpi:nth-child(n+3) { border-top: 1px solid var(--line); }
@@ -481,13 +496,6 @@ button, .btn, .chip, .seg-btn, .tab, .nav-link, summary { -webkit-user-select: n
   .tab .icon { width: 22px; height: 22px; }
   .content { padding: var(--s6) calc(var(--s4) + env(safe-area-inset-right, 0px)) calc(56px + var(--s12) + env(safe-area-inset-bottom, 0px)) calc(var(--s4) + env(safe-area-inset-left, 0px)); }
   .review-actions { bottom: calc(56px + env(safe-area-inset-bottom, 0px)); padding-bottom: var(--s4); }
-  .merchant-head { display: none; }
-  .merchant {
-    grid-template-columns: minmax(0, 1fr) auto auto;
-    grid-template-areas: "name name name" "how count total" "select select select" "rows rows rows";
-    gap: var(--s2) var(--s3); padding: var(--s4) 0 var(--s1);
-  }
-  .m-rows summary { min-height: 44px; }
 
   .hero, .feature, .how { grid-template-columns: minmax(0, 1fr); gap: var(--s8); }
   .hero { padding: var(--s8) 0 var(--s16); }

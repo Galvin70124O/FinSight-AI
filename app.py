@@ -8,7 +8,7 @@ from blueprints.auth import auth_bp
 from blueprints.main import main_bp
 from config import Config
 from database import close_db, init_db
-from utils import CSVValidationError, format_day, format_inr, plural
+from utils import CSVValidationError, format_day, format_inr, group_digits, plural
 
 csrf = CSRFProtect()
 
@@ -26,6 +26,7 @@ def create_app(test_config: dict | None = None) -> Flask:
     app.jinja_env.filters["inr"] = format_inr
     app.jinja_env.filters["plural"] = plural
     app.jinja_env.filters["day"] = format_day
+    app.jinja_env.filters["digits"] = lambda count: group_digits(str(count))
     # The footer's copyright year comes from the clock, never a hard-coded number.
     app.context_processor(lambda: {"current_year": date.today().year})
     csrf.init_app(app)

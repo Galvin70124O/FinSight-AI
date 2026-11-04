@@ -203,5 +203,5 @@ def test_the_largest_accepted_file_round_trips_under_the_request_limit(app, clie
     print(f"\n{len(lines) - 1} rows: payload {len(form['payload']):,} B, Save request {request_size:,} B of {app.config['MAX_CONTENT_LENGTH']:,}")
     assert request_size < app.config["MAX_CONTENT_LENGTH"]
 
-    assert f"Imported {len(lines) - 1} transactions." in client.post("/upload/save", data=form, follow_redirects=True).get_data(as_text=True)
+    assert f"Imported {len(lines) - 1:,} transactions." in client.post("/upload/save", data=form, follow_redirects=True).get_data(as_text=True)
     assert db.execute("SELECT COUNT(*) FROM transactions").fetchone()[0] == len(lines) - 1

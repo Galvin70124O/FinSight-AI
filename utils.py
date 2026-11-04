@@ -17,6 +17,17 @@ ANOMALY_LIMIT = 10  # the newest ones; the dashboard says how many more there ar
 OTHER_CATEGORIES = "Everything else"  # not "Other": users often have a category of that name
 
 
+def group_digits(whole: str) -> str:
+    """Indian digit grouping of a whole number's digits: '1234567' -> '12,34,567'."""
+    if len(whole) <= 3:
+        return whole
+    head, groups = whole[:-3], [whole[-3:]]
+    while head:
+        groups.insert(0, head[-2:])
+        head = head[:-2]
+    return ",".join(groups)
+
+
 def format_inr(value: Any, decimals: int | None = None) -> str:
     """Format a number as rupees with Indian digit grouping, e.g. ₹1,25,000.
 
@@ -28,13 +39,7 @@ def format_inr(value: Any, decimals: int | None = None) -> str:
     amount = round(amount, decimals)
     sign = "−" if amount < 0 else ""  # U+2212 minus, the width of "+", not a hyphen
     whole, _, fraction = f"{abs(amount):.{decimals}f}".partition(".")
-    if len(whole) > 3:
-        head, groups = whole[:-3], [whole[-3:]]
-        while head:
-            groups.insert(0, head[-2:])
-            head = head[:-2]
-        whole = ",".join(groups)
-    return f"{sign}₹{whole}" + (f".{fraction}" if fraction else "")
+    return f"{sign}₹{group_digits(whole)}" + (f".{fraction}" if fraction else "")
 
 
 def inr_axis(max_value: float, ticks: int = 5) -> dict[str, list]:
@@ -102,7 +107,7 @@ def whole_health(health: dict[str, Any] | None) -> dict[str, Any] | None:
 
 def plural(count: int, word: str) -> str:
     """'1 month', '8 months': English plurals for the counts the app prints."""
-    return f"{count} {word}" + ("" if count == 1 else "s")
+    return f"{group_digits(str(count))} {word}" + ("" if count == 1 else "s")
 
 
 class CSVValidationError(ValueError):
