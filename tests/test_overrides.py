@@ -104,3 +104,48 @@ def test_saved_rows_get_their_merchant_key(db, user_id):
     save_transactions(db, user_id, pd.DataFrame([{"Date": "2026-01-01", "Category": "Dining", "Amount": 100.0, "Type": "Expense",
                                                    "Description": "UPI-SWIGGY-swiggy@icici-ICIC0000001-412345678901-Order"}]))
     assert db.execute("SELECT merchant_key FROM transactions").fetchone()[0] == "SWIGGY"
+
+
+def test_old_demo_categories_are_mapped_once_and_later_custom_ones_stay(tmp_path):
+    path = tmp_path / "old.db"
+    old = sqlite3.connect(path)
+    old.executescript(
+        "CREATE TABLE users (id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT NOT NULL UNIQUE, email TEXT NOT NULL UNIQUE,"
+        " password_hash TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);"
+        "CREATE TABLE transactions (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, date TEXT NOT NULL,"
+        " category TEXT NOT NULL, amount REAL NOT NULL, type TEXT NOT NULL, description TEXT NOT NULL, source_file TEXT,"
+        " created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);"
+        "CREATE TABLE category_overrides (user_id INTEGER NOT NULL, merchant_key TEXT NOT NULL, category TEXT NOT NULL,"
+        " updated_at TEXT NOT NULL, PRIMARY KEY (user_id, merchant_key));"
+        "INSERT INTO users (username, email, password_hash) VALUES ('asha', 'asha@example.com', 'x');"
+        "INSERT INTO transactions (user_id, date, category, amount, type, description) VALUES"
+        " (1, '2026-01-01', 'Salary', 85000, 'Income', 'Monthly salary'), (1, '2026-01-02', 'Freelance', 9000, 'Income', 'Project'),"
+        " (1, '2026-01-03', 'Bills', 800, 'Expense', 'Mobile bill'), (1, '2026-01-04', 'Pet care', 600, 'Expense', 'Vet');"
+        "INSERT INTO category_overrides VALUES (1, 'ACME', 'Salary', '2026-01-01');"
+    )
+    old.commit()
+    old.close()
+
+    create_app({"TESTING": True, "DATABASE_PATH": str(path)})
+    conn = sqlite3.connect(path)
+    assert [r[0] for r in conn.execute("SELECT category FROM transactions ORDER BY id")] == ["Income", "Income", "Utilities", "Pet care"]
+    assert conn.execute("SELECT category FROM category_overrides").fetchone()[0] == "Income"
+
+    # A user's own "Salary" imported after the step is a custom category and stays on later starts.
+    conn.execute("INSERT INTO transactions (user_id, date, category, amount, type, description, merchant_key)"
+                 " VALUES (1, '2026-02-01', 'Salary', 85000, 'Income', 'Pay', 'PAY')")
+    conn.commit()
+    conn.close()
+    create_app({"TESTING": True, "DATABASE_PATH": str(path)})
+    conn = sqlite3.connect(path)
+    assert conn.execute("SELECT category FROM transactions WHERE date = '2026-02-01'").fetchone()[0] == "Salary"
+    assert conn.execute("SELECT COUNT(*) FROM migrations").fetchone()[0] == 1
+    conn.close()
+
+
+def test_the_sample_data_uses_only_the_one_category_list():
+    import pandas as pd
+
+    from ml.categorise import CATEGORIES
+
+    assert set(pd.read_csv("dataset/sample_transactions.csv")["Category"]) <= set(CATEGORIES)

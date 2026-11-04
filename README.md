@@ -119,7 +119,7 @@ One row per transaction, with a header row. Column names are case-insensitive.
 
 ```csv
 Date,Category,Amount,Type,Description
-2025-01-01,Salary,85000,Income,Monthly salary
+2025-01-01,Income,85000,Income,Monthly salary
 2025-01-03,Rent,22000,Expense,Flat rent
 2025-01-04,Groceries,2450.50,Expense,Weekly groceries
 ```

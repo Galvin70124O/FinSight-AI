@@ -214,6 +214,10 @@ def close_db(_error: Exception | None = None) -> None:
         db.close()
 
 
+# The demo data and the first imports used these; merchant_rules.json is now the one list of categories.
+OLD_CATEGORIES = {"Salary": "Income", "Freelance": "Income", "Bills": "Utilities"}
+
+
 def init_db() -> None:
     """Create application tables if they do not already exist, then run the one-time data steps."""
     db = get_db()
@@ -229,6 +233,7 @@ def init_db() -> None:
     db.execute("CREATE INDEX IF NOT EXISTS idx_transactions_user_merchant ON transactions(user_id, merchant_key)")
     db.commit()
     backfill_merchant_keys(db)
+    _once(db, "2026-11-05 one category list", _map_old_categories)
 
 
 def backfill_merchant_keys(db) -> int:
@@ -253,3 +258,11 @@ def _once(db, name: str, step) -> None:
         return
     step(db)
     db.commit()
+
+
+def _map_old_categories(db) -> None:
+    """Existing rows and corrections that use the old demo names move to the one list. Categories users
+    choose later, including these names from their own files, stay as they are."""
+    for old, new in OLD_CATEGORIES.items():
+        db.execute("UPDATE transactions SET category = ? WHERE category = ?", (new, old))
+        db.execute("UPDATE category_overrides SET category = ? WHERE category = ?", (new, old))
