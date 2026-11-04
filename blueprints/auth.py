@@ -9,6 +9,15 @@ from models import User, create_user, get_user_by_email, get_user_by_username, v
 
 auth_bp = Blueprint("auth", __name__)
 
+# Length beats symbol rules (NIST SP 800-63B). Checked when a password is set, never at
+# login, so accounts created under the old 6-character rule keep working.
+MIN_PASSWORD_LENGTH = 12
+
+
+@auth_bp.app_context_processor
+def password_rule():
+    return {"min_password_length": MIN_PASSWORD_LENGTH}
+
 
 @auth_bp.route("/register", methods=["GET", "POST"])
 def register():
@@ -27,8 +36,8 @@ def register():
             flash("Please enter a valid email address.", "danger")
             return render_template("register.html")
 
-        if len(password) < 6:
-            flash("Password must be at least 6 characters long.", "danger")
+        if len(password) < MIN_PASSWORD_LENGTH:
+            flash(f"Use a password of at least {MIN_PASSWORD_LENGTH} characters. A few unrelated words work well.", "danger")
             return render_template("register.html")
 
         if password != confirm_password:

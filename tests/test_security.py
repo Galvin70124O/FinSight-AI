@@ -9,7 +9,7 @@ from conftest import csrf_token
 def test_post_without_csrf_token_is_rejected(client, db):
     client.post(
         "/register",
-        data={"username": "mallory", "email": "m@example.com", "password": "secret123", "confirm_password": "secret123"},
+        data={"username": "mallory", "email": "m@example.com", "password": "correct-horse-battery", "confirm_password": "correct-horse-battery"},
     )
     assert db.execute("SELECT COUNT(*) FROM users").fetchone()[0] == 0
 
@@ -39,3 +39,33 @@ def test_secret_key_read_from_environment(monkeypatch):
     monkeypatch.setenv("SECRET_KEY", "from-env")
     monkeypatch.setattr(config, "IS_PRODUCTION", True)
     assert config._secret_key() == "from-env"
+
+
+def register(client, password):
+    return client.post(
+        "/register",
+        data={"username": "nisha", "email": "nisha@example.com", "password": password,
+              "confirm_password": password, "csrf_token": csrf_token(client, "/register")},
+        follow_redirects=True,
+    ).get_data(as_text=True)
+
+
+def test_new_passwords_need_twelve_characters(client, db):
+    page = register(client, "elevenchars")  # 11
+    assert "at least 12 characters" in page
+    assert db.execute("SELECT COUNT(*) FROM users").fetchone()[0] == 0
+
+    register(client, "twelve chars")  # 12, spaces allowed
+    assert db.execute("SELECT COUNT(*) FROM users").fetchone()[0] == 1
+
+
+def test_existing_short_passwords_still_sign_in(client, db, user_id):
+    # user_id was created directly with a 9-character password, as under the old rule.
+    page = client.post(
+        "/login",
+        data={"username": "asha", "password": "secret123", "csrf_token": csrf_token(client, "/login")},
+        follow_redirects=True,
+    ).get_data(as_text=True)
+    assert "Incorrect username or password" not in page
+    with client.session_transaction() as session:
+        assert session["user_id"] == user_id

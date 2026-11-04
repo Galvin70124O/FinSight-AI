@@ -21,13 +21,14 @@
       <div class="field-pair">
         <label class="field">
           <span>Password</span>
-          <input class="input" type="password" name="password" autocomplete="new-password" required>
+          <input class="input" type="password" name="password" autocomplete="new-password" minlength="{{ min_password_length }}" aria-describedby="passwordHint" required>
         </label>
         <label class="field">
           <span>Confirm password</span>
           <input class="input" type="password" name="confirm_password" autocomplete="new-password" required>
         </label>
       </div>
+      <p class="field-hint" id="passwordHint">At least {{ min_password_length }} characters. A few unrelated words are easy to remember and hard to guess.</p>
       <button class="btn btn-primary btn-block btn-lg" type="submit">Create account</button>
     </form>
     <p class="auth-switch">Already have an account? <a class="link" href="{{ url_for('auth.login') }}">Sign in</a></p>

@@ -59,7 +59,7 @@ def csrf_token(client, path):
     return match.group(1)
 
 
-def register_and_login(client, username="asha", password="secret123"):
+def register_and_login(client, username="asha", password="correct-horse-battery"):
     client.post(
         "/register",
         data={
