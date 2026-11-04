@@ -8,7 +8,7 @@ import zlib
 from collections import Counter
 
 import pandas as pd
-from flask import Blueprint, abort, current_app, flash, redirect, render_template, request, session, url_for
+from flask import Blueprint, abort, current_app, flash, get_flashed_messages, redirect, render_template, request, session, url_for
 from itsdangerous import BadSignature, URLSafeTimedSerializer
 from werkzeug.utils import secure_filename
 
@@ -250,9 +250,12 @@ def categories():
     more = request.args.get("more", "")
     rows = max(MERCHANT_ROWS_PAGE, request.args.get("rows", MERCHANT_ROWS_PAGE, type=int))
     needle = query.lower()
+    # A merchant just changed may no longer match the search ("uncategorized"); keep it, with its message, in view.
+    just_changed = {category.split(" ")[0][3:] for category, _ in get_flashed_messages(with_categories=True) if category.startswith("at-")}
     shown = [
         m for m in merchants
-        if not needle or needle in m["key"].lower() or needle in m["category"].lower() or needle in m["rows"][0]["description"].lower()
+        if not needle or m["anchor"] in just_changed
+        or needle in m["key"].lower() or needle in m["category"].lower() or needle in m["rows"][0]["description"].lower()
     ]
     for merchant in shown:
         merchant["open"] = merchant["anchor"] in opened

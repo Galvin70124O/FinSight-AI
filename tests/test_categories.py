@@ -1,5 +1,6 @@
 import io
 import re
+import zlib
 
 from conftest import csrf_token, register_and_login
 
@@ -217,3 +218,17 @@ def test_the_result_of_a_change_is_shown_beside_what_changed(client, db, logged_
     overview = change_row(client, tx_id(db, "UPI/ZOMATO", logged_in), "Dining").get_data(as_text=True)
     section = overview[overview.index('id="transactions"'):]
     assert "Changed one transaction to Dining." in section.split("</table>")[0] and 'class="flash-stack"' not in overview
+
+
+def test_a_change_made_while_searching_still_shows_its_merchant_and_result(client, db, logged_in):
+    add(db, logged_in, "UPI/BLINKIT/412345678901", "Uncategorized")
+    add(db, logged_in, "UPI/ZOMATO LTD/412345678902", "Uncategorized", date="2026-03-02")
+    row = tx_id(db, "UPI/ZOMATO", logged_in)
+    page = change_merchant(client, "BLINKIT", "Groceries", q="uncategorized").get_data(as_text=True)
+    assert "BLINKIT: 1 transaction now in Groceries." in page  # no longer matches the search, but shown
+
+    page = client.post(f"/transactions/{row}/category", data={
+        "category": "Dining", "return_to": "categories", "anchor": f"m{zlib.crc32(b'ZOMATO'):x}",
+        "q": "uncategorized", "csrf_token": csrf_token(client, "/categories"),
+    }, follow_redirects=True).get_data(as_text=True)
+    assert "Changed one transaction to Dining." in page
