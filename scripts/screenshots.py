@@ -123,6 +123,8 @@ def main() -> None:
                             page = context.new_page()
                             page.goto(BASE + path)
                             settle(page)
+                            # A full-page capture would paint the fixed tab bar mid-page; show it at the bottom instead.
+                            page.add_style_tag(content=".tabbar { position: static; }")
                             page.screenshot(path=shots_dir / f"{name}-{width}-{theme}.png", full_page=True)
                             context.close()
                 browser.close()

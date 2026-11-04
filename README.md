@@ -7,27 +7,43 @@ an honest range, unusual transactions, and a health score you can see the
 working for. Amounts are shown in rupees with Indian digit grouping
 (₹1,25,000).
 
-Built with Flask, pandas, scikit-learn and Plotly. Data is stored in SQLite
-locally or Postgres in production.
+Built with Flask, pandas, scikit-learn and Plotly.js. Data is stored in SQLite
+locally or Postgres in production. Fonts and the chart library are served by
+the app itself, so pages make no requests to other sites.
 
 ## Screenshots
 
-_Add screenshots here: the dashboard with demo data, and the import page._
+Real captures of the app with the bundled sample data, in both themes.
+
+| Page | Desktop, light | Desktop, dark | Phone, light | Phone, dark |
+| --- | --- | --- | --- | --- |
+| Landing | [![Landing page, light](docs/screenshots/landing-1440-light.png)](docs/screenshots/landing-1440-light.png) | [![Landing page, dark](docs/screenshots/landing-1440-dark.png)](docs/screenshots/landing-1440-dark.png) | [![Landing page on a phone, light](docs/screenshots/landing-390-light.png)](docs/screenshots/landing-390-light.png) | [![Landing page on a phone, dark](docs/screenshots/landing-390-dark.png)](docs/screenshots/landing-390-dark.png) |
+| Overview | [![Overview with sample data, light](docs/screenshots/dashboard-1440-light.png)](docs/screenshots/dashboard-1440-light.png) | [![Overview with sample data, dark](docs/screenshots/dashboard-1440-dark.png)](docs/screenshots/dashboard-1440-dark.png) | [![Overview on a phone, light](docs/screenshots/dashboard-390-light.png)](docs/screenshots/dashboard-390-light.png) | [![Overview on a phone, dark](docs/screenshots/dashboard-390-dark.png)](docs/screenshots/dashboard-390-dark.png) |
+| Import | [![Import page, light](docs/screenshots/upload-1440-light.png)](docs/screenshots/upload-1440-light.png) | [![Import page, dark](docs/screenshots/upload-1440-dark.png)](docs/screenshots/upload-1440-dark.png) | [![Import page on a phone, light](docs/screenshots/upload-390-light.png)](docs/screenshots/upload-390-light.png) | [![Import page on a phone, dark](docs/screenshots/upload-390-dark.png)](docs/screenshots/upload-390-dark.png) |
+
+To refresh them (and the pictures on the landing page), see
+[Screenshots](#regenerating-the-screenshots) below.
 
 ## Features
 
-- Accounts with hashed passwords, CSRF-protected forms and POST-only logout.
-- CSV import (parsed in memory, never stored on disk; 2 MB limit). Re-importing
-  the same rows does not create duplicates.
-- **Load demo data** on an empty dashboard: eight months of sample transactions
-  loaded into your account only.
-- Income, expenses, balance and savings rate.
-- Charts: monthly spending, income vs expense per month, spending by category.
-  Months are grouped by year and month ("Jan 2025"), so different years never
-  merge.
-- Next-month spending forecast with an 80% range.
-- Unusual-transaction list.
-- Financial health score with a breakdown.
+- Accounts with hashed passwords (12 characters minimum for new accounts),
+  CSRF-protected forms and POST-only logout.
+- **Delete your account** on the import page: removes the account, every
+  transaction and the cached insights at once, after a password check.
+- CSV import (parsed in memory, never stored on disk; 2 MB limit, with advice
+  to split bigger files). Re-importing the same rows does not create duplicates.
+- **Load sample data** on an empty overview: eight months of sample
+  transactions loaded into your account only.
+- Balance, plus this month's income, spending and savings, each compared with
+  last month.
+- Charts: income and spending per month, spending by category (the top seven
+  and "Everything else", so shares add up to 100%), and spending over time with
+  next month's 80% forecast range drawn as a band. Months are grouped by year
+  and month ("Jan 2025"), so different years never merge.
+- Unusual-transaction list (the newest 10, with a count of the rest).
+- Financial health score with a breakdown of what each part added and cost.
+- Plain-language [Privacy](templates/privacy.html) and
+  [Terms](templates/terms.html) pages, linked from every footer.
 
 ## Run it locally
 
@@ -43,13 +59,25 @@ FLASK_DEBUG=1 python app.py
 ```
 
 Open http://127.0.0.1:5000, create an account, then import a CSV or click
-**Load demo data**.
+**Load sample data**.
 
 Run the tests with:
 
 ```bash
 python -m pytest
 ```
+
+### Regenerating the screenshots
+
+```bash
+python scripts/screenshots.py
+```
+
+This starts the app on a throwaway database, signs up a sample user, loads the
+sample data and saves `docs/screenshots/*.png` (landing, import and overview at
+1440 and 390 px, light and dark) and the landing-page pictures in
+`static/img/`. It needs the dev requirements (Playwright) and an installed
+Google Chrome; nothing from the run is kept.
 
 ### Configuration
 
@@ -151,86 +179,109 @@ would save.
 ## Project structure
 
 ```
-app.py               Application factory, CSRF, error handlers
+app.py               Application factory, CSRF, error handlers (404, 413)
 config.py            Settings from environment variables
 database.py          SQLite / Postgres connection and schema
-models.py            Users, transactions, cached insights
-utils.py             CSV cleaning, dashboard numbers, charts, ₹ formatting
-blueprints/          Routes (auth, dashboard, import, demo data)
+models.py            Users, transactions, cached insights, account deletion
+utils.py             CSV cleaning, dashboard numbers, chart specs, ₹ formatting
+blueprints/          Routes (auth, overview, import, sample data, privacy, terms)
 ml/                  Forecast, anomaly detection, health score
-templates/, static/  Pages, styles, scripts
-dataset/             Demo data (sample_transactions.csv)
+templates/           Pages (Jinja)
+static/style.css     The design system: tokens first, then components
+static/app.js        Theme, charts, filters, command palette
+static/fonts/        Newsreader and IBM Plex Sans (OFL 1.1), self-hosted
+static/vendor/       plotly-basic 2.27.0 (MIT), self-hosted
+static/img/          Landing-page captures made by scripts/screenshots.py
+scripts/             screenshots.py
+docs/screenshots/    README screenshots
+dataset/             Sample data (sample_transactions.csv)
 tests/               pytest suite
 ```
 
 ## Design system
 
-Style: **premium dark dashboard**, inspired by Copilot Money, Monzo and
-Robinhood. Deep navy surfaces, hairline borders, one lime accent for money
-coming in, rose for overspend, violet for AI. Dark is the default; a light
-theme is available from the sun/moon button (saved in `localStorage` as
-`finsight-theme`, applied in `<head>` before first paint). All tokens live at
-the top of `static/style.css`; change them there, not in components.
+A calm, light-first look for a money app: one deep blue accent, large figures
+in tabular numerals, and hairline rules between sections instead of boxed
+cards. Light is the default; a dark theme is available from the sun/moon
+button (saved in `localStorage` as `finsight-theme` and applied in `<head>`
+before the first paint). All tokens are at the top of `static/style.css`;
+change them there, not in components.
 
-**Colours (dark / light)**
+**Colour (light / dark).** Every text colour passes WCAG AA (4.5:1) on every
+surface in both themes.
 
-| Token | Dark | Light | Use |
+| Token | Light | Dark | Use |
 | --- | --- | --- | --- |
-| `--bg` | `#0B0F17` | `#F5F7FA` | Page |
-| `--card` | `#121826` | `#FFFFFF` | Tiles, sidebar footer, palette |
-| `--card-2` | `#182032` | `#F4F6F9` | Inputs, hovered rows, inner wells |
-| `--border` | white 5% | slate 7% | Tile borders |
-| `--border-2` | white 10% | slate 12% | Controls, table header line |
-| `--text` / `--muted` | `#F1F5F9` / `#94A3B8` | `#0F172A` / `#586579` | Body / labels |
-| `--accent` | `#A3E635` | `#4D7C0F` | Positive amounts, lines, active nav |
-| `--accent-fill` | `#A3E635` | `#A3E635` | Primary button (ink `#1A2E05`) |
-| `--neg` | `#FB7185` | `#E11D48` | Overspend, anomalies, expense line |
-| `--ai` | `#A78BFA` | `#7C3AED` | AI insight card |
-| `--c0`…`--c7` | lime, violet, sky, amber, rose, teal, orange, slate | darker variants | Category donut + legend, in that order |
+| `--bg` | `#F7F8FA` | `#0F1114` | Page |
+| `--surface` | `#FFFFFF` | `#16181C` | Auth card, palette, inputs |
+| `--surface-2` | `#EFF1F4` | `#1D2025` | Active nav, hovered rows, chart placeholders, meter tracks |
+| `--line` / `--line-strong` | `#E2E5EA` / `#C9CED6` | `#262A31` / `#3A4049` | Hairline dividers / control borders |
+| `--ink` / `--ink-2` / `--muted` | `#14171C` / `#454C58` / `#5F6774` | `#ECEEF1` / `#B9BFC8` / `#939AA5` | Text / secondary text / labels |
+| `--accent` | `#2447B8` | `#6B8AEA` | The one action colour, links, the main data series |
+| `--good` / `--bad` | `#17703F` / `#B3261E` | `#4CC38A` / `#F28B82` | A change in your favour / against you, overspend, unusual amounts |
+| `--chart-muted` | `#7C8594` | `#6F7785` | The second, quiet chart series |
 
-**Type.** Geist (Google Fonts) with Inter/system fallback; Geist Mono for
-keyboard hints, chart axis labels under the net strip and CSV column chips.
-Body 14/20, labels 13 medium, sub-text 12/18 muted, tile titles 15/22
-semibold, figures 26/32 semibold with `-0.03em` tracking, hero figure 40/44.
-Every number uses `tabular-nums` (`.num`, `.figure`).
+Colour never carries meaning alone: changes have an arrow and a `+` or `−`
+sign (a real minus, U+2212), and "bad" amounts are also named in words.
 
-**Spacing and shape.** 4px scale (`--s1`…`--s16`); tiles have 20px padding and
-16px gaps. Radius: 8px chips/badges, 12px buttons/inputs, 20px tiles (16px on
-phones), full for filter chips. No shadows on tiles; only floating layers (the
-command palette, auth card, mobile drawer) use `--shadow-pop`.
+**Type.** Two families, both self-hosted (`static/fonts/`):
 
-**Components.**
-- **Shell:** left sidebar (248px) that collapses to a 76px icon rail
-  (`finsight-sidebar` in `localStorage`); on screens under 900px it becomes a
-  drawer opened from the top bar. Sticky, blurred top bar with page title,
-  data-period chip, search trigger and theme toggle.
-- **Command palette:** Ctrl/Cmd+K or `/`. Lists pages, actions, dashboard
-  sections and, when you type, matching recent transactions. Commands come from
-  the `paletteCommands` JSON in `base.html` plus `[data-section]` elements.
-- **Tiles:** `.tile` in a 4-column `.bento` grid (`.span-2`, `.span-4`); 2
-  columns under 1180px, 1 column under 640px (stat tiles stay 2-up). Add
-  `data-spotlight` for the pointer-following glow (ported from 21st.dev
-  "Spotlight").
-- **AI card:** `.ai-tile`, a violet-to-lime gradient border with stacked
-  Tip / Forecast / Unusual rows.
-- **Stats:** `.figure` + `sparkline()` macro (`templates/_macros.html`),
-  `.meter` bars, the SVG `.ring` for the health score.
-- **Charts:** Plotly figures come from `utils.py` unchanged; `themeCharts()` in
-  `static/app.js` restyles them for the current theme (transparent background,
-  horizontal gridlines only, no axis lines, lime/rose areas, donut with a centre
-  total). It re-runs when the theme changes.
-- **Tables:** `.data-table` with a sticky header, category icon
-  (`category_icon()` macro), right-aligned tabular amounts (`+` lime for
-  income, `−` for expenses, rose only for anomalies), filter chips. On phones
-  secondary columns hide (`.hide-sm`) and fold into a `.cell-sub` line.
-- **Forms:** `.field` + `.input` (42px, lime focus ring), `.btn-primary`,
-  `.btn-ghost`; the import page uses a `.dropzone` around the file input.
+- **Newsreader 500** only for page headings (`.page-title`, 28–32 px) and the
+  one hero balance (`.figure-hero`, 40–52 px). Landing headings use it too.
+- **IBM Plex Sans 400–600** for everything else: body 16/24, labels and
+  secondary text 14/20, section titles 18/24 medium, KPI figures 22–28 px.
+  Every number uses `font-variant-numeric: tabular-nums` so columns line up.
 
-**Motion.** Tiles rise in (6px, .45s, staggered), bars and meters grow once,
-figures count up, and the palette pops in. There is no looping or bouncing
-motion, and `prefers-reduced-motion` turns all of it off.
+Headings use `text-wrap: balance`. Nothing meant to be read is under 13 px.
 
-**Accessibility.** Text contrast is at least 4.5:1 in both themes. Every
-control shows a 2px `:focus-visible` ring in the accent colour. There is a skip
-link, labelled icon buttons, and the palette uses combobox/listbox roles. The
-category list next to the donut is the text version of the chart.
+**Shape.** A deliberate radius scale: `--r-xs` 4 px for tags and keyboard
+hints, `--r-sm` 8 px for buttons, inputs and selects, `--r-md` 12 px for
+floating panels (auth card, command palette) and screenshot frames, and
+`--r-full` only for filter chips and the avatar. Spacing is a 4 px scale
+(`--s1`…`--s24`). Shadows appear only on the command palette; everything at
+rest is flat, separated by a tone step or a hairline.
+
+**Layout.**
+
+- **Signed out** (landing, sign in, register, privacy, terms, 404): a plain top
+  bar (logo, theme, Sign in, Create account) and a footer with the year from the
+  server clock.
+- **Signed in:** a 232 px labelled sidebar on desktop. Under 900 px it is
+  replaced by a top bar (search, theme, log out) and a fixed bottom tab bar
+  (Overview, Spending, Transactions, Import) padded for the phone's safe areas.
+- **Overview order:** title and period, KPI row (balance, then this month's
+  income, spending and savings with the change from last month), income and
+  spending beside where your money goes, spending with the forecast band, a
+  short plain-language summary, health score, unusual transactions, recent
+  transactions.
+
+**Charts.** `utils.py` builds each chart as a JSON spec (data, ₹ hover text,
+₹ axis ticks with Indian grouping); `static/app.js` draws it with plotly-basic
+and styles it from the tokens: one accent series, a muted grey second series,
+faint horizontal gridlines only, axes starting at ₹0, no legend box (an HTML
+legend sits above the chart). Each chart frame keeps its final height and
+shows a placeholder until it is drawn, a plain message if the script cannot
+load, and a "Show the numbers" table as the text version. On phones only about
+four month labels are shown. The category split is an HTML ranked bar list, not
+a chart.
+
+**Motion.** Little and short. Buttons press to 98% for 100 ms; colours change
+over 150 ms; landing sections rise 16 px once as they scroll into view. Chart
+placeholders pulse gently while loading; nothing else loops. Figures never count up
+(money must never show a wrong number, even for a moment), and the command
+palette opens instantly because it is a keyboard action.
+`prefers-reduced-motion` keeps fades and drops all movement.
+
+**Accessibility.** Every control shows a 2 px `:focus-visible` ring in the
+accent colour; there is a skip link, icon buttons are labelled, the command
+palette uses combobox/listbox roles, each chart has a table version, and the
+category list is plain text.
+
+**Touch.** Hover styles only apply with a mouse or trackpad; controls have no
+tap flash or double-tap delay; on touch screens every control is at least
+44 px and form fields are 16 px, so iOS does not zoom.
+
+**Out of bounds for this design:** gradients, glows, glass or blur panels,
+violet accents, icons in tinted squares, sparklines on KPIs, bento grids of
+cards, pill labels above headings, tiny uppercase labels, emoji, and a second
+accent colour.
