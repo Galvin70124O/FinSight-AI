@@ -26,3 +26,13 @@ def test_footer_year_comes_from_the_clock(client):
     from datetime import date
 
     assert f"© {date.today().year} FinSight AI" in client.get("/").get_data(as_text=True)
+
+
+def test_pages_load_nothing_from_other_sites(client, logged_in):
+    client.post("/demo-data", data={"csrf_token": csrf_token(client, "/dashboard")})
+    for path in ("/dashboard", "/upload"):
+        html = client.get(path).get_data(as_text=True)
+        # Fonts and Plotly are served from /static; no Google Fonts or CDN requests.
+        assert not re.search(r'(src|href)="(https?:)?//', html), path
+        assert "/static/fonts/fonts.css" in html
+    assert "/static/vendor/plotly-basic-2.27.0.min.js" in client.get("/dashboard").get_data(as_text=True)
