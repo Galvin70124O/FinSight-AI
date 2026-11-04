@@ -47,6 +47,7 @@ def test_file_over_size_limit_is_rejected(client, db, logged_in):
     big = VALID_CSV + b"2025-01-03,Food,10,Expense," + b"x" * (3 * 1024 * 1024) + b"\n"
     page = upload(client, big).get_data(as_text=True)
     assert "too large" in page
+    assert "Split it into smaller CSV files" in page
     assert count(db) == 0
 
 

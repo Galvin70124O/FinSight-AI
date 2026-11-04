@@ -46,7 +46,12 @@ def create_app(test_config: dict | None = None) -> Flask:
     @app.errorhandler(413)
     def handle_too_large(_error):
         limit_mb = app.config["MAX_CONTENT_LENGTH"] // (1024 * 1024)
-        flash(f"That file is too large. The limit is {limit_mb} MB.", "danger")
+        flash(
+            f"That file is too large. The limit is {limit_mb} MB. Split it into smaller CSV files "
+            "(for example one per year, each with the header row) and upload them one at a time. "
+            "Rows you have already imported are skipped.",
+            "danger",
+        )
         return redirect(url_for("main.upload"))
 
     with app.app_context():
