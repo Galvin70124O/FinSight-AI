@@ -20,3 +20,6 @@ trained_models/
 .idea/
 .DS_Store
 *.log
+
+# Local code-graph output (graphify)
+graphify-out/
