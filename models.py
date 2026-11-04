@@ -203,3 +203,11 @@ def save_insights(db, user_id: int, insights: dict) -> None:
         (user_id, datetime.now(timezone.utc).isoformat(timespec="seconds"), json.dumps(insights)),
     )
     db.commit()
+
+
+def delete_user(db, user_id: int) -> None:
+    """Delete a user and everything stored for them (transactions, cached insights) in one commit."""
+    db.execute("DELETE FROM user_insights WHERE user_id = ?", (user_id,))
+    db.execute("DELETE FROM transactions WHERE user_id = ?", (user_id,))
+    db.execute("DELETE FROM users WHERE id = ?", (user_id,))
+    db.commit()

@@ -5,7 +5,7 @@ import re
 from flask import Blueprint, flash, redirect, render_template, request, session, url_for
 
 from database import IntegrityError, get_db
-from models import User, create_user, get_user_by_email, get_user_by_username, verify_password
+from models import User, create_user, delete_user, get_user_by_email, get_user_by_username, verify_password
 
 auth_bp = Blueprint("auth", __name__)
 
@@ -90,3 +90,24 @@ def logout():
     session.clear()
     flash("You have been logged out.", "info")
     return redirect(url_for("auth.login"))
+
+
+@auth_bp.route("/account/delete", methods=["POST"])
+def delete_account():
+    """Delete the signed-in user's account and all their data, after re-checking the password."""
+    if "user_id" not in session:
+        return redirect(url_for("auth.login"))
+    back = url_for("main.upload") + "#delete"
+
+    user = get_user_by_username(get_db(), session.get("username", ""))
+    if user is None or user.id != session["user_id"] or not verify_password(user, request.form.get("password", "")):
+        flash("That password is not right, so nothing was deleted.", "delete")
+        return redirect(back)
+    if request.form.get("confirm", "").strip() != "DELETE":
+        flash("Type DELETE in capitals to confirm. Nothing was deleted.", "delete")
+        return redirect(back)
+
+    delete_user(get_db(), user.id)
+    session.clear()
+    flash("Your account, transactions and insights have been deleted.", "success")
+    return redirect(url_for("main.index"))

@@ -98,6 +98,7 @@ svg { flex: none; }
 .btn:active { transform: scale(0.98); }
 .btn-primary { background: var(--accent); color: var(--accent-ink); }
 .btn-secondary { border-color: var(--line-strong); background: var(--surface); color: var(--ink); }
+.btn-danger { border-color: var(--bad); background: none; color: var(--bad); }
 .btn-lg { min-height: 48px; padding: 0 var(--s6); font-size: 16px; }
 .btn-block { width: 100%; }
 
@@ -339,6 +340,10 @@ svg { flex: none; }
 .columns { margin-top: var(--s8); }
 .columns h2 { margin-bottom: var(--s3); }
 
+.danger-zone { margin-top: var(--s12); padding-top: var(--s8); border-top: 1px solid var(--line); }
+.danger-zone .sub { margin: var(--s1) 0 var(--s5); }
+.danger-zone .flash { margin-bottom: var(--s4); }
+
 /* ---------- Command palette (Ctrl/Cmd+K). Opens instantly: it is a keyboard action. ---------- */
 .palette { position: fixed; inset: 0; z-index: 40; display: grid; justify-items: center; padding: 12vh var(--s4) var(--s4); }
 .palette[hidden] { display: none; }
@@ -378,6 +383,7 @@ button, .btn, .chip, .seg-btn, .tab, .nav-link, summary { -webkit-user-select: n
   .site-link:hover { color: var(--ink); }
   .footer-inner a:hover { color: var(--ink); }
   .nav-link:hover { background: var(--surface-2); color: var(--ink); }
+  .btn-danger:hover { background: color-mix(in srgb, var(--bad) 10%, transparent); }
 }
 
 /* Fingers need 44px targets and 16px fields (iOS zooms into anything smaller). */

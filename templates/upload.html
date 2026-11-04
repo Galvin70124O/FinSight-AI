@@ -39,5 +39,30 @@
       </table>
     </div>
   </div>
+
+  {# Deleting cannot be undone, so it asks for the password and a typed confirmation instead of an undo toast. #}
+  <section class="danger-zone" id="delete" aria-labelledby="deleteTitle">
+    <h2 class="section-title" id="deleteTitle">Delete your account</h2>
+    <p class="sub">Removes your account, every imported transaction and your computed insights straight away. This cannot be undone.</p>
+    {% for message in get_flashed_messages(category_filter=['delete']) %}
+    <div class="flash danger" role="alert">{{ icon('alert') }}<span>{{ message }}</span></div>
+    {% endfor %}
+    <form method="post" action="{{ url_for('auth.delete_account') }}" class="form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="field-pair">
+        <label class="field">
+          <span>Your password</span>
+          <input class="input" type="password" name="password" autocomplete="current-password" required>
+        </label>
+        <label class="field">
+          <span>Type DELETE to confirm</span>
+          <input class="input" type="text" name="confirm" autocomplete="off" autocapitalize="characters" pattern="DELETE" required>
+        </label>
+      </div>
+      <div class="form-actions">
+        <button class="btn btn-danger" type="submit">Delete my account and data</button>
+      </div>
+    </form>
+  </section>
 </section>
 {% endblock %}
