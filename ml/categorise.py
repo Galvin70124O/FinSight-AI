@@ -33,6 +33,7 @@ _RULES_FILE = json.loads(Path(__file__).with_name("merchant_rules.json").read_te
 CATEGORIES: list[str] = _RULES_FILE["categories"]
 RULES: list[tuple[str, list[str]]] = [(rule["category"], rule["keywords"]) for rule in _RULES_FILE["rules"]]
 assert all(category in CATEGORIES for category, _ in RULES), "every rule needs a category from the list"
+BUSINESS_WORDS = set(_RULES_FILE["business_words"])
 
 MODEL_PATH = Path(__file__).with_name("categoriser.joblib")
 CONFIDENCE_THRESHOLD = 0.6
@@ -50,6 +51,12 @@ _NOISE = {"UPI", "NEFT", "IMPS", "RTGS", "ACH", "NACH", "ECS", "POS", "P2M", "P2
 # Direction words banks put in front: noise only at the start ("DR MEHTA" later on is a doctor).
 _LEADING_NOISE = {"CR", "DR", "D", "C", "TO", "BY", "TRF", "TRANSFER", "REF", "SENT", "RECEIVED"}
 _COMPANY_SUFFIX = {"LTD", "LIMITED", "PVT", "PRIVATE", "LLP", "INC", "CO"}
+_P2A = re.compile(r"\bP2A\b")  # person-to-account transfers (IMPS/P2A, UPI/P2A)
+# Handles people use: a phone number (often masked) at any UPI app, or a name at Google Pay's personal
+# suffixes. Business handles look different (zomato@hdfcbank, shop@okbizaxis, Q123456789@ybl).
+# Merchant QR and business handles: PhonePe Q-codes, Paytm and BharatPe QR, Google Pay for Business.
+_BUSINESS_HANDLE = re.compile(r"(?:\bQ\d{6,}|\bPAYTMQR|\bBHARATPE)[\w.]*@|@OKBIZ")
+_PERSONAL_HANDLE = re.compile(r"(?<![0-9X])[0-9X]{10}@[A-Z]+|[A-Z][A-Z0-9._-]*@OK(?:AXIS|HDFCBANK|SBI|ICICI)\b")
 _PUNCTUATION = re.compile(r"[^A-Z0-9&]+")
 _WITHOUT_DIGITS = str.maketrans("", "", "0123456789")
 
@@ -137,12 +144,29 @@ def load_model(path: Path = MODEL_PATH):
 MODEL = load_model()
 
 
+def looks_like_person(key: str, descriptions: list[str], model_sure: bool = False) -> bool:
+    """A transfer to a person rather than a business: a P2A transfer, a personal UPI handle, or a
+    merchant name of 2-3 plain words such as RAHUL S or KAVYA NAIR. A business word (STORE, TIFFIN,
+    LTD...) or a rule keyword in the name always means a business, and so does a name the model is
+    sure about (it rarely is about people's names)."""
+    words = key.split()
+    if not words or any(word in BUSINESS_WORDS for word in words) or match_rule(key):
+        return False
+    upper = [str(description).upper() for description in descriptions]
+    if any(_BUSINESS_HANDLE.search(text) for text in upper):
+        return False
+    if any(_P2A.search(text) or _PERSONAL_HANDLE.search(text) for text in upper):
+        return True
+    return not model_sure and 2 <= len(words) <= 3 and all(word.isalpha() for word in words)
+
+
 @dataclass
 class Suggestion:
     category: str | None  # None means "Needs a category"
     source: str  # "correction", "rule", "model" or "none"
     keyword: str = ""  # the rule keyword that matched
     confidence: float | None = None  # the model's confidence
+    person: bool = False  # a transfer to a person: corrections are not remembered unless the user asks
 
 
 def categorise(descriptions: list[str], overrides: dict[str, str], model=None) -> tuple[list[str], dict[str, Suggestion]]:
@@ -152,6 +176,7 @@ def categorise(descriptions: list[str], overrides: dict[str, str], model=None) -
     """
     model = MODEL if model is None else model
     keys = []
+    raw: dict[str, list[str]] = {}  # a few original descriptions per merchant, for telling people from businesses
     # Per merchant, how many rows share each cleaned text. With references stripped, a year of
     # statements has a few hundred distinct texts, so rules and model run once per text, not per row.
     texts: dict[str, Counter] = {}
@@ -160,6 +185,9 @@ def categorise(descriptions: list[str], overrides: dict[str, str], model=None) -
         key = _key(segments)
         keys.append(key)
         texts.setdefault(key, Counter())[" ".join(segments)] += 1
+        examples = raw.setdefault(key, [])
+        if len(examples) < 20:
+            examples.append(description)
 
     suggestions: dict[str, Suggestion] = {}
     for_model: dict[str, Counter] = {}
@@ -190,4 +218,6 @@ def categorise(descriptions: list[str], overrides: dict[str, str], model=None) -
             suggestions[key] = Suggestion(category, "model", confidence=confidence)
     for key in for_model:
         suggestions.setdefault(key, Suggestion(None, "none"))
+    for key, suggestion in suggestions.items():
+        suggestion.person = looks_like_person(key, raw[key], model_sure=suggestion.source == "model" and suggestion.category is not None)
     return keys, suggestions

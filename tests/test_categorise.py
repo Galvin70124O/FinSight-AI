@@ -146,3 +146,44 @@ def test_a_payment_to_a_person_is_rarely_given_a_confident_category():
     guessed = [key for key, s in suggestions.items() if s.category]
     print(f"\n{len(guessed)} of {len(people)} people given a category: {guessed}")
     assert len(guessed) <= len(people) * 0.02
+
+
+@pytest.mark.parametrize(
+    "description",
+    [
+        "IMPS/P2A/412345678901/KAVYA NAIR/HDFC0001234/rent oct",  # person-to-account transfer
+        "UPI/P2A/412345678901/ARJUN MENON/SBIN0001234",
+        "UPI/ravi.kumar@oksbi/412345678901",  # a name at a personal Google Pay handle
+        "UPI/98XXXXXX21@ybl/412345678901/coffee",  # a phone-number handle
+        "UPI/RAHUL S/412345678901/",  # looks like a name: 2-3 plain words
+        "UPI/ANITA K/412345678913/split dinner",
+        "UPI/LAKSHMI VENKATARAMAN IYER/412345678913",
+    ],
+)
+def test_transfers_to_people_are_recognised(description):
+    from ml.categorise import categorise
+
+    keys, suggestions = categorise([description], {})
+    assert suggestions[keys[0]].person
+
+
+@pytest.mark.parametrize(
+    "description",
+    [
+        "UPI/ZOMATO LTD/412345678901/Paid via PhonePe",
+        "UPI-SWIGGY-swiggy@icici-ICIC0000001-412345678901-Order",
+        "UPI/SRI GANAPATHI TIFFIN ROOM/412345678910",  # a business word
+        "POS 4591XXXXXX1234 NEW HEALTH MEDICALS PUNE",
+        "UPI/sharma.kirana@okbizaxis/412345678901",  # a Google Pay business handle
+        "UPI/q123456789@ybl/412345678901/GREEN VALLEY ORGANICS",  # a PhonePe QR code
+        "UPI/SPEEDWAY CABS/412345678901",
+        "IMPS/P2A/412345678901/ACME TECH PVT LTD/HDFC0001234",  # P2A to a company account
+        "ACH/SALARY/ACME TECH",
+        "BIL/BPAY/000123456/BESCOM",
+    ],
+)
+def test_businesses_are_not_mistaken_for_people(description):
+    from ml.categorise import categorise
+
+    keys, suggestions = categorise([description], {})
+    assert not suggestions[keys[0]].person
