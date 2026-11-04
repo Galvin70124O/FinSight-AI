@@ -1,6 +1,7 @@
 import io
 
 from conftest import csrf_token, register_and_login
+from models import save_category_overrides
 
 CSV = b"Date,Category,Amount,Type,Description\n2025-01-02,Food,250,Expense,Lunch\n2025-01-01,Salary,9000,Income,Pay\n"
 
@@ -8,7 +9,7 @@ CSV = b"Date,Category,Amount,Type,Description\n2025-01-02,Food,250,Expense,Lunch
 def rows(db, user_id):
     return {
         table: db.execute(f"SELECT COUNT(*) FROM {table} WHERE {column} = ?", (user_id,)).fetchone()[0]
-        for table, column in (("users", "id"), ("transactions", "user_id"), ("user_insights", "user_id"))
+        for table, column in (("users", "id"), ("transactions", "user_id"), ("user_insights", "user_id"), ("category_overrides", "user_id"))
     }
 
 
@@ -28,13 +29,15 @@ def delete(client, password="correct-horse-battery", confirm="DELETE"):
 
 def test_deleting_removes_the_account_and_all_its_data_only(app, db):
     client, first_id, second_id = setup_two_users(app)
-    assert rows(db, first_id) == {"users": 1, "transactions": 2, "user_insights": 1}
+    for user_id in (first_id, second_id):
+        save_category_overrides(db, user_id, {"ZOMATO": "Dining"})
+    assert rows(db, first_id) == {"users": 1, "transactions": 2, "user_insights": 1, "category_overrides": 1}
 
     page = delete(client)
 
     assert "have been deleted" in page
-    assert rows(db, first_id) == {"users": 0, "transactions": 0, "user_insights": 0}
-    assert rows(db, second_id) == {"users": 1, "transactions": 2, "user_insights": 1}
+    assert rows(db, first_id) == {"users": 0, "transactions": 0, "user_insights": 0, "category_overrides": 0}
+    assert rows(db, second_id) == {"users": 1, "transactions": 2, "user_insights": 1, "category_overrides": 1}
     with client.session_transaction() as session:
         assert "user_id" not in session
 

@@ -205,8 +205,29 @@ def save_insights(db, user_id: int, insights: dict) -> None:
     db.commit()
 
 
+def get_category_overrides(db, user_id: int) -> dict[str, str]:
+    """The categories this user chose for merchants, by merchant key."""
+    rows = db.execute("SELECT merchant_key, category FROM category_overrides WHERE user_id = ?", (user_id,)).fetchall()
+    return {row["merchant_key"]: row["category"] for row in rows}
+
+
+def save_category_overrides(db, user_id: int, overrides: dict[str, str]) -> None:
+    """Remember the user's category for each merchant, replacing any earlier choice."""
+    now = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    for merchant_key, category in overrides.items():
+        db.execute(
+            """
+            INSERT INTO category_overrides (user_id, merchant_key, category, updated_at) VALUES (?, ?, ?, ?)
+            ON CONFLICT (user_id, merchant_key) DO UPDATE SET category = excluded.category, updated_at = excluded.updated_at
+            """,
+            (user_id, merchant_key, category, now),
+        )
+    db.commit()
+
+
 def delete_user(db, user_id: int) -> None:
-    """Delete a user and everything stored for them (transactions, cached insights) in one commit."""
+    """Delete a user and everything stored for them (transactions, insights, category corrections) in one commit."""
+    db.execute("DELETE FROM category_overrides WHERE user_id = ?", (user_id,))
     db.execute("DELETE FROM user_insights WHERE user_id = ?", (user_id,))
     db.execute("DELETE FROM transactions WHERE user_id = ?", (user_id,))
     db.execute("DELETE FROM users WHERE id = ?", (user_id,))

@@ -54,6 +54,15 @@ CREATE TABLE IF NOT EXISTS user_insights (
     payload TEXT NOT NULL,
     FOREIGN KEY (user_id) REFERENCES users (id)
 );
+
+CREATE TABLE IF NOT EXISTS category_overrides (
+    user_id INTEGER NOT NULL,
+    merchant_key TEXT NOT NULL,
+    category TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    PRIMARY KEY (user_id, merchant_key),
+    FOREIGN KEY (user_id) REFERENCES users (id)
+);
 """
 
 POSTGRES_SCHEMA = """
@@ -89,6 +98,14 @@ CREATE TABLE IF NOT EXISTS user_insights (
     user_id INTEGER PRIMARY KEY REFERENCES users (id),
     computed_at TEXT NOT NULL,
     payload TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS category_overrides (
+    user_id INTEGER NOT NULL REFERENCES users (id),
+    merchant_key TEXT NOT NULL,
+    category TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    PRIMARY KEY (user_id, merchant_key)
 );
 """
 
