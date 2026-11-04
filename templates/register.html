@@ -1,19 +1,17 @@
 {% extends 'base.html' %}
-{% from '_macros.html' import logo_mark %}
 {% block title %}Create account · FinSight AI{% endblock %}
-{% block content %}
+{% block public %}
 <section class="auth">
   <div class="auth-card">
     <div class="auth-head">
-      {{ logo_mark() }}
-      <h1 class="auth-title">Create your account</h1>
-      <p class="tile-sub">Import a CSV or load demo data once you’re in.</p>
+      <h1 class="page-title">Create your account</h1>
+      <p class="sub">Free. Then upload a CSV, or look around with sample data.</p>
     </div>
     <form method="post" class="form">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <label class="field">
         <span>Username</span>
-        <input class="input" type="text" name="username" autocomplete="username" required autofocus>
+        <input class="input" type="text" name="username" autocomplete="username" autocapitalize="none" autocorrect="off" required autofocus>
       </label>
       <label class="field">
         <span>Email</span>
@@ -29,7 +27,7 @@
           <input class="input" type="password" name="confirm_password" autocomplete="new-password" required>
         </label>
       </div>
-      <button class="btn btn-primary btn-block" type="submit">Create account</button>
+      <button class="btn btn-primary btn-block btn-lg" type="submit">Create account</button>
     </form>
     <p class="auth-switch">Already have an account? <a class="link" href="{{ url_for('auth.login') }}">Sign in</a></p>
   </div>

@@ -21,7 +21,7 @@ def test_fresh_database_starts_empty(tmp_path):
 def test_empty_dashboard_offers_demo_data(client, logged_in):
     page = client.get("/dashboard")
     assert page.status_code == 200
-    assert "Load demo data" in page.get_data(as_text=True)
+    assert "Load sample data" in page.get_data(as_text=True)
 
 
 def test_demo_data_loads_into_current_user_only(app, db):
@@ -31,10 +31,10 @@ def test_demo_data_loads_into_current_user_only(app, db):
 
     page = second.post("/demo-data", data={"csrf_token": csrf_token(second, "/dashboard")}, follow_redirects=True)
 
-    assert "demo transactions." in page.get_data(as_text=True)
+    assert "sample transactions." in page.get_data(as_text=True)
     assert count(db, second_id) > 100
     assert count(db, first_id) == 0
-    assert "Load demo data" not in page.get_data(as_text=True)
+    assert "Load sample data" not in page.get_data(as_text=True)
 
     # Loading twice does not duplicate rows.
     before = count(db, second_id)

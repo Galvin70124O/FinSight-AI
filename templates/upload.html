@@ -1,33 +1,42 @@
 {% extends 'base.html' %}
 {% from '_macros.html' import icon %}
-{% block title %}Import data · FinSight AI{% endblock %}
-{% block topbar_title %}<h1 class="topbar-heading">Import data</h1>{% endblock %}
+{% block title %}Import a CSV · FinSight AI{% endblock %}
 {% block content %}
-<section class="import">
-  <div class="tile import-card">
-    <header class="tile-head">
-      <div>
-        <h2 class="tile-title">Import transaction history</h2>
-        <p class="tile-sub">The file is read in memory and never stored. Rows you have already imported are skipped.</p>
-      </div>
-    </header>
-    <form method="post" enctype="multipart/form-data" class="form">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <label class="dropzone" data-dropzone>
-        <input class="dropzone-input" type="file" name="file" accept=".csv" required>
-        <span class="dropzone-icon">{{ icon('upload') }}</span>
-        <span class="dropzone-title" data-dropzone-label>Drop a CSV here, or <span class="link">browse</span></span>
-        <span class="tile-sub">CSV · max 2 MB</span>
-      </label>
-      <div class="columns-hint">
-        <span class="tile-sub">Required columns</span>
-        <span class="code-chip">Date</span><span class="code-chip">Category</span><span class="code-chip">Amount</span><span class="code-chip">Type</span><span class="code-chip">Description</span>
-      </div>
-      <div class="form-actions">
-        <a class="btn btn-ghost" href="{{ url_for('main.dashboard') }}">Cancel</a>
-        <button class="btn btn-primary" type="submit">Import data</button>
-      </div>
-    </form>
+<section class="import" aria-labelledby="pageTitle">
+  <header class="page-head">
+    <div>
+      <h1 class="page-title" id="pageTitle">Import a CSV</h1>
+      <p class="sub">The file is read in memory and never saved on disk. Rows you have already imported are skipped.</p>
+    </div>
+  </header>
+  <form method="post" enctype="multipart/form-data" class="form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <label class="dropzone" data-dropzone>
+      <input class="dropzone-input" type="file" name="file" accept=".csv,text/csv" required aria-describedby="fileHint">
+      {{ icon('upload') }}
+      <span class="dropzone-title" data-dropzone-label>Choose a CSV file, or drop it here</span>
+      <span class="sub" id="fileHint">CSV only, up to 2 MB. A bigger export can be split into two files and uploaded one after the other.</span>
+    </label>
+    <div class="form-actions">
+      <a class="btn btn-secondary" href="{{ url_for('main.dashboard') }}">Cancel</a>
+      <button class="btn btn-primary" type="submit">Import</button>
+    </div>
+  </form>
+
+  <div class="columns">
+    <h2 class="section-title">Columns your file needs</h2>
+    <div class="table-wrap">
+      <table class="data-table">
+        <thead><tr><th scope="col">Column</th><th scope="col">Example</th><th scope="col" class="hide-sm">Notes</th></tr></thead>
+        <tbody>
+          <tr><td>Date</td><td class="num">2025-01-31</td><td class="hide-sm muted">Most date formats work. YYYY-MM-DD is safest.</td></tr>
+          <tr><td>Category</td><td>Groceries</td><td class="hide-sm muted">Any name you use.</td></tr>
+          <tr><td>Amount</td><td class="num">2450.50</td><td class="hide-sm muted">A positive number, without ₹ or commas.</td></tr>
+          <tr><td>Type</td><td>Expense</td><td class="hide-sm muted">Income or Expense.</td></tr>
+          <tr><td>Description</td><td>Weekly groceries</td><td class="hide-sm muted">Anything that helps you recognise it.</td></tr>
+        </tbody>
+      </table>
+    </div>
   </div>
 </section>
 {% endblock %}

@@ -5,8 +5,6 @@ import math
 from typing import Any
 
 import pandas as pd
-import plotly.express as px
-import plotly.graph_objects as go
 from flask import current_app
 
 
@@ -283,9 +281,12 @@ def series_dict(summary: pd.DataFrame) -> dict[str, list]:
     }
 
 
-def spending_view(summary: pd.DataFrame, axis_title: str) -> dict[str, Any]:
-    """One Month/Quarter/Year view of the spending chart, ready for Plotly.update."""
-    axis = inr_axis(summary["Total"].max() if not summary.empty else 0)
+def spending_view(summary: pd.DataFrame, axis_title: str, axis_floor: float = 0) -> dict[str, Any]:
+    """One Month/Quarter/Year view of the spending chart, ready for Plotly.update.
+
+    ``axis_floor`` stretches the ₹ axis to fit something drawn beyond the totals (the forecast band).
+    """
+    axis = inr_axis(max(summary["Total"].max() if not summary.empty else 0, axis_floor))
     return {
         "x": summary["Label"].tolist(),
         "y": summary["Total"].tolist(),
@@ -294,6 +295,31 @@ def spending_view(summary: pd.DataFrame, axis_title: str) -> dict[str, Any]:
         "ticktext": axis.get("ticktext", []),
         "axis_title": axis_title,
     }
+
+
+def spending_figure(month_view: dict[str, Any], forecast: dict[str, Any]) -> dict[str, Any]:
+    """Monthly spending as a line, continued by next month's forecast with its 80% range as a band.
+
+    Traces carry a ``meta`` role (actual / band-low / band / forecast) so the browser can colour
+    them from the theme. The band runs from the last real month, where it is zero-width, to the
+    forecast month, where it spans low to high.
+    """
+    data = [{
+        "type": "scatter", "mode": "lines+markers", "meta": "actual", "name": "Spending",
+        "x": month_view["x"], "y": month_view["y"], "customdata": month_view["customdata"],
+        "hovertemplate": "<b>%{x}</b><br>Spent %{customdata[0]}<br>%{customdata[1]} transactions<extra></extra>",
+    }]
+    if forecast.get("enough_data") and month_view["x"]:
+        x = [month_view["x"][-1], forecast["month"]]
+        last = month_view["y"][-1]
+        label = f"Forecast {format_inr(forecast['predicted'], 0)}<br>likely {format_inr(forecast['low'], 0)} to {format_inr(forecast['high'], 0)}"
+        data += [
+            {"type": "scatter", "mode": "lines", "meta": "band-low", "x": x, "y": [last, forecast["low"]], "hoverinfo": "skip", "showlegend": False},
+            {"type": "scatter", "mode": "lines", "meta": "band", "fill": "tonexty", "x": x, "y": [last, forecast["high"]], "hoverinfo": "skip", "showlegend": False},
+            {"type": "scatter", "mode": "lines+markers", "meta": "forecast", "name": "Forecast", "x": x, "y": [last, forecast["predicted"]],
+             "customdata": ["", label], "hovertemplate": "%{customdata}<extra></extra>"},
+        ]
+    return {"data": data, "layout": {"yaxis": {"tickvals": month_view["tickvals"], "ticktext": month_view["ticktext"]}}}
 
 
 def month_on_month(labels: list[str], income: list[float], expense: list[float]) -> dict[str, Any] | None:
@@ -379,81 +405,33 @@ def build_dashboard_payload(transactions_df: pd.DataFrame, insights: dict[str, A
         insight = f"You have recorded {format_inr(total_expense)} of spending. Add income transactions to see your savings rate."
 
     # The Month/Quarter/Year buttons swap these views into the spending chart.
+    forecast = insights.get("forecast") or {}
+    band_top = (forecast.get("high") or 0) if forecast.get("enough_data") else 0
     spending_views = {
-        "month": spending_view(monthly_summary, "Month"),
+        "month": spending_view(monthly_summary, "Month", band_top),
         "quarter": spending_view(quarterly_summary, "Quarter"),
         "year": spending_view(yearly_summary, "Year"),
     }
 
     charts = {
-        "monthly_expense": plot_div(
-            go.Figure(
-                data=[go.Scatter(
-                    x=spending_views["month"]["x"],
-                    y=spending_views["month"]["y"],
-                    mode="lines+markers",
-                    line=dict(color="#2dd4bf", width=3),  # straight segments: a spline overshoots the real totals
-                    fill="tozeroy",
-                    fillcolor="rgba(45, 212, 191, 0.16)",
-                    hovertemplate="<b>%{x}</b><br>Total expense: %{customdata[0]}<br>Transactions: %{customdata[1]}<extra></extra>",
-                    customdata=spending_views["month"]["customdata"],
-                )]
-            ).update_layout(
-                template="plotly_white",
-                margin=dict(l=25, r=25, t=35, b=30),
-                paper_bgcolor="rgba(0,0,0,0)",
-                plot_bgcolor="rgba(0,0,0,0)",
-                hovermode="x",
-                xaxis=dict(title="Month"),
-                yaxis=dict(
-                    title="Total expense",
-                    tickvals=spending_views["month"]["tickvals"],
-                    ticktext=spending_views["month"]["ticktext"],
-                ),
-            ),
-            div_id="spendingChart",
-        ),
+        "spending": spending_figure(spending_views["month"], forecast),
         "spending_views": spending_views,
-        "income_vs_expense": plot_div(
-            go.Figure(
-                data=[
-                    go.Bar(
-                        name=name,
-                        x=series["Label"],
-                        y=series["Total"],
-                        marker_color=color,
-                        customdata=[format_inr(total) for total in series["Total"]],
-                        hovertemplate=f"{name}: %{{customdata}}<extra></extra>",
-                    )
-                    for name, series, color in (("Income", monthly_income, "#2563eb"), ("Expense", monthly_summary, "#ef4444"))
-                ]
-            ).update_layout(
-                barmode="group",
-                template="plotly_white",
-                margin=dict(l=25, r=25, t=35, b=30),
-                paper_bgcolor="rgba(0,0,0,0)",
-                plot_bgcolor="rgba(0,0,0,0)",
-                hovermode="x unified",
-                legend=dict(orientation="h", y=1.12),
-                yaxis=inr_axis(max(monthly_income["Total"].max(), monthly_summary["Total"].max())),
-            )
-        ),
-        "category_pie": plot_div(
-            go.Figure(
-                data=[go.Pie(
-                    labels=category_frame["Category"],
-                    values=category_frame["Total"],
-                    customdata=[format_inr(total) for total in category_frame["Total"]],
-                    hovertemplate="<b>%{label}</b><br>%{customdata}<br>%{percent}<extra></extra>",
-                    marker=dict(colors=px.colors.sequential.Emrld),
-                )]
-            ).update_layout(
-                title="Spending Distribution",
-                template="plotly_white",
-                margin=dict(l=25, r=25, t=60, b=30),
-                paper_bgcolor="rgba(0,0,0,0)",
-            )
-        ),
+        "cashflow": {
+            # Grouped bars, not smoothed areas: a spline bends past the real monthly totals.
+            "data": [
+                {
+                    "type": "bar",
+                    "name": name,
+                    "meta": name.lower(),
+                    "x": series["Label"].tolist(),
+                    "y": series["Total"].tolist(),
+                    "customdata": [format_inr(total, 0) for total in series["Total"]],
+                    "hovertemplate": f"{name}: %{{customdata}}<extra></extra>",
+                }
+                for name, series in (("Income", monthly_income), ("Spending", monthly_summary))
+            ],
+            "layout": {"barmode": "group", "yaxis": inr_axis(max(monthly_income["Total"].max(), monthly_summary["Total"].max()))},
+        },
     }
 
     return {
@@ -493,7 +471,3 @@ def build_dashboard_payload(transactions_df: pd.DataFrame, insights: dict[str, A
         },
     }
 
-
-def plot_div(fig: Any, div_id: str | None = None) -> str:
-    """Render a Plotly figure as HTML for embedding in templates."""
-    return fig.to_html(full_html=False, include_plotlyjs="cdn", div_id=div_id)

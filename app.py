@@ -1,5 +1,6 @@
 import os
 import logging
+from datetime import date
 from flask import Flask, flash, redirect, request, url_for
 from flask_wtf.csrf import CSRFError, CSRFProtect
 
@@ -7,7 +8,7 @@ from blueprints.auth import auth_bp
 from blueprints.main import main_bp
 from config import Config
 from database import close_db, init_db
-from utils import CSVValidationError, format_inr
+from utils import CSVValidationError, format_inr, plural
 
 csrf = CSRFProtect()
 
@@ -23,6 +24,9 @@ def create_app(test_config: dict | None = None) -> Flask:
     os.makedirs(app.instance_path, exist_ok=True)
 
     app.jinja_env.filters["inr"] = format_inr
+    app.jinja_env.filters["plural"] = plural
+    # The footer's copyright year comes from the clock, never a hard-coded number.
+    app.context_processor(lambda: {"current_year": date.today().year})
     csrf.init_app(app)
     app.register_blueprint(auth_bp)
     app.register_blueprint(main_bp)

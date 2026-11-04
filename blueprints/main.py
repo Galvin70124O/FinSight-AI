@@ -81,7 +81,7 @@ def load_demo_data():
     db = get_db()
     saved_rows = save_transactions(db, session["user_id"], cleaned_df, source_file="demo_data")
     refresh_insights(db, session["user_id"])
-    flash(f"Loaded {plural(saved_rows, 'demo transaction')}.", "success")
+    flash(f"Loaded {plural(saved_rows, 'sample transaction')}.", "success")
     return redirect(url_for("main.dashboard"))
 
 

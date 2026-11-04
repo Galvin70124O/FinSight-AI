@@ -1,342 +1,313 @@
 {% extends 'base.html' %}
-{% from '_macros.html' import icon, category_icon, sparkline %}
+{% from '_macros.html' import icon, category_icon, change %}
 
-{% block title %}Dashboard · FinSight AI{% endblock %}
-{% block topbar_title %}
-  <h1 class="topbar-heading">Dashboard</h1>
-{% endblock %}
-{% block topbar_extra %}
-  {% set flow = payload.summary.income_vs_expense %}
-  {% set months = flow.labels|length %}
-  {% if months %}
-  <span class="period-chip" title="Period covered by your transactions">
-    {{ icon('calendar') }}
-    <span>{{ flow.labels[0] }}{% if months > 1 %} – {{ flow.labels[-1] }}{% endif %}</span>
-  </span>
-  {% endif %}
-{% endblock %}
+{% block title %}Overview · FinSight AI{% endblock %}
 
 {% block content %}
 {% set m = payload.metrics %}
 {% set flow = payload.summary.income_vs_expense %}
 {% set months = flow.labels|length %}
-<div class="bento" id="top" data-section="Overview">
+{% set mom = payload.month_on_month %}
 
-  {# ---------- Net balance hero ---------- #}
-  <section class="tile span-2 hero-tile" data-spotlight aria-labelledby="netLabel">
-    <div class="hero-head">
-      <div>
-        <p class="tile-label" id="netLabel">Net balance</p>
-        <p class="figure figure-xl {{ 'is-neg' if m.current_balance < 0 }}">
-          <span data-counter="{{ m.current_balance }}" data-currency="INR">{{ m.current_balance|inr }}</span>
-        </p>
-        <p class="tile-sub">
-          {% if months %}
-            Income {{ m.total_income|inr(0) }} − expenses {{ m.total_expense|inr(0) }} over {{ months }} month{{ 's' if months != 1 }}
-          {% else %}
-            Import transactions to see your balance.
-          {% endif %}
-        </p>
-      </div>
-      <div class="hero-actions">
-        <a class="btn btn-primary" href="{{ url_for('main.upload') }}">{{ icon('upload') }}<span>Import</span></a>
-        {% if not transactions %}
-        <form method="post" action="{{ url_for('main.load_demo_data') }}" id="demoForm">
-          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-          <button class="btn btn-ghost" type="submit">{{ icon('database') }}<span>Load demo data</span></button>
-        </form>
-        {% endif %}
-      </div>
+<section id="top" data-section="Overview" aria-labelledby="pageTitle">
+  <header class="page-head">
+    <div>
+      <h1 class="page-title" id="pageTitle">Overview</h1>
+      {% if months %}
+      <p class="sub">{{ flow.labels[0] }}{% if months > 1 %} to {{ flow.labels[-1] }}{% endif %} · {{ transactions|length|plural('transaction') }}</p>
+      {% endif %}
     </div>
-
-    {% if months %}
-      {% set ns = namespace(peak=1) %}
-      {% for i in range(months) %}
-        {% set net = flow.income[i] - flow.expense[i] %}
-        {% if net|abs > ns.peak %}{% set ns.peak = net|abs %}{% endif %}
-      {% endfor %}
-      <div class="net-strip" data-net-strip>
-        <div class="net-bars" role="list" aria-label="Net saved per month">
-          {% for i in range(months) %}
-            {% set net = flow.income[i] - flow.expense[i] %}
-            <span class="net-bar {{ 'down' if net < 0 else 'up' }}" role="listitem" tabindex="0"
-                  style="--h: {{ (12 + (net|abs / ns.peak) * 88)|round(1) }}%"
-                  data-readout="{{ flow.labels[i] }} · {{ '+' if net >= 0 else '−' }}{{ (net|abs)|inr(0) }}"
-                  aria-label="{{ flow.labels[i] }}: {{ 'saved' if net >= 0 else 'overspent' }} {{ (net|abs)|inr(0) }}"></span>
-          {% endfor %}
-        </div>
-        <div class="net-axis">
-          <span>{{ flow.labels[0] }}</span>
-          <span class="net-readout" aria-live="polite" data-default="Net saved per month">Net saved per month</span>
-          <span>{{ flow.labels[-1] }}</span>
-        </div>
-      </div>
-    {% endif %}
-  </section>
-
-  {# ---------- AI insight ---------- #}
-  {% set forecast = payload.insights.forecast %}
-  {% set tip = payload.insights.tip %}
-  <section class="tile span-2 ai-tile" id="insights" data-section="AI insights" aria-labelledby="aiTitle">
-    <header class="tile-head">
-      <h2 class="tile-title" id="aiTitle"><span class="ai-badge">{{ icon('sparkles') }}</span>AI insights</h2>
-    </header>
-    <p class="ai-summary">{{ payload.insight }}</p>
-    <ul class="ai-list">
-      {% if tip %}
-      <li>
-        <span class="ai-kind">Tip</span>
-        <p>{{ tip.category }} is your biggest variable expense: about {{ tip.monthly_average|inr(0) }} a month ({{ tip.share }}% of spending). Trimming it by 10% would save about {{ tip.saving|inr(0) }} a month.</p>
-      </li>
-      {% endif %}
-      {% if forecast %}
-      <li>
-        <span class="ai-kind">Forecast{% if forecast.low_confidence %} · low confidence{% endif %}</span>
-        {% if forecast.enough_data %}
-        <p>Expected spending in {{ forecast.month }}: about <strong class="num">{{ forecast.predicted|inr(0) }}</strong>, likely between {{ forecast.low|inr(0) }} and {{ forecast.high|inr(0) }} (80% range).</p>
-        <p class="ai-note">{% if forecast.uneven %}Spending is too uneven to forecast closely. {% endif %}{{ forecast.message }}</p>
-        {% else %}
-        <p>{{ forecast.message }}</p>
-        {% endif %}
-      </li>
-      {% endif %}
-      {% if transactions %}
-      <li>
-        <span class="ai-kind">Unusual</span>
-        <p>
-          {% set n_anom = payload.insights.anomaly_count %}
-          {% if n_anom %}<a class="link" href="#unusual">{{ n_anom }} transaction{{ 's' if n_anom != 1 }}</a> {{ 'looks' if n_anom == 1 else 'look' }} higher than usual for their category.{% else %}Nothing unusual in your spending.{% endif %}
-        </p>
-      </li>
-      {% endif %}
-    </ul>
-  </section>
-
-  {# ---------- KPI row ---------- #}
-  <section class="tile stat-tile" data-spotlight>
-    <p class="tile-label">Income</p>
-    <p class="figure"><span data-counter="{{ m.total_income }}" data-currency="INR">{{ m.total_income|inr }}</span></p>
-    {{ sparkline(flow.income, 'accent', 'Monthly income trend') }}
-  </section>
-
-  <section class="tile stat-tile" data-spotlight>
-    <p class="tile-label">Expenses</p>
-    <p class="figure"><span data-counter="{{ m.total_expense }}" data-currency="INR">{{ m.total_expense|inr }}</span></p>
-    {{ sparkline(flow.expense, 'neg', 'Monthly spending trend') }}
-  </section>
-
-  <section class="tile stat-tile" data-spotlight>
-    <p class="tile-label">Savings rate</p>
-    <p class="figure {{ 'is-neg' if m.savings_rate < 0 }}"><span data-counter="{{ m.savings_rate }}" data-suffix="%" data-decimals="1">{{ m.savings_rate }}%</span></p>
-    <div class="meter" role="img" aria-label="Savings rate {{ m.savings_rate }}%">
-      <span class="{{ 'neg' if m.savings_rate < 0 }}" style="--w: {{ [[m.savings_rate|abs, 100]|min, 0]|max }}%"></span>
+    {% if transactions %}
+    <div class="page-actions">
+      <a class="btn btn-primary" href="{{ url_for('main.upload') }}">{{ icon('upload') }}<span>Import a CSV</span></a>
     </div>
-    <p class="tile-sub">Share of income you kept</p>
-  </section>
-
-  <section class="tile stat-tile health-stat" data-spotlight>
-    <p class="tile-label">Financial health</p>
-    {% if m.health_score is not none %}
-      {% set score = m.health_score|round|int %}
-      <div class="ring-row">
-        <svg class="ring" viewBox="0 0 40 40" role="img" aria-label="Health score {{ score }} out of 100">
-          <circle class="ring-track" cx="20" cy="20" r="16"/>
-          <circle class="ring-value" cx="20" cy="20" r="16" pathLength="100" style="--v: {{ score }}"/>
-        </svg>
-        <p class="figure"><span data-counter="{{ m.health_score }}" data-decimals="0">{{ score }}</span><span class="figure-unit">/100</span></p>
-      </div>
-      <p class="tile-sub">{{ payload.insights.health.label if payload.insights.health else '' }}</p>
-    {% else %}
-      <p class="figure muted">—</p>
-      <p class="tile-sub">Needs income transactions</p>
     {% endif %}
-  </section>
+  </header>
 
   {% if transactions %}
-  {# ---------- Charts ---------- #}
-  <section class="tile span-2 chart-tile" id="analytics" data-section="Spending over time" aria-labelledby="spendTitle">
-    <header class="tile-head">
-      <div>
-        <h2 class="tile-title" id="spendTitle">Spending over time</h2>
-        <p class="tile-sub">Total spending per period. Hover a point for the amount and number of transactions.</p>
-      </div>
-      {% if payload.charts.spending_views %}
-      <div class="segmented" role="group" aria-label="Time range">
-        <button class="seg-btn active" type="button" data-range="month" aria-pressed="true">Month</button>
-        <button class="seg-btn" type="button" data-range="quarter" aria-pressed="false">Quarter</button>
-        <button class="seg-btn" type="button" data-range="year" aria-pressed="false">Year</button>
-      </div>
-      {% endif %}
-    </header>
-    <div class="chart-shell">{{ payload.charts.monthly_expense|safe }}</div>
-    {% if payload.charts.spending_views %}
-    <script type="application/json" id="spendingViews">{{ payload.charts.spending_views|tojson }}</script>
-    {% endif %}
-  </section>
-
-  <section class="tile span-2 chart-tile" id="cashflow" data-section="Income vs expense" aria-labelledby="flowTitle">
-    <header class="tile-head">
-      <div>
-        <h2 class="tile-title" id="flowTitle">Income vs expense</h2>
-        <p class="tile-sub">By month</p>
-      </div>
-      <div class="legend" aria-hidden="true">
-        <span><i class="swatch accent"></i>Income</span>
-        <span><i class="swatch neg"></i>Expense</span>
-      </div>
-    </header>
-    <div class="chart-shell" data-chart="cashflow">{{ payload.charts.income_vs_expense|safe }}</div>
-  </section>
-
-  {# ---------- Categories ---------- #}
-  {% set cats = payload.summary.category_distribution %}
-  <section class="tile span-2 category-tile" id="categories" data-section="Categories" aria-labelledby="catTitle">
-    <header class="tile-head">
-      <div>
-        <h2 class="tile-title" id="catTitle">Where your money goes</h2>
-        <p class="tile-sub">Share of total spending by category</p>
-      </div>
-    </header>
-    <div class="category-body">
-      <div class="donut-shell" data-chart="donut" data-total="{{ m.total_expense|inr(0) }}">{{ payload.charts.category_pie|safe }}</div>
-      <ol class="category-list">
-        {% for c in cats %}
-          {% set share = (c.Total / m.total_expense * 100) if m.total_expense else 0 %}
-          <li>
-            <div class="cat-row">
-              <span class="cat-name"><i class="swatch c{{ loop.index0 }}"></i>{{ c.Category }}</span>
-              <span class="num">{{ c.Total|inr(0) }}</span>
-              <span class="num muted cat-share">{{ share|round(1) }}%</span>
-            </div>
-            <div class="meter thin"><span class="c{{ loop.index0 }}" style="--w: {{ share|round(2) }}%"></span></div>
-          </li>
-        {% endfor %}
-      </ol>
+  <div class="kpis">
+    <div class="kpi">
+      <p class="label">Balance</p>
+      <p class="figure figure-hero{{ ' is-neg' if m.current_balance < 0 }}">{{ m.current_balance|inr(0) }}</p>
+      <p class="sub">{{ m.total_income|inr(0) }} in, {{ m.total_expense|inr(0) }} out over {{ months|plural('month') }}</p>
     </div>
+    {% set month_label = mom.month if mom else flow.labels[-1] %}
+    {% for key, name, up_is_good in [('income', 'Income', True), ('expense', 'Spending', False), ('saved', 'Saved', True)] %}
+    <div class="kpi">
+      <p class="label">{{ name }} in {{ month_label }}</p>
+      {% if mom %}
+        {% set value = mom[key].value %}
+      {% else %}
+        {% set value = flow.income[-1] if key == 'income' else flow.expense[-1] if key == 'expense' else flow.income[-1] - flow.expense[-1] %}
+      {% endif %}
+      <p class="figure{{ ' is-neg' if value < 0 }}">{{ value|inr(0) }}</p>
+      {% if mom %}{{ change(mom[key].change, mom.previous_month, up_is_good) }}{% else %}<p class="change flat">First month: nothing to compare yet</p>{% endif %}
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+</section>
+
+{% if transactions %}
+{% set forecast = payload.insights.forecast %}
+{% set tip = payload.insights.tip %}
+{% set n_anom = payload.insights.anomaly_count %}
+<div class="section split">
+  <section id="cashflow" data-section="Income and spending" aria-labelledby="flowTitle">
+    <div class="section-head">
+      <div>
+        <h2 class="section-title" id="flowTitle">Income and spending</h2>
+        <p class="sub">Each month, side by side</p>
+      </div>
+      <div class="legend" aria-hidden="true"><span><i class="swatch accent"></i>Income</span><span><i class="swatch"></i>Spending</span></div>
+    </div>
+    <div class="chart" id="cashflowChart" data-figure="cashflowFigure" role="img" aria-label="Bar chart of income and spending per month. The numbers are in the table below.">
+      <p class="chart-error">The chart could not load. The numbers are in the table below.</p>
+    </div>
+    <script type="application/json" id="cashflowFigure">{{ payload.charts.cashflow|tojson }}</script>
+    <details class="chart-data">
+      <summary>Show the numbers</summary>
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead><tr><th scope="col">Month</th><th scope="col" class="r">Income</th><th scope="col" class="r">Spending</th></tr></thead>
+          <tbody>
+            {% for i in range(months) %}
+            <tr><td>{{ flow.labels[i] }}</td><td class="r">{{ flow.income[i]|inr(0) }}</td><td class="r">{{ flow.expense[i]|inr(0) }}</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </details>
   </section>
 
-  {# ---------- Health breakdown ---------- #}
-  {% set health = payload.insights.health %}
-  <section class="tile span-2" id="health" data-section="Financial health" aria-labelledby="healthTitle">
-    <header class="tile-head">
+  {% set cats = payload.summary.category_distribution %}
+  <section id="categories" data-section="Where your money goes" aria-labelledby="catTitle">
+    <div class="section-head">
       <div>
-        <h2 class="tile-title" id="healthTitle">Financial health</h2>
-        <p class="tile-sub">{% if health and health.score is not none %}{{ health.score|round|int }}/100 · {{ health.label }}{% else %}Not available yet{% endif %}</p>
+        <h2 class="section-title" id="catTitle">Where your money goes</h2>
+        <p class="sub">Share of all spending, {{ m.total_expense|inr(0) }} in total</p>
       </div>
-    </header>
-    {% if health and health.score is not none %}
-    <ul class="health-list">
-      {% for part in health.components %}
-        {% set pct = (part.points / part.max_points * 100) if part.max_points else 0 %}
-        <li>
-          <div class="health-row"><span>{{ part.name }}</span><span class="num">{{ part.points }} <span class="muted">/ {{ part.max_points }}</span></span></div>
-          <div class="meter thin"><span class="{{ 'warn' if pct < 50 }}" style="--w: {{ pct|round(1) }}%"></span></div>
-          <p class="tile-sub">{{ part.detail }}</p>
+    </div>
+    {% if cats %}
+    <ol class="bars">
+      {% set top = cats|map(attribute='Total')|max %}
+      {% for c in cats %}
+        {% set share = (c.Total / m.total_expense * 100) if m.total_expense else 0 %}
+        <li class="bar-row{{ ' is-rest' if c.Category == 'Everything else' }}">
+          <span class="name">{{ c.Category }}</span>
+          <span class="num">{{ c.Total|inr(0) }}</span>
+          <span class="num share">{{ share|round(1) }}%</span>
+          <span class="bar-track" aria-hidden="true"><span class="bar-fill" style="width: {{ (c.Total / top * 100)|round(2) if top else 0 }}%"></span></span>
         </li>
       {% endfor %}
-    </ul>
+    </ol>
     {% else %}
-    <p class="empty">{{ health.message if health else "Add income transactions to see your health score." }}</p>
-    {% endif %}
-  </section>
-
-  {# ---------- Unusual ---------- #}
-  <section class="tile span-4" id="unusual" data-section="Unusual transactions" aria-labelledby="unusualTitle">
-    <header class="tile-head">
-      <div>
-        <h2 class="tile-title" id="unusualTitle">{{ icon('alert', 'icon title-icon neg') }}Unusual transactions</h2>
-        <p class="tile-sub">Each expense is compared with the usual amount for its category (categories need at least 4 expenses).</p>
-      </div>
-    </header>
-    {% if payload.insights.anomalies %}
-    <div class="table-wrap">
-      <table class="data-table">
-        <thead>
-          <tr><th scope="col" class="hide-sm">Date</th><th scope="col">Category</th><th scope="col" class="hide-sm">Description</th><th scope="col" class="r hide-sm">Usual</th><th scope="col" class="r">Amount</th></tr>
-        </thead>
-        <tbody>
-          {% for item in payload.insights.anomalies %}
-          <tr>
-            <td class="num muted hide-sm">{{ item.date }}</td>
-            <td><span class="cat-cell">{{ category_icon(item.category) }}<span>{{ item.category }}<span class="cell-sub">{{ item.description }} · {{ item.date }} · usually {{ item.typical|inr(0) }}</span></span></span></td>
-            <td class="desc hide-sm">{{ item.description }}</td>
-            <td class="r num muted hide-sm">{{ item.typical|inr }}</td>
-            <td class="r num amount neg">{{ item.amount|inr }}{% if item.ratio %} <span class="ratio">{{ item.ratio }}×</span>{% endif %}</td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
-    {% set hidden = payload.insights.anomaly_count - payload.insights.anomalies|length %}
-    {% if hidden > 0 %}<p class="tile-sub">and {{ hidden }} more, older than these.</p>{% endif %}
-    {% else %}
-    <p class="empty">Nothing unusual.</p>
-    {% endif %}
-  </section>
-  {% else %}
-  <section class="tile span-4 welcome-tile">
-    <span class="welcome-icon">{{ icon('file') }}</span>
-    <h2 class="tile-title">No transactions yet</h2>
-    <p class="tile-sub">Upload a CSV, or load the demo data to explore the dashboard. Charts, insights and the forecast appear once there are transactions.</p>
-  </section>
-  {% endif %}
-
-  {# ---------- Transactions ---------- #}
-  <section class="tile span-4 table-tile" id="transactions" data-section="Transactions" aria-labelledby="txTitle">
-    <header class="tile-head">
-      <div>
-        <h2 class="tile-title" id="txTitle">Recent transactions</h2>
-        <p class="tile-sub">Your latest {{ payload.recent_transactions|length }} transactions</p>
-      </div>
-      {% if payload.recent_transactions %}
-      <div class="table-controls">
-        <div class="chips" role="group" aria-label="Filter by type">
-          <button class="chip active" type="button" data-filter="all" aria-pressed="true">All</button>
-          <button class="chip" type="button" data-filter="Expense" aria-pressed="false">Expense</button>
-          <button class="chip" type="button" data-filter="Income" aria-pressed="false">Income</button>
-        </div>
-        <label class="select-wrap">
-          <span class="sr-only">Sort</span>
-          <select id="sortSelect" class="select">
-            <option value="date-desc">Newest</option>
-            <option value="date-asc">Oldest</option>
-            <option value="amount-desc">Highest</option>
-            <option value="amount-asc">Lowest</option>
-          </select>
-        </label>
-      </div>
-      {% endif %}
-    </header>
-
-    {% if payload.recent_transactions %}
-    <div class="table-wrap scroll">
-      <table class="data-table" id="transactionsTable">
-        <thead>
-          <tr>
-            <th scope="col">Category</th>
-            <th scope="col" class="hide-sm">Description</th>
-            <th scope="col" class="hide-sm">Date</th>
-            <th scope="col" class="hide-sm">Type</th>
-            <th scope="col" class="r">Amount</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for tx in payload.recent_transactions %}
-          {% set is_exp = tx['Type'] == 'Expense' %}
-          <tr data-type="{{ tx['Type'] }}" data-date="{{ tx['Date'] }}" data-amount="{{ tx['Amount'] }}" data-category="{{ tx['Category'] }}">
-            <td><span class="cat-cell">{{ category_icon(tx['Category']) }}<span>{{ tx['Category'] }}<span class="cell-sub">{{ tx['Description'] }} · {{ tx['Date'] }}</span></span></span></td>
-            <td class="desc hide-sm">{{ tx['Description'] }}</td>
-            <td class="num muted hide-sm">{{ tx['Date'] }}</td>
-            <td class="hide-sm"><span class="badge {{ 'neg' if is_exp else 'pos' }}">{{ tx['Type'] }}</span></td>
-            <td class="r num amount {{ 'neg' if is_exp else 'pos' }}">{{ '−' if is_exp else '+' }}{{ tx['Amount']|inr }}</td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
-    {% else %}
-    <p class="empty">No transactions have been imported yet. <a class="link" href="{{ url_for('main.upload') }}">Import a CSV</a></p>
+    <p class="empty">No spending recorded yet. Only income has been imported.</p>
     {% endif %}
   </section>
 </div>
+
+{% set views = payload.charts.spending_views %}
+<section class="section" id="spending" data-section="Spending and forecast" aria-labelledby="spendTitle">
+  <div class="section-head">
+    <div>
+      <h2 class="section-title" id="spendTitle">Spending and next month's forecast</h2>
+      <p class="sub">{% if forecast and forecast.enough_data %}The shaded band is where {{ forecast.month }} will most likely land (80% range).{% else %}A forecast appears once you have 3 months of transactions.{% endif %}</p>
+    </div>
+    <div class="segmented" role="group" aria-label="Group spending by">
+      <button class="seg-btn active" type="button" data-range="month" aria-pressed="true">Month</button>
+      <button class="seg-btn" type="button" data-range="quarter" aria-pressed="false">Quarter</button>
+      <button class="seg-btn" type="button" data-range="year" aria-pressed="false">Year</button>
+    </div>
+  </div>
+  <div class="legend chart-legend" aria-hidden="true">
+    <span><i class="swatch accent"></i>Spending</span>
+    {% if forecast and forecast.enough_data %}<span data-forecast-only><i class="swatch band"></i>Forecast range</span>{% endif %}
+  </div>
+  <div class="chart" id="spendingChart" data-figure="spendingFigure" role="img" aria-label="Line chart of spending per period, with next month's forecast range. The numbers are in the table below.">
+    <p class="chart-error">The chart could not load. The numbers are in the table below.</p>
+  </div>
+  <script type="application/json" id="spendingFigure">{{ payload.charts.spending|tojson }}</script>
+  <script type="application/json" id="spendingViews">{{ views|tojson }}</script>
+  <details class="chart-data">
+    <summary>Show the numbers</summary>
+    <div class="table-wrap">
+      <table class="data-table">
+        <thead><tr><th scope="col">Month</th><th scope="col" class="r">Spent</th><th scope="col" class="r">Transactions</th></tr></thead>
+        <tbody>
+          {% for i in range(views.month.x|length) %}
+          <tr><td>{{ views.month.x[i] }}</td><td class="r">{{ views.month.customdata[i][0] }}</td><td class="r">{{ views.month.customdata[i][1] }}</td></tr>
+          {% endfor %}
+          {% if forecast and forecast.enough_data %}
+          <tr><td>{{ forecast.month }} (forecast)</td><td class="r">{{ forecast.predicted|inr(0) }}</td><td class="r muted">{{ forecast.low|inr(0) }} to {{ forecast.high|inr(0) }}</td></tr>
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
+  </details>
+</section>
+
+<section class="section" id="brief" data-section="In brief" aria-labelledby="briefTitle">
+  <div class="section-head"><h2 class="section-title" id="briefTitle">In brief</h2></div>
+  <ul class="brief">
+    <li>
+      <h3>So far</h3>
+      <p>{{ payload.insight }}</p>
+    </li>
+    <li>
+      <h3>Unusual spending</h3>
+      <p>{% if n_anom %}<a class="link" href="#unusual">{{ n_anom|plural('transaction') }}</a> {{ 'looks' if n_anom == 1 else 'look' }} higher than usual for {{ 'its' if n_anom == 1 else 'their' }} category.{% else %}Nothing stands out. Every expense is close to what is usual for its category.{% endif %}</p>
+    </li>
+    {% if forecast %}
+    <li>
+      <h3>Next month</h3>
+      {% if forecast.enough_data %}
+      <p>You may spend about <strong class="num">{{ forecast.predicted|inr(0) }}</strong> in {{ forecast.month }}, most likely between {{ forecast.low|inr(0) }} and {{ forecast.high|inr(0) }}.</p>
+      <p class="note">{% if forecast.uneven %}Spending is too uneven to forecast closely. {% endif %}{{ forecast.message }}</p>
+      {% else %}
+      <p>{{ forecast.message }}</p>
+      {% endif %}
+    </li>
+    {% endif %}
+    {% if tip %}
+    <li>
+      <h3>Easiest place to save</h3>
+      <p>{{ tip.category }} costs you about {{ tip.monthly_average|inr(0) }} a month ({{ tip.share }}% of your spending). Spending 10% less there saves about {{ tip.saving|inr(0) }} a month.</p>
+    </li>
+    {% endif %}
+  </ul>
+</section>
+
+{% set health = payload.insights.health %}
+<section class="section" id="health" data-section="Health score" aria-labelledby="healthTitle">
+  <div class="section-head">
+    <div>
+      <h2 class="section-title" id="healthTitle">Health score</h2>
+      <p class="sub">Out of 100, from up to three parts. Each part shows what it added and what it cost you.</p>
+    </div>
+  </div>
+  {% if health and health.score is not none %}
+  <div class="health">
+    <div class="score">
+      <p class="figure">{{ health.score|round|int }}<span> / 100</span></p>
+      <p>{{ health.label }}</p>
+    </div>
+    <ul class="parts">
+      {% for part in health.components %}
+        {% set lost = part.max_points - part.points %}
+        <li class="part">
+          <div class="part-head"><span>{{ part.name }}</span><span class="num">{{ '%g'|format(part.points) }} of {{ part.max_points }}</span></div>
+          <div class="meter" aria-hidden="true"><span style="width: {{ (part.points / part.max_points * 100)|round(1) }}%"></span></div>
+          <p>{{ part.detail }} <span class="effect{{ ' bad' if lost > 0 }}">{% if lost > 0 %}Cost you {{ '%g'|format(lost|round(1)) }} points.{% else %}Full marks.{% endif %}</span></p>
+        </li>
+      {% endfor %}
+    </ul>
+  </div>
+  {% else %}
+  <p class="empty">{{ health.message if health else "Add income transactions to see your health score." }}</p>
+  {% endif %}
+</section>
+
+<section class="section" id="unusual" data-section="Unusual transactions" aria-labelledby="unusualTitle">
+  <div class="section-head">
+    <div>
+      <h2 class="section-title" id="unusualTitle">Unusual transactions</h2>
+      <p class="sub">Expenses much higher than usual for their category. A category needs at least 4 expenses before anything is flagged.</p>
+    </div>
+  </div>
+  {% if payload.insights.anomalies %}
+  <div class="table-wrap">
+    <table class="data-table">
+      <thead><tr><th scope="col" class="hide-sm">Date</th><th scope="col">Category</th><th scope="col" class="hide-sm">Description</th><th scope="col" class="r hide-sm">Usual</th><th scope="col" class="r">Amount</th></tr></thead>
+      <tbody>
+        {% for item in payload.insights.anomalies %}
+        <tr>
+          <td class="num muted hide-sm">{{ item.date }}</td>
+          <td>
+            <span class="cat-cell">{{ category_icon(item.category) }}<span>{{ item.category }}
+              <span class="cell-sub desc-sm" title="{{ item.description }}">{{ item.description }}</span>
+              <span class="cell-sub">{{ item.date }} · usually {{ item.typical|inr(0) }}</span></span></span>
+          </td>
+          <td class="hide-sm"><span class="desc" title="{{ item.description }}">{{ item.description }}</span></td>
+          <td class="r muted hide-sm">{{ item.typical|inr(0) }}</td>
+          <td class="r"><span class="amount neg">{{ item.amount|inr(0) }}</span>{% if item.ratio %}<span class="ratio">{{ '{:,.0f}'.format(item.ratio) if item.ratio >= 10 else item.ratio }}× usual</span>{% endif %}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% set hidden = payload.insights.anomaly_count - payload.insights.anomalies|length %}
+  {% if hidden > 0 %}<p class="table-foot">and {{ hidden }} more, older than these.</p>{% endif %}
+  {% else %}
+  <p class="empty">Nothing unusual. Every expense is close to what is usual for its category.</p>
+  {% endif %}
+</section>
+
+<section class="section" id="transactions" data-section="Recent transactions" aria-labelledby="txTitle">
+  <div class="section-head">
+    <div>
+      <h2 class="section-title" id="txTitle">Recent transactions</h2>
+      <p class="sub">Your latest {{ payload.recent_transactions|length }}</p>
+    </div>
+    <div class="table-controls">
+      <div class="chips" role="group" aria-label="Show">
+        <button class="chip active" type="button" data-filter="all" aria-pressed="true">All</button>
+        <button class="chip" type="button" data-filter="Expense" aria-pressed="false">Spending</button>
+        <button class="chip" type="button" data-filter="Income" aria-pressed="false">Income</button>
+      </div>
+      <label>
+        <span class="sr-only">Sort by</span>
+        <select id="sortSelect" class="select">
+          <option value="date-desc">Newest first</option>
+          <option value="date-asc">Oldest first</option>
+          <option value="amount-desc">Largest first</option>
+          <option value="amount-asc">Smallest first</option>
+        </select>
+      </label>
+    </div>
+  </div>
+  <div class="table-wrap">
+    <table class="data-table" id="transactionsTable">
+      <thead>
+        <tr><th scope="col" class="hide-sm">Date</th><th scope="col">Category</th><th scope="col" class="hide-sm">Description</th><th scope="col" class="r">Amount</th></tr>
+      </thead>
+      <tbody>
+        {% for tx in payload.recent_transactions %}
+        {% set is_exp = tx['Type'] == 'Expense' %}
+        <tr data-type="{{ tx['Type'] }}" data-date="{{ tx['Date'] }}" data-amount="{{ tx['Amount'] }}" data-category="{{ tx['Category'] }}">
+          <td class="num muted hide-sm">{{ tx['Date'] }}</td>
+          <td>
+            <span class="cat-cell">{{ category_icon(tx['Category']) }}<span>{{ tx['Category'] }}
+              <span class="cell-sub desc-sm" title="{{ tx['Description'] }}">{{ tx['Description'] }}</span>
+              <span class="cell-sub">{{ tx['Date'] }}</span></span></span>
+          </td>
+          <td class="hide-sm"><span class="desc" title="{{ tx['Description'] }}">{{ tx['Description'] }}</span></td>
+          <td class="r"><span class="amount{{ '' if is_exp else ' pos' }}">{{ '−' if is_exp else '+' }}{{ tx['Amount']|inr }}</span></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+
+{% else %}
+<section class="empty-state" aria-labelledby="emptyTitle">
+  <h2 id="emptyTitle">No transactions yet</h2>
+  <p>Upload a CSV from your bank or expense app to see your balance, where your money goes and a forecast for next month. Want to look around first? Load 8 months of sample transactions; you can upload your own later.</p>
+  <div class="page-actions">
+    <a class="btn btn-primary" href="{{ url_for('main.upload') }}">{{ icon('upload') }}<span>Import a CSV</span></a>
+    <form method="post" action="{{ url_for('main.load_demo_data') }}" id="demoForm">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button class="btn btn-secondary" type="submit">Load sample data</button>
+    </form>
+  </div>
+</section>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+{% if transactions %}
+{# plotly-basic (bar + scatter) is a third of the full bundle; loaded once, after the HTML. #}
+<script src="https://cdn.plot.ly/plotly-basic-2.27.0.min.js" integrity="sha384-C21rxKmXDHRC0bKRfO4BhLiAheJB5GEbL2ohT8ER/IW4/oXhpHW1iygb4d6p7vsb" crossorigin="anonymous" defer></script>
+{% endif %}
 {% endblock %}

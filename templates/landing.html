@@ -1,53 +1,92 @@
 {% extends 'base.html' %}
-{% from '_macros.html' import icon %}
-{% block topbar_title %}<span class="topbar-heading">Welcome</span>{% endblock %}
-{% block content %}
-<div class="landing">
-  <section class="landing-hero">
-    <p class="eyebrow"><span class="eyebrow-dot" aria-hidden="true"></span>Personal finance analytics</p>
-    <h1 class="hero-title">See where your money goes,<br><span class="accent-text">and where it’s heading.</span></h1>
-    <p class="hero-lead">Import your transactions as a CSV. FinSight AI charts income against spending, forecasts next month with an honest range, flags unusual expenses, and scores your financial health with the working shown.</p>
+{% block title %}FinSight AI · See where your money goes{% endblock %}
+
+{# A real capture of the app with sample data, in both themes. Made by scripts/screenshots.py. #}
+{% macro shot(name, alt, lazy=True) -%}
+<figure class="shot">
+  {%- for theme in ('light', 'dark') %}
+  <picture class="shot-{{ theme }}">
+    <source media="(max-width: 640px)" srcset="{{ url_for('static', filename='img/' ~ name ~ '-phone-' ~ theme ~ '.jpg') }}">
+    <img src="{{ url_for('static', filename='img/' ~ name ~ '-' ~ theme ~ '.jpg') }}" alt="{{ alt }}"{% if lazy or theme == 'dark' %} loading="lazy"{% endif %} decoding="async">
+  </picture>
+  {%- endfor %}
+</figure>
+{%- endmacro %}
+
+{% block public %}
+<section class="hero" aria-labelledby="heroTitle" data-reveal>
+  <h1 class="hero-title" id="heroTitle">Know where your money goes</h1>
+  <div>
+    <p class="hero-lead">Upload your bank statement as a CSV. See what came in, what went out, where it went, and what next month may cost. In rupees, for students and households.</p>
     <div class="hero-cta">
-      <a class="btn btn-primary btn-lg" href="{{ url_for('auth.register') }}">Get started {{ icon('arrow-right') }}</a>
-      <a class="btn btn-ghost btn-lg" href="{{ url_for('auth.login') }}">Sign in</a>
+      <a class="btn btn-primary btn-lg" href="{{ url_for('auth.register') }}">Create a free account</a>
+      <p class="sub">Already have one? <a href="{{ url_for('auth.login') }}">Sign in</a></p>
     </div>
+  </div>
+  {{ shot('overview', 'The FinSight overview with 8 months of sample data: the balance, income, spending and savings for the latest month, and a short summary.', lazy=False) }}
+</section>
+
+<div class="feature-list">
+  <section class="feature" data-reveal aria-labelledby="f1">
+    <div class="feature-text">
+      <h2 id="f1">Your month at a glance</h2>
+      <p>Balance, income, spending and what you saved, each compared with last month, so you can see which way things are moving.</p>
+    </div>
+    {{ shot('kpis', 'Balance of ₹3,62,201 with income, spending and savings for April, each showing the change from March.') }}
   </section>
 
-  <section class="bento landing-bento" aria-label="Features">
-    <article class="tile span-2 feature" data-spotlight>
-      <p class="tile-label">Forecast</p>
-      <h2 class="tile-title">A range, not a guess</h2>
-      <p class="tile-sub">Next month’s spending with an 80% range, built from your own history. Needs 3+ months of transactions.</p>
-      <div class="feature-visual range-visual" aria-hidden="true">
-        <span style="--h:42%"></span><span style="--h:55%"></span><span style="--h:48%"></span><span style="--h:63%"></span><span style="--h:58%"></span>
-        <span class="forecast" style="--h:66%"><i></i></span>
-      </div>
-    </article>
-    <article class="tile feature" data-spotlight>
-      <p class="tile-label">Anomalies</p>
-      <h2 class="tile-title">Unusual spend, flagged</h2>
-      <p class="tile-sub">Each expense is compared with what is normal for its category.</p>
-    </article>
-    <article class="tile feature" data-spotlight>
-      <p class="tile-label">Health</p>
-      <h2 class="tile-title">A score you can check</h2>
-      <p class="tile-sub">Out of 100, with points for each part shown.</p>
-    </article>
-    <article class="tile feature" data-spotlight>
-      <p class="tile-label">Cash flow</p>
-      <h2 class="tile-title">Income vs expense</h2>
-      <p class="tile-sub">Month by month, in rupees with Indian digit grouping.</p>
-    </article>
-    <article class="tile feature" data-spotlight>
-      <p class="tile-label">Categories</p>
-      <h2 class="tile-title">Spending mix</h2>
-      <p class="tile-sub">See which categories take the biggest share.</p>
-    </article>
-    <article class="tile span-2 feature" data-spotlight>
-      <p class="tile-label">Privacy</p>
-      <h2 class="tile-title">{{ icon('shield', 'icon title-icon') }}Your CSV is never stored on disk</h2>
-      <p class="tile-sub">Files are parsed in memory; only the transactions are saved, to your account alone. Re-importing the same rows does not create duplicates.</p>
-    </article>
+  <section class="feature" data-reveal aria-labelledby="f2">
+    <div class="feature-text">
+      <h2 id="f2">Where each rupee went</h2>
+      <p>Rent, groceries, mess fees, the auto to college: every category ranked by how much of your spending it took.</p>
+    </div>
+    {{ shot('categories', 'Spending by category, ranked: rent first, then groceries, shopping, utilities and the rest, each with its share.') }}
+  </section>
+
+  <section class="feature" data-reveal aria-labelledby="f3">
+    <div class="feature-text">
+      <h2 id="f3">Next month, with an honest range</h2>
+      <p>A forecast from your own history, drawn as a band rather than one confident number. When your spending is too uneven to predict, it tells you so.</p>
+    </div>
+    {{ shot('spending', 'Monthly spending as a line, continued by a shaded band for next month’s likely range.') }}
+  </section>
+
+  <section class="feature" data-reveal aria-labelledby="f4">
+    <div class="feature-text">
+      <h2 id="f4">Spending that stands out</h2>
+      <p>An expense far above what is usual for its category gets flagged, so one ₹46,999 phone does not hide among ₹2,000 shopping trips.</p>
+    </div>
+    {{ shot('unusual', 'A table of unusual transactions: a ₹46,999 phone in Shopping, about 18 times the usual amount.') }}
+  </section>
+
+  <section class="feature" data-reveal aria-labelledby="f5">
+    <div class="feature-text">
+      <h2 id="f5">A health score you can check</h2>
+      <p>Out of 100, with every part shown: how much you saved, how often income covered spending, and how steady your spending was.</p>
+    </div>
+    {{ shot('health', 'A health score of 92 out of 100, broken into savings rate, months covered and steady spending, with the points each part cost.') }}
   </section>
 </div>
+
+<section class="how" aria-labelledby="howTitle" data-reveal>
+  <h2 id="howTitle">How it works</h2>
+  <div>
+    <ol class="steps">
+      <li><p>Download a CSV from your bank or expense app.</p><span class="sub">It needs five columns: Date, Category, Amount, Type and Description.</span></li>
+      <li><p>Upload it to FinSight.</p><span class="sub">The file is read in memory and never saved on disk. Uploading the same rows again adds nothing twice.</span></li>
+      <li><p>Read your overview.</p><span class="sub">Or load 8 months of sample data first and look around.</span></li>
+    </ol>
+    <div class="table-wrap csv-table">
+      <table class="data-table">
+        <caption class="sr-only">Example CSV rows</caption>
+        <thead><tr><th scope="col">Date</th><th scope="col">Category</th><th scope="col" class="r">Amount</th><th scope="col">Type</th><th scope="col">Description</th></tr></thead>
+        <tbody>
+          <tr><td class="num">2025-01-01</td><td>Salary</td><td class="r">85000</td><td>Income</td><td>Monthly salary</td></tr>
+          <tr><td class="num">2025-01-03</td><td>Rent</td><td class="r">22000</td><td>Expense</td><td>Flat rent</td></tr>
+          <tr><td class="num">2025-01-04</td><td>Groceries</td><td class="r">2450.50</td><td>Expense</td><td>Weekly groceries</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
 {% endblock %}

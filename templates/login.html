@@ -1,27 +1,25 @@
 {% extends 'base.html' %}
-{% from '_macros.html' import logo_mark %}
 {% block title %}Sign in · FinSight AI{% endblock %}
-{% block content %}
+{% block public %}
 <section class="auth">
   <div class="auth-card">
     <div class="auth-head">
-      {{ logo_mark() }}
-      <h1 class="auth-title">Welcome back</h1>
-      <p class="tile-sub">Sign in to see your dashboard.</p>
+      <h1 class="page-title">Sign in</h1>
+      <p class="sub">Pick up where you left off.</p>
     </div>
     <form method="post" class="form">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <label class="field">
         <span>Username</span>
-        <input class="input" type="text" name="username" autocomplete="username" required autofocus>
+        <input class="input" type="text" name="username" autocomplete="username" autocapitalize="none" autocorrect="off" required autofocus>
       </label>
       <label class="field">
         <span>Password</span>
         <input class="input" type="password" name="password" autocomplete="current-password" required>
       </label>
-      <button class="btn btn-primary btn-block" type="submit">Sign in</button>
+      <button class="btn btn-primary btn-block btn-lg" type="submit">Sign in</button>
     </form>
-    <p class="auth-switch">New to FinSight AI? <a class="link" href="{{ url_for('auth.register') }}">Create an account</a></p>
+    <p class="auth-switch">New here? <a class="link" href="{{ url_for('auth.register') }}">Create an account</a></p>
   </div>
 </section>
 {% endblock %}
