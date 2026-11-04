@@ -42,8 +42,12 @@ def create_app(test_config: dict | None = None) -> Flask:
     @app.errorhandler(CSRFError)
     def handle_csrf_error(_error: CSRFError):
         flash("Your session expired or the form was out of date. Please try again.", "danger")
-        # Send people back to the form they submitted (logout has no form page).
-        return redirect(url_for("main.index") if request.endpoint == "auth.logout" else request.path)
+        # Send people back to the form they submitted. A POST-only address has no page of its own
+        # (redirecting there would show "405 Method Not Allowed"), so those go to the page with the form.
+        if request.url_rule is not None and "GET" in request.url_rule.methods:
+            return redirect(request.path)
+        pages = {"auth.logout": "main.index", "auth.delete_account": "main.upload", "main.save_review": "main.upload"}
+        return redirect(url_for(pages.get(request.endpoint, "main.dashboard")))
 
     @app.errorhandler(404)
     def handle_not_found(_error):

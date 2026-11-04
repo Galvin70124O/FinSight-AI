@@ -69,3 +69,10 @@ def test_existing_short_passwords_still_sign_in(client, db, user_id):
     assert "Incorrect username or password" not in page
     with client.session_transaction() as session:
         assert session["user_id"] == user_id
+
+
+@pytest.mark.parametrize("path", ["/upload/save", "/account/delete", "/logout"])
+def test_an_out_of_date_form_on_a_post_only_address_lands_on_a_real_page(client, logged_in, path):
+    # The CSRF check fails (no token); the redirect must not be a GET to the POST-only address (a 405).
+    response = client.post(path, data={}, follow_redirects=True)
+    assert response.status_code == 200
