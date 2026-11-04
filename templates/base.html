@@ -3,14 +3,19 @@
 <html lang="en" data-theme="light">
   <head>
     <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <meta name="theme-color" content="#F7F8FA">
     <title>{% block title %}FinSight AI{% endblock %}</title>
+    <meta name="description" content="{% block description %}See where your money goes: upload a bank statement CSV and get income vs spending, where it went, unusual expenses and next month's forecast, in rupees.{% endblock %}">
     <script>
       // Apply the saved theme before first paint so there is no flash. Light is the default.
       (function () {
         try {
-          if (localStorage.getItem('finsight-theme') === 'dark') document.documentElement.setAttribute('data-theme', 'dark');
+          if (localStorage.getItem('finsight-theme') === 'dark') {
+            document.documentElement.setAttribute('data-theme', 'dark');
+            // The phone's status bar matches the page from the first frame.
+            document.querySelector('meta[name="theme-color"]').setAttribute('content', '#0F1114');
+          }
         } catch (e) { /* storage blocked: keep the light default */ }
       })();
     </script>

@@ -56,9 +56,9 @@
 
 /* ---------- Base ---------- */
 *, *::before, *::after { box-sizing: border-box; }
-html { -webkit-text-size-adjust: 100%; }
+html { -webkit-text-size-adjust: 100%; -webkit-tap-highlight-color: transparent; }
 body {
-  margin: 0; min-height: 100vh;
+  margin: 0; min-height: 100vh; min-height: 100svh;
   background: var(--bg); color: var(--ink);
   font: 400 16px/1.5 var(--font);
   -webkit-font-smoothing: antialiased;
@@ -97,9 +97,7 @@ svg { flex: none; }
 }
 .btn:active { transform: scale(0.98); }
 .btn-primary { background: var(--accent); color: var(--accent-ink); }
-.btn-primary:hover { background: color-mix(in srgb, var(--accent) 88%, var(--ink)); }
 .btn-secondary { border-color: var(--line-strong); background: var(--surface); color: var(--ink); }
-.btn-secondary:hover { background: var(--surface-2); }
 .btn-lg { min-height: 48px; padding: 0 var(--s6); font-size: 16px; }
 .btn-block { width: 100%; }
 
@@ -108,7 +106,6 @@ svg { flex: none; }
   border: 0; border-radius: var(--r-sm); background: none; color: var(--ink-2);
   transition: background-color .15s ease;
 }
-.icon-button:hover { background: var(--surface-2); color: var(--ink); }
 
 .segmented { display: inline-flex; padding: 2px; border-radius: var(--r-sm); background: var(--surface-2); }
 .seg-btn { min-height: 32px; padding: 0 var(--s3); border: 0; border-radius: 6px; background: none; color: var(--muted); font-size: 14px; font-weight: 500; transition: background-color .15s ease, color .15s ease; }
@@ -149,7 +146,7 @@ svg { flex: none; }
 .flash.danger .icon { color: var(--bad); }
 
 /* ---------- Public pages: top bar and footer ---------- */
-.site { display: flex; flex-direction: column; min-height: 100vh; }
+.site { display: flex; flex-direction: column; min-height: 100svh; }
 .site-bar { display: flex; align-items: center; gap: var(--s4); width: min(1200px, 100% - 2 * var(--s6)); margin: 0 auto; padding: var(--s4) 0; }
 .site-bar .brand { margin-right: auto; }
 .site-main { flex: 1; width: min(1200px, 100% - 2 * var(--s6)); margin: 0 auto; }
@@ -158,13 +155,11 @@ svg { flex: none; }
 .logo-bg { fill: var(--accent); }
 .logo-bars { stroke: var(--accent-ink); stroke-width: 2.6; stroke-linecap: round; fill: none; }
 .site-link { display: inline-flex; align-items: center; min-height: 44px; padding: 0 var(--s2); color: var(--ink-2); font-size: 15px; }
-.site-link:hover { color: var(--ink); }
 
 .site-footer { border-top: 1px solid var(--line); margin-top: var(--s24); }
 .footer-inner { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2) var(--s6); width: min(1200px, 100% - 2 * var(--s6)); margin: 0 auto; padding: var(--s8) 0; color: var(--muted); font-size: 14px; }
 .footer-inner nav { display: flex; flex-wrap: wrap; gap: 0 var(--s4); margin-left: auto; }
 .footer-inner a { display: inline-flex; align-items: center; min-height: 44px; color: var(--ink-2); }
-.footer-inner a:hover { color: var(--ink); }
 
 /* ---------- Landing ---------- */
 /* Headline and lead side by side, then the real app, full width, as the first screen's picture. */
@@ -212,15 +207,14 @@ svg { flex: none; }
 .auth-switch { margin-top: var(--s6); color: var(--muted); font-size: 15px; text-align: center; }
 
 /* ---------- App shell ---------- */
-.app { display: grid; grid-template-columns: var(--sidebar) minmax(0, 1fr); min-height: 100vh; }
+.app { display: grid; grid-template-columns: var(--sidebar) minmax(0, 1fr); min-height: 100svh; }
 .sidebar {
-  position: sticky; top: 0; height: 100vh;
+  position: sticky; top: 0; height: 100dvh;
   display: flex; flex-direction: column; gap: var(--s6);
   padding: var(--s5) var(--s4); border-right: 1px solid var(--line);
 }
 .nav { display: grid; gap: 2px; }
 .nav-link { display: flex; align-items: center; gap: var(--s3); min-height: 40px; padding: 0 var(--s3); border-radius: var(--r-sm); color: var(--ink-2); font-size: 15px; transition: background-color .15s ease, color .15s ease; }
-.nav-link:hover { background: var(--surface-2); color: var(--ink); }
 .nav-link.active { background: var(--surface-2); color: var(--ink); font-weight: 500; }
 .sidebar-foot { display: grid; gap: var(--s2); margin-top: auto; }
 .search-trigger { display: flex; align-items: center; gap: var(--s2); min-height: 40px; padding: 0 var(--s3); border: 1px solid var(--line-strong); border-radius: var(--r-sm); background: var(--surface); color: var(--muted); font-size: 14px; }
@@ -325,6 +319,10 @@ svg { flex: none; }
 .empty-state .page-actions { margin-top: var(--s6); }
 .empty { color: var(--muted); font-size: 15px; }
 
+.not-found { max-width: 560px; padding: var(--s16) 0; }
+.not-found p { margin-top: var(--s3); color: var(--ink-2); }
+.not-found .page-actions { margin-top: var(--s6); }
+
 /* ---------- Import ---------- */
 .import { max-width: 640px; }
 .dropzone {
@@ -348,7 +346,7 @@ svg { flex: none; }
 .palette-box { position: relative; width: min(600px, 100%); max-height: 70vh; display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: var(--r-md); background: var(--surface); box-shadow: var(--shadow-pop); overflow: hidden; }
 .palette-search { display: flex; align-items: center; gap: var(--s3); padding: 0 var(--s4); border-bottom: 1px solid var(--line); color: var(--muted); }
 .palette-search input { flex: 1; min-height: 52px; border: 0; background: none; color: var(--ink); font-size: 16px; outline: none; }
-.palette-list { overflow-y: auto; padding: var(--s2); }
+.palette-list { overflow-y: auto; overscroll-behavior: contain; padding: var(--s2); }
 .palette-group { padding: var(--s3) var(--s2) var(--s1); color: var(--muted); font-size: 13px; }
 .palette-item { display: flex; align-items: center; gap: var(--s3); min-height: 44px; padding: 0 var(--s2); border-radius: var(--r-sm); cursor: pointer; font-size: 15px; }
 .palette-item[aria-selected="true"] { background: var(--surface-2); }
@@ -367,6 +365,29 @@ body.palette-open { overflow: hidden; }
 
 @keyframes wait { 50% { opacity: 0.55; } }
 
+/* ---------- Touch and pointer ---------- */
+/* Controls fire on tap without the double-tap wait, and a long press does not select their label. */
+button, a, select, summary, [role="button"] { touch-action: manipulation; }
+button, .btn, .chip, .seg-btn, .tab, .nav-link, summary { -webkit-user-select: none; user-select: none; }
+
+/* Hover styles only for a mouse or trackpad, so a tap never leaves a control stuck in its hover look. */
+@media (hover: hover) and (pointer: fine) {
+  .btn-primary:hover { background: color-mix(in srgb, var(--accent) 88%, var(--ink)); }
+  .btn-secondary:hover { background: var(--surface-2); }
+  .icon-button:hover { background: var(--surface-2); color: var(--ink); }
+  .site-link:hover { color: var(--ink); }
+  .footer-inner a:hover { color: var(--ink); }
+  .nav-link:hover { background: var(--surface-2); color: var(--ink); }
+}
+
+/* Fingers need 44px targets and 16px fields (iOS zooms into anything smaller). */
+@media (pointer: coarse) {
+  .btn, .seg-btn, .chip, .select, .search-trigger, .skip-link { min-height: 44px; }
+  .chip { min-width: 44px; }
+  .icon-button { width: 44px; height: 44px; }
+  .select, .input { font-size: 16px; }
+}
+
 /* ---------- Responsive ---------- */
 @media (max-width: 1100px) {
   .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -380,16 +401,17 @@ body.palette-open { overflow: hidden; }
   /* Phones and small tablets: no sidebar. A top bar for search and theme, tabs at the bottom. */
   .app { display: block; }
   .sidebar { display: none; }
-  .mobile-bar { position: sticky; top: 0; z-index: 20; display: flex; align-items: center; gap: var(--s1); padding: var(--s2) var(--s4); border-bottom: 1px solid var(--line); background: var(--bg); }
+  .mobile-bar { position: sticky; top: 0; z-index: 20; display: flex; align-items: center; gap: var(--s1); padding: calc(var(--s2) + env(safe-area-inset-top, 0px)) calc(var(--s4) + env(safe-area-inset-right, 0px)) var(--s2) calc(var(--s4) + env(safe-area-inset-left, 0px)); border-bottom: 1px solid var(--line); background: var(--bg); }
   .mobile-bar .brand { margin-right: auto; }
   .tabbar {
     position: fixed; inset: auto 0 0 0; z-index: 30; display: grid; grid-template-columns: repeat(4, 1fr);
+    padding: 0 env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px);
     border-top: 1px solid var(--line); background: var(--surface);
   }
   .tab { display: grid; justify-items: center; align-content: center; gap: 2px; min-height: 56px; color: var(--muted); font-size: 12px; font-weight: 500; }
   .tab.active { color: var(--accent); }
   .tab .icon { width: 22px; height: 22px; }
-  .content { padding: var(--s6) var(--s4) calc(56px + var(--s12)); }
+  .content { padding: var(--s6) calc(var(--s4) + env(safe-area-inset-right, 0px)) calc(56px + var(--s12) + env(safe-area-inset-bottom, 0px)) calc(var(--s4) + env(safe-area-inset-left, 0px)); }
 
   .hero, .feature, .how { grid-template-columns: minmax(0, 1fr); gap: var(--s8); }
   .feature:nth-child(even) { grid-template-columns: minmax(0, 1fr); }

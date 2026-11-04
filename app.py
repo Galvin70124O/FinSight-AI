@@ -1,7 +1,7 @@
 import os
 import logging
 from datetime import date
-from flask import Flask, flash, redirect, request, url_for
+from flask import Flask, flash, redirect, render_template, request, url_for
 from flask_wtf.csrf import CSRFError, CSRFProtect
 
 from blueprints.auth import auth_bp
@@ -42,6 +42,10 @@ def create_app(test_config: dict | None = None) -> Flask:
         flash("Your session expired or the form was out of date. Please try again.", "danger")
         # Send people back to the form they submitted (logout has no form page).
         return redirect(url_for("main.index") if request.endpoint == "auth.logout" else request.path)
+
+    @app.errorhandler(404)
+    def handle_not_found(_error):
+        return render_template("404.html"), 404
 
     @app.errorhandler(413)
     def handle_too_large(_error):
