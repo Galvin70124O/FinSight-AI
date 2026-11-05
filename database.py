@@ -87,6 +87,14 @@ CREATE TABLE IF NOT EXISTS column_mappings (
     FOREIGN KEY (user_id) REFERENCES users (id)
 );
 
+-- Recent sign-in and sign-up tries, to slow down password guessing: a key such as "login-ip:203.0.113.5"
+-- or "login-user:asha" and a time. Rows older than 15 minutes are deleted at the next try.
+CREATE TABLE IF NOT EXISTS auth_attempts (
+    key TEXT NOT NULL,
+    attempted_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_auth_attempts_key ON auth_attempts(key, attempted_at);
+
 CREATE TABLE IF NOT EXISTS migrations (
     name TEXT PRIMARY KEY,
     applied_at TEXT NOT NULL
@@ -152,6 +160,12 @@ CREATE TABLE IF NOT EXISTS column_mappings (
     updated_at TEXT NOT NULL,
     PRIMARY KEY (user_id, header_key)
 );
+
+CREATE TABLE IF NOT EXISTS auth_attempts (
+    key TEXT NOT NULL,
+    attempted_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_auth_attempts_key ON auth_attempts(key, attempted_at);
 
 ALTER TABLE transactions ADD COLUMN IF NOT EXISTS merchant_key TEXT;
 

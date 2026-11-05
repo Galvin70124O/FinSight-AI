@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import math
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Any
@@ -247,6 +248,38 @@ def claim_import_token(db, user_id: int, token: str) -> bool:
         db.rollback()
         return False
     return True
+
+
+ATTEMPT_LIMIT = 5  # sign-in or sign-up tries per username and per address...
+ATTEMPT_WINDOW = timedelta(minutes=15)  # ...in this long
+
+
+def attempt_wait(db, keys: list[str]) -> int:
+    """Seconds until one more try is allowed for every key ("login-ip:203.0.113.5"), 0 when it is allowed now.
+    The fifth most recent try in the window decides: once it is 15 minutes old, the limit lifts."""
+    now = datetime.now(timezone.utc)
+    db.execute("DELETE FROM auth_attempts WHERE attempted_at < ?", ((now - ATTEMPT_WINDOW).isoformat(timespec="microseconds"),))
+    db.commit()
+    wait = 0.0
+    for key in keys:
+        row = db.execute(
+            "SELECT attempted_at FROM auth_attempts WHERE key = ? ORDER BY attempted_at DESC LIMIT 1 OFFSET ?", (key, ATTEMPT_LIMIT - 1)
+        ).fetchone()
+        if row is not None:
+            wait = max(wait, (datetime.fromisoformat(row["attempted_at"]) + ATTEMPT_WINDOW - now).total_seconds())
+    return math.ceil(wait)
+
+
+def record_attempt(db, keys: list[str]) -> None:
+    """Count one try against each key. Kept in the database so every worker process sees the same count."""
+    now = datetime.now(timezone.utc).isoformat(timespec="microseconds")  # one width, so the text sorts by time
+    db.executemany("INSERT INTO auth_attempts (key, attempted_at) VALUES (?, ?)", [(key, now) for key in keys])
+    db.commit()
+
+
+def clear_attempts(db, key: str) -> None:
+    db.execute("DELETE FROM auth_attempts WHERE key = ?", (key,))
+    db.commit()
 
 
 def get_category_overrides(db, user_id: int) -> dict[str, str]:
