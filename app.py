@@ -1,7 +1,8 @@
+import io
 import os
 import logging
 from datetime import date
-from flask import Flask, flash, jsonify, redirect, render_template, request, url_for
+from flask import Flask, Request, flash, jsonify, redirect, render_template, request, url_for
 from flask_wtf.csrf import CSRFError, CSRFProtect
 
 from blueprints.auth import auth_bp
@@ -13,9 +14,18 @@ from utils import CSVValidationError, format_day, format_inr, group_digits, plur
 csrf = CSRFProtect()
 
 
+class InMemoryRequest(Request):
+    """Keeps uploaded files in memory. Werkzeug would move any upload over 500 KB into a temporary file on
+    disk; MAX_CONTENT_LENGTH (2 MB) still caps how much is held."""
+
+    def _get_file_stream(self, total_content_length, content_type, filename=None, content_length=None):
+        return io.BytesIO()
+
+
 def create_app(test_config: dict | None = None) -> Flask:
     """Application factory for FinSight AI."""
     app = Flask(__name__, instance_relative_config=True)
+    app.request_class = InMemoryRequest
     app.config.from_object(Config)
     if test_config:
         app.config.update(test_config)

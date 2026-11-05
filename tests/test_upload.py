@@ -51,6 +51,18 @@ def test_file_over_size_limit_is_rejected(client, db, logged_in):
     assert count(db) == 0
 
 
+def test_uploads_over_500_kb_stay_in_memory(client, db, logged_in, monkeypatch):
+    import werkzeug.formparser
+
+    def no_disk(*args, **kwargs):
+        raise AssertionError("the upload was spooled to a temporary file on disk")
+
+    monkeypatch.setattr(werkzeug.formparser, "SpooledTemporaryFile", no_disk)
+    page = upload(client, (b"a" * 99 + b"\n") * 7_000).get_data(as_text=True)  # 700 KB
+    assert "find the header row" in page
+    assert count(db) == 0
+
+
 def test_unreadable_file_shows_friendly_message(client, db, logged_in):
     page = upload(client, b"\xff\xfe\x00garbage\x00\x81").get_data(as_text=True)
     assert "could not be read as a CSV" in page or "Missing required columns" in page
