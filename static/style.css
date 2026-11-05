@@ -361,6 +361,7 @@ svg { flex: none; }
 .form-actions { display: flex; justify-content: flex-end; gap: var(--s2); }
 .columns { margin-top: var(--s8); }
 .columns h2 { margin-bottom: var(--s3); }
+.columns > .sub { max-width: 72ch; margin-bottom: var(--s4); }
 
 .how-categories { margin-top: var(--s8); }
 .how-categories h2 { margin-bottom: var(--s2); }

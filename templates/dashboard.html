@@ -20,7 +20,7 @@
     </div>
     {% if transactions %}
     <div class="page-actions">
-      <a class="btn btn-primary" href="{{ url_for('main.upload') }}">{{ icon('upload') }}<span>Import a CSV</span></a>
+      <a class="btn btn-primary" href="{{ url_for('main.upload') }}">{{ icon('upload') }}<span>Import a statement</span></a>
     </div>
     {% endif %}
   </header>
@@ -299,9 +299,9 @@
 {% else %}
 <section class="empty-state" aria-labelledby="emptyTitle">
   <h2 id="emptyTitle">No transactions yet</h2>
-  <p>Upload a CSV from your bank or expense app to see your balance, where your money goes and a forecast for next month. Want to look around first? Load 8 months of sample transactions; you can upload your own later.</p>
+  <p>Upload a statement from your bank (CSV or Excel), or a CSV from your expense app, to see your balance, where your money goes and a forecast for next month. Want to look around first? Load 8 months of sample transactions; you can upload your own later.</p>
   <div class="page-actions">
-    <a class="btn btn-primary" href="{{ url_for('main.upload') }}">{{ icon('upload') }}<span>Import a CSV</span></a>
+    <a class="btn btn-primary" href="{{ url_for('main.upload') }}">{{ icon('upload') }}<span>Import a statement</span></a>
     <form method="post" action="{{ url_for('main.load_demo_data') }}" id="demoForm">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <button class="btn btn-secondary" type="submit">Load sample data</button>

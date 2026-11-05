@@ -22,8 +22,8 @@
   {% if not merchant_count %}
   <section class="empty-state" aria-labelledby="emptyTitle">
     <h2 id="emptyTitle">No transactions yet</h2>
-    <p>Import a CSV, or load the sample data from the overview. Your merchants and their categories appear here.</p>
-    <div class="page-actions"><a class="btn btn-primary" href="{{ url_for('main.upload') }}">{{ icon('upload') }}<span>Import a CSV</span></a></div>
+    <p>Import a statement, or load the sample data from the overview. Your merchants and their categories appear here.</p>
+    <div class="page-actions"><a class="btn btn-primary" href="{{ url_for('main.upload') }}">{{ icon('upload') }}<span>Import a statement</span></a></div>
   </section>
   {% else %}
   <form method="get" action="{{ url_for('main.categories') }}" class="cat-search" role="search">

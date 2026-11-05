@@ -148,5 +148,5 @@ def delete_account():
 
     delete_user(get_db(), user.id)
     session.clear()
-    flash("Your account, transactions, insights and category corrections have been deleted.", "success")
+    flash("Your account, transactions, insights, category corrections and saved column choices have been deleted.", "success")
     return redirect(url_for("main.index"))

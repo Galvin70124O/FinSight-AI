@@ -36,7 +36,7 @@ REVIEW_MAX_AGE = 3600  # seconds a review form stays valid
 MERCHANT_ROWS_PAGE = 20  # transactions shown per merchant on the Categories page, then "Show more"
 ROWS_SHOWN_PER_MERCHANT = 10  # enough to recognise a merchant; keeps a 2 MB file's review page light
 TOO_MANY_ROWS = (
-    "This file has too many rows to review in one go. Split it into smaller CSV files (for example one per "
+    "This file has too many rows to review in one go. Split it into smaller files (for example one per "
     "quarter, each with the header row) and upload them one at a time. Rows you have already imported are skipped."
 )
 COLUMNS_TOO_BIG = (
@@ -176,7 +176,7 @@ def upload():
             return redirect(url_for("main.upload"))
         except Exception:
             logger.exception("CSV import failed for user %s", session["user_id"])
-            flash("Import failed. Please check that the file matches the CSV format and try again.", "danger")
+            flash("Import failed. Check that the file is a bank statement or a CSV with the columns listed below, and try again.", "danger")
             return redirect(url_for("main.upload"))
 
     return render_template("upload.html")
