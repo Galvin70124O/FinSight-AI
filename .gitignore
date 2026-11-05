@@ -27,3 +27,6 @@ graphify-out/
 
 # Local drafts, not part of the app
 Claude outputs/
+
+# Design detector settings (Impeccable), per machine
+.impeccable/
