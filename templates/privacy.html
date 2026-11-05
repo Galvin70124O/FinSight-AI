@@ -4,9 +4,9 @@
 {% macro body() %}
 <article class="legal" aria-labelledby="privacyTitle">
   <h1 class="page-title" id="privacyTitle">Privacy</h1>
-  <p class="sub">Last updated 4 November 2026</p>
+  <p class="sub">Last updated 5 November 2026</p>
 
-  <p>FinSight AI shows you where your money goes. To do that it stores your account, the transactions you import and the category choices you make, and nothing else about you. This page says exactly what that is.</p>
+  <p>FinSight AI shows you where your money goes. To do that it stores your account, the transactions you import and the category and column choices you make. To stop password guessing, it also keeps sign-in tries for a short time. This page says exactly what that is.</p>
 
   <h2>What we store, and why</h2>
   <ul>
@@ -14,20 +14,22 @@
     <li><strong>Your transactions:</strong> for each row you import, the date, category, amount, type (income or expense) and description, plus the name of the file it came from. These are what the overview is built from.</li>
     <li><strong>Your insights:</strong> the forecast, unusual transactions and health score worked out from your transactions, saved so the overview loads quickly. They are recalculated whenever your transactions change.</li>
     <li><strong>Your category corrections:</strong> when you change a merchant’s category and ask FinSight to remember it (say, ZOMATO to Groceries), the merchant name and the category you chose are saved for your account, so your next import uses your choice. On import and on the Categories page, remembering is ticked for businesses and unticked for transfers to people, and changing a single transaction is never remembered. Only your account uses them.</li>
+    <li><strong>Your column choices:</strong> when FinSight asks which column of a bank statement holds the date, the description and the money, your answer is saved for your account, so the next statement with the same columns imports straight away. What is saved is a fingerprint of the row of column names (a one-way code, not the names themselves) and what each column holds. Nothing from the rows of the statement is saved this way, and only your account uses it.</li>
+    <li><strong>Sign-in and sign-up tries:</strong> to stop password guessing, each failed sign-in keeps the username that was typed and the IP address it came from, and so does each sign-up try. They are not linked to your account. Failed sign-ins older than 15 minutes and sign-up tries older than an hour are deleted whenever anyone next signs in or signs up, and signing in successfully clears that username’s failed tries straight away.</li>
     <li><strong>A receipt for each import:</strong> a random code and the time, so pressing Save twice cannot import the same rows twice. It says nothing about the rows themselves. Receipts older than a day are cleared whenever anyone saves an import.</li>
   </ul>
 
-  <h2>Your CSV file</h2>
-  <p>An uploaded CSV is read in memory and is never saved on disk. Only the rows inside it are stored, as described above, with a cleaned-up copy of the file name as a label. Rows you have already imported are skipped.</p>
-  <p>If some rows have no category, you see the suggested categories before anything is stored. Until you press Save, the rows wait only in that page in your browser, sealed with a signature so they cannot be changed on the way back, and they expire after an hour. If you leave the page instead, nothing from the file is kept.</p>
+  <h2>Your statement file</h2>
+  <p>An uploaded file, CSV or Excel, is read in memory and is never saved on disk. Only the rows inside it are stored, as described above, with a cleaned-up copy of the file name as a label. Rows you have already imported are skipped.</p>
+  <p>If FinSight can’t tell which column of a statement is which, it asks you first, and if some rows have no category, you see the suggested categories before anything is stored. Until you answer or press Save, the rows wait only in that page in your browser, sealed with a signature so they cannot be changed on the way back, and they expire after an hour. If you leave the page instead, nothing from the file is kept.</p>
 
   <h2>How the “AI” works</h2>
   <p>There is no outside AI service. The forecast, the unusual-transaction check and the health score are small statistical calculations (a straight-line trend and comparisons with the usual amount in each category) that run on our own server, separately for each account. Suggested categories come from your own corrections, a fixed list of keywords, and a small model that was trained once on made-up example descriptions and ships with the app. Your data is not sent anywhere for analysis and is not used to train anything.</p>
 
   <h2>Who else receives your data</h2>
   <ul>
-    <li><strong>Render</strong> hosts the app. Every page you open passes through Render’s servers, which see your IP address and keep request logs under Render’s own policy.</li>
-    <li><strong>Neon</strong> runs the Postgres database where your account, transactions, insights and category corrections are stored.</li>
+    <li><strong>Render</strong> hosts the app. Every page you open passes through Render’s servers, which see your IP address and keep request logs under Render’s own policy. While we check a new release, FinSight can also write the IP address of each sign-in attempt to those logs.</li>
+    <li><strong>Neon</strong> runs the Postgres database where your account, transactions, insights, category corrections, column choices and sign-in tries are stored.</li>
   </ul>
   <p>That is the full list. Fonts and charts are served from FinSight itself, and there are no analytics, advertising or tracking scripts.</p>
 
@@ -35,10 +37,10 @@
   <p>One cookie keeps you signed in. It is signed, cannot be read by scripts on the page, and is only sent over HTTPS on the live site. Your choice of light or dark theme is saved in your browser and never sent to us.</p>
 
   <h2>How long we keep it</h2>
-  <p>Until you delete your account. Apart from import receipts (see above), nothing expires automatically.</p>
+  <p>Until you delete your account. Apart from import receipts and sign-in and sign-up tries (see above), nothing expires automatically.</p>
 
   <h2>Getting your data, and deleting it</h2>
-  <p>Your transactions are the CSV files you uploaded, so you already have a copy; FinSight does not have an export button yet. To delete everything, sign in, open <strong>Import a CSV</strong> and use <strong>Delete your account</strong> at the bottom of the page. Your account, every transaction, your insights, your category corrections and your import receipts are deleted straight away. Render’s request logs expire under Render’s own schedule.</p>
+  <p>Your transactions are the files you uploaded, so you already have a copy; FinSight does not have an export button yet. To delete everything, sign in, open <strong>Import a statement</strong> and use <strong>Delete your account</strong> at the bottom of the page. Your account, every transaction, your insights, your category corrections, your saved column choices and your import receipts are deleted straight away. Render’s request logs expire under Render’s own schedule.</p>
 </article>
 {% endmacro %}
 {% block content %}{{ body() }}{% endblock %}
