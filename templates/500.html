@@ -1,0 +1,14 @@
+{% extends 'base.html' %}
+{% block title %}Something went wrong · FinSight AI{% endblock %}
+{% block description %}Something went wrong on FinSight AI's side. Nothing you saved was lost.{% endblock %}
+{% macro body() %}
+<section class="not-found" aria-labelledby="errorTitle">
+  <h1 class="page-title" id="errorTitle">Something went wrong on our side</h1>
+  <p>Nothing you saved was lost. Try again in a moment.</p>
+  <div class="page-actions">
+    <a class="btn btn-primary" href="{{ url_for('main.index') }}">{{ 'Go to your overview' if session.get('user_id') else 'Go to the home page' }}</a>
+  </div>
+</section>
+{% endmacro %}
+{% block content %}{{ body() }}{% endblock %}
+{% block public %}{{ body() }}{% endblock %}

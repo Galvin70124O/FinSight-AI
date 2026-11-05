@@ -65,6 +65,11 @@ def create_app(test_config: dict | None = None) -> Flask:
     def handle_not_found(_error):
         return render_template("404.html"), 404
 
+    @app.errorhandler(500)
+    def handle_server_error(_error):
+        # Flask has already logged the exception; the page says nothing about it.
+        return render_template("500.html"), 500
+
     @app.errorhandler(413)
     def handle_too_large(_error):
         limit_mb = app.config["MAX_CONTENT_LENGTH"] // (1024 * 1024)

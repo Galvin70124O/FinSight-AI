@@ -52,3 +52,19 @@ def test_privacy_and_terms_are_public_and_linked(client):
     for path in ("/", "/register"):
         html = client.get(path).get_data(as_text=True)
         assert 'href="/privacy"' in html and 'href="/terms"' in html
+
+
+def test_an_unexpected_error_shows_a_friendly_page_without_details(app, client, logged_in, monkeypatch):
+    import blueprints.main
+
+    def broken(*args, **kwargs):
+        raise RuntimeError("secret detail postgres://finsight:hunter2@db")
+
+    monkeypatch.setattr(blueprints.main, "get_user_transactions", broken)
+    app.config["PROPAGATE_EXCEPTIONS"] = False  # TESTING re-raises errors; production shows the page
+    response = client.get("/dashboard")
+    page = response.get_data(as_text=True)
+    assert response.status_code == 500
+    assert "Something went wrong on our side" in page and "Nothing you saved was lost." in page
+    assert 'href="/"' in page
+    assert not any(leak in page for leak in ("secret detail", "hunter2", "RuntimeError", "Traceback"))
