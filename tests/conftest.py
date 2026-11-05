@@ -1,3 +1,4 @@
+import io
 import os
 import re
 import sqlite3
@@ -82,3 +83,35 @@ def register_and_login(client, username="asha", password="correct-horse-battery"
 @pytest.fixture
 def logged_in(client):
     return register_and_login(client)
+
+
+def xlsx_bytes(rows) -> bytes:
+    """An .xlsx workbook built in memory, one list per row (None leaves a cell blank)."""
+    from openpyxl import Workbook
+
+    book = Workbook()
+    for row in rows:
+        book.active.append(row)
+    buffer = io.BytesIO()
+    book.save(buffer)
+    return buffer.getvalue()
+
+
+def xls_bytes(rows) -> bytes:
+    """An old-style .xls workbook built in memory; datetime values become real Excel date cells."""
+    from datetime import date
+
+    import xlwt
+
+    book = xlwt.Workbook()
+    sheet = book.add_sheet("Statement")
+    date_style = xlwt.easyxf(num_format_str="DD/MM/YYYY")
+    for r, row in enumerate(rows):
+        for c, value in enumerate(row):
+            if isinstance(value, date):
+                sheet.write(r, c, value, date_style)
+            elif value is not None:
+                sheet.write(r, c, value)
+    buffer = io.BytesIO()
+    book.save(buffer)
+    return buffer.getvalue()
