@@ -20,7 +20,7 @@ from ml.categorise import CATEGORIES, UNCATEGORISED, categorise, looks_like_pers
 from ml.pipeline import INSIGHTS_VERSION, compute_insights
 from ml.statement_parser import StatementError
 from models import (
-    claim_import_token, get_cached_insights, get_category_overrides, get_user_categories, get_user_transactions,
+    claim_import_token, get_cached_insights, get_category_overrides, get_column_mapping, get_user_categories, get_user_transactions,
     clear_insights, imported_signatures, merchant_rows, recategorise, restore_categories, save_category_overrides, save_insights, save_transactions, transaction_signature,
 )
 from utils import (
@@ -151,7 +151,10 @@ def upload():
                 if own_columns:  # our format with columns missing: name them, as before
                     return _import_finsight_csv(db, data, filename)
                 raise
-            result = statement_parser.convert(layout, statement_parser.guess_roles(layout))
+            mapping = get_column_mapping(db, session["user_id"], layout.key)  # this user's own, for this header
+            if not mapping or len(mapping[0]) != layout.width:
+                mapping = (statement_parser.guess_roles(layout), None)
+            result = statement_parser.convert(layout, *mapping)
             if not result.ok:
                 if result.date_example:
                     text, day_first, month_first = result.date_example

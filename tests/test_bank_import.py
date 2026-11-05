@@ -5,7 +5,9 @@ from pathlib import Path
 
 import pytest
 
-from conftest import csrf_token, xls_bytes, xlsx_bytes
+from conftest import csrf_token, register_and_login, xls_bytes, xlsx_bytes
+from ml.statement_parser import locate, read_grid
+from models import delete_user, get_column_mapping, save_column_mapping
 from test_import_review import review_form
 
 FIXTURES = Path(__file__).parent / "fixtures" / "statements"
@@ -84,3 +86,58 @@ def test_a_statement_that_needs_checking_is_not_imported(client, db, logged_in):
     page = upload(client, b"Account,XXXX1234\n\nDate,Narration,Debit,Credit\n31/02/2026,Groceries,500,\n", "s.csv")
     assert "Row 4: &#39;31/02/2026&#39; is not a valid date." in page
     assert saved(db, logged_in) == []
+
+
+UNKNOWN = b"My bank export\n\nWhen,What,Money out,Money in\n25/10/2026,Groceries,500,\n26/10/2026,Salary,,9000\n"
+UNKNOWN_ROLES = ["date", "description", "debit", "credit"]
+AMBIGUOUS = b"Date,Description,Debit,Credit,Balance\n03/04/2026,Groceries,500,,100\n05/04/2026,Salary,,9000,200\n"
+
+
+def key_of(content: bytes) -> str:
+    return locate(read_grid(content, "s.csv")).key
+
+
+def test_a_remembered_mapping_imports_the_same_layout_without_asking(client, db, logged_in):
+    assert "Pick the Date column." in upload(client, UNKNOWN, "s.csv")
+    save_column_mapping(db, logged_in, key_of(UNKNOWN), UNKNOWN_ROLES, None)
+    page = upload(client, UNKNOWN, "s.csv")
+    assert "Read 2 transactions from rows 4–5 (Generic layout)." in page and "Check the categories" in page
+
+
+def test_a_remembered_mapping_also_settles_ambiguous_dates(client, db, logged_in):
+    assert "could be 3 Apr 2026 or 4 Mar 2026" in upload(client, AMBIGUOUS, "s.csv")
+    save_column_mapping(db, logged_in, key_of(AMBIGUOUS), ["date", "description", "debit", "credit", "ignore"], "month")
+    page = upload(client, AMBIGUOUS, "s.csv")
+    assert "Read 2 transactions" in page and "4 Mar 2026" in page and "4 May 2026" in page
+
+
+def test_one_users_mapping_is_never_used_for_another(app, db):
+    asha, ravi = app.test_client(), app.test_client()
+    asha_id, ravi_id = register_and_login(asha, "asha"), register_and_login(ravi, "ravi")
+    save_column_mapping(db, asha_id, key_of(UNKNOWN), UNKNOWN_ROLES, None)
+    assert "Read 2 transactions" in upload(asha, UNKNOWN, "s.csv")
+    ravi_page = upload(ravi, UNKNOWN, "s.csv")
+    assert "Pick the Date column." in ravi_page and "Read 2 transactions" not in ravi_page
+    assert get_column_mapping(db, ravi_id, key_of(UNKNOWN)) is None
+
+
+def test_a_mapping_for_a_different_number_of_columns_is_not_used(client, db, logged_in):
+    save_column_mapping(db, logged_in, key_of(UNKNOWN), UNKNOWN_ROLES + ["ignore"], None)
+    assert "Pick the Date column." in upload(client, UNKNOWN, "s.csv")
+
+
+def test_saving_a_mapping_again_replaces_it_and_stores_no_statement_text(db, logged_in):
+    save_column_mapping(db, logged_in, key_of(UNKNOWN), ["ignore"] * 4, None)
+    save_column_mapping(db, logged_in, key_of(UNKNOWN), UNKNOWN_ROLES, "day")
+    assert get_column_mapping(db, logged_in, key_of(UNKNOWN)) == (UNKNOWN_ROLES, "day")
+    stored = [tuple(row) for row in db.execute("SELECT * FROM column_mappings")]
+    assert len(stored) == 1 and not any(word in repr(stored) for word in ("When", "Money", "Groceries", "500"))
+
+
+def test_deleting_an_account_removes_only_its_mappings(app, db):
+    asha_id, ravi_id = register_and_login(app.test_client(), "asha"), register_and_login(app.test_client(), "ravi")
+    for user_id in (asha_id, ravi_id):
+        save_column_mapping(db, user_id, key_of(UNKNOWN), UNKNOWN_ROLES, None)
+    delete_user(db, asha_id)
+    assert get_column_mapping(db, asha_id, key_of(UNKNOWN)) is None
+    assert get_column_mapping(db, ravi_id, key_of(UNKNOWN)) == (UNKNOWN_ROLES, None)

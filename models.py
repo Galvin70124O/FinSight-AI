@@ -272,6 +272,27 @@ def save_category_overrides(db, user_id: int, overrides: dict[str, str]) -> None
     db.commit()
 
 
+def get_column_mapping(db, user_id: int, header_key: str) -> tuple[list[str], str | None] | None:
+    """The column roles this user confirmed for statements with this header row, and the day/month order."""
+    row = db.execute(
+        "SELECT roles, date_order FROM column_mappings WHERE user_id = ? AND header_key = ?", (user_id, header_key)
+    ).fetchone()
+    return (json.loads(row["roles"]), row["date_order"]) if row else None
+
+
+def save_column_mapping(db, user_id: int, header_key: str, roles: list[str], date_order: str | None) -> None:
+    """Remember a confirmed mapping for this user: the header row's fingerprint and one role per column only."""
+    db.execute(
+        """
+        INSERT INTO column_mappings (user_id, header_key, roles, date_order, updated_at) VALUES (?, ?, ?, ?, ?)
+        ON CONFLICT (user_id, header_key) DO UPDATE SET roles = excluded.roles, date_order = excluded.date_order,
+            updated_at = excluded.updated_at
+        """,
+        (user_id, header_key, json.dumps(roles), date_order, datetime.now(timezone.utc).isoformat(timespec="seconds")),
+    )
+    db.commit()
+
+
 def merchant_rows(db, user_id: int, key: str, limit: int | None = None) -> list:
     """This user's transactions from one merchant, newest first."""
     sql = "SELECT id, date, category, amount, type, description FROM transactions WHERE user_id = ? AND merchant_key = ? ORDER BY date DESC, id DESC"
@@ -315,9 +336,11 @@ def restore_categories(db, user_id: int, previous: dict[str, list[int]], merchan
 
 
 def delete_user(db, user_id: int) -> None:
-    """Delete a user and everything stored for them (transactions, insights, category corrections) in one commit."""
+    """Delete a user and everything stored for them (transactions, insights, category corrections, statement
+    column mappings) in one commit."""
     db.execute("DELETE FROM import_tokens WHERE user_id = ?", (user_id,))
     db.execute("DELETE FROM category_overrides WHERE user_id = ?", (user_id,))
+    db.execute("DELETE FROM column_mappings WHERE user_id = ?", (user_id,))
     db.execute("DELETE FROM user_insights WHERE user_id = ?", (user_id,))
     db.execute("DELETE FROM transactions WHERE user_id = ?", (user_id,))
     db.execute("DELETE FROM users WHERE id = ?", (user_id,))

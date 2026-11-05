@@ -75,6 +75,18 @@ CREATE TABLE IF NOT EXISTS import_tokens (
     FOREIGN KEY (user_id) REFERENCES users (id)
 );
 
+-- A statement layout the user mapped: a fingerprint of its header row and one role per column. Never the
+-- header text or any row of the statement.
+CREATE TABLE IF NOT EXISTS column_mappings (
+    user_id INTEGER NOT NULL,
+    header_key TEXT NOT NULL,
+    roles TEXT NOT NULL,
+    date_order TEXT,
+    updated_at TEXT NOT NULL,
+    PRIMARY KEY (user_id, header_key),
+    FOREIGN KEY (user_id) REFERENCES users (id)
+);
+
 CREATE TABLE IF NOT EXISTS migrations (
     name TEXT PRIMARY KEY,
     applied_at TEXT NOT NULL
@@ -130,6 +142,15 @@ CREATE TABLE IF NOT EXISTS import_tokens (
     token TEXT NOT NULL,
     created_at TEXT NOT NULL,
     PRIMARY KEY (user_id, token)
+);
+
+CREATE TABLE IF NOT EXISTS column_mappings (
+    user_id INTEGER NOT NULL REFERENCES users (id),
+    header_key TEXT NOT NULL,
+    roles TEXT NOT NULL,
+    date_order TEXT,
+    updated_at TEXT NOT NULL,
+    PRIMARY KEY (user_id, header_key)
 );
 
 ALTER TABLE transactions ADD COLUMN IF NOT EXISTS merchant_key TEXT;
