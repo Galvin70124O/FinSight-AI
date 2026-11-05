@@ -321,3 +321,27 @@ def test_the_layout_key_ignores_position_case_and_spacing_but_not_the_names():
     later = locate(csv_grid("Name,Asha\nBranch,Pune\n\nDATE, Narration ,Debit,Credit\n"))
     other = locate(csv_grid("Date,Narration,Withdrawal,Deposit\n"))
     assert first.key == later.key != other.key
+
+
+def test_a_wrapped_narration_with_a_summary_word_does_not_end_the_statement():
+    result = parse(csv_grid("Date,Narration,Debit,Credit\n25/10/2026,POS 4580XXXX,1500,\n,TOTAL ENERGIES PUNE,,\n"
+                            ",LEGEND MOTORS,,\n26/10/2026,UPI-ZOMATO,640,\n"))[1]
+    assert result.frame.Description.tolist() == ["POS 4580XXXX", "UPI-ZOMATO"] and result.skipped == 2
+
+
+def test_a_transaction_after_the_end_of_the_statement_is_reported_not_dropped():
+    after_blanks = parse(csv_grid("Date,Narration,Debit,Credit\n25/10/2026,Tea,20,\n\n\n\n27/10/2026,Rent,22000,\n"))[1]
+    assert after_blanks.errors == [
+        "Row 6 looks like a transaction, but the statement seemed to end at row 5 (a summary row or blank rows). "
+        "Remove the rows in between and upload again."]
+    after_total = parse(csv_grid("Date,Narration,Debit,Credit\n25/10/2026,Tea,20,\nTotal,,20,\n27/10/2026,Rent,22000,\n"))[1]
+    assert after_total.errors[0].startswith("Row 4 looks like a transaction, but the statement seemed to end at row 3")
+
+
+@pytest.mark.parametrize("saved, width, fitted", [
+    (["date", "description", "debit", "credit"], 5, ["date", "description", "debit", "credit", "ignore"]),
+    (["date", "description", "debit", "credit", "ignore"], 4, ["date", "description", "debit", "credit"]),
+    (["date", "description", "debit", "ignore", "credit"], 4, None),
+])
+def test_a_saved_mapping_is_fitted_to_a_file_with_a_stray_extra_column(saved, width, fitted):
+    assert statement_parser.fit_roles(saved, width) == fitted

@@ -343,6 +343,14 @@ def guess_roles(layout: Layout) -> list[str]:
     return roles
 
 
+def fit_roles(roles: list[str], width: int) -> list[str] | None:
+    """A saved mapping fitted to this file's width: next month's file may have a stray cell further right.
+    None when a chosen column is beyond this file's last column."""
+    if any(role != "ignore" for role in roles[width:]):
+        return None
+    return roles[:width] + ["ignore"] * (width - len(roles))
+
+
 def check_roles(roles: list[str], labels: list[str]) -> list[str]:
     """What is wrong with a mapping, worded for the mapping screen. Empty when it can be used."""
     if len(roles) != len(labels) or any(role not in ROLES for role in roles):
@@ -463,21 +471,25 @@ def convert(layout: Layout, roles: list[str], date_order: str | None = None) -> 
     column = {role: roles.index(role) for role in set(roles) - {"ignore"}}
     header_names = [_name(cell) for cell in layout.header]
     found = []  # (row number, date text, signed amount, description, category)
-    blanks, said_which_way = 0, False
+    blanks, said_which_way, end = 0, False, len(layout.rows)
     for offset, row in enumerate(layout.rows):
         number = layout.header_index + 2 + offset
         cells = row + [""] * (layout.width - len(row))
         if all(_SEPARATOR.match(cell) for cell in cells):
             blanks += 1
             if found and blanks >= 3:
+                end = offset
                 break
             continue
         blanks = 0
         if [_name(cell) for cell in cells[:len(header_names)]] == header_names:
             continue
         date_text = cells[column["date"]].strip()
-        if not _looks_like_date(date_text) and _SUMMARY.search(" ".join(_name(cell) for cell in cells)):
+        # Not the description: a wrapped narration such as "TOTAL ENERGIES" must not end the statement.
+        others = " ".join(_name(cell) for i, cell in enumerate(cells) if i != column["description"])
+        if not _looks_like_date(date_text) and _SUMMARY.search(others):
             if found:
+                end = offset
                 break
             result.skipped += 1
             continue
@@ -490,6 +502,15 @@ def convert(layout: Layout, roles: list[str], date_order: str | None = None) -> 
         said_which_way = said_which_way or money[1]
         found.append((number, date_text, money[0], cells[column["description"]].strip() or "No description",
                       cells[column["category"]].strip() if "category" in column else ""))
+    for offset in range(end + 1, len(layout.rows)):  # a transaction after the end must never vanish quietly
+        cells = layout.rows[offset] + [""] * (layout.width - len(layout.rows[offset]))
+        if _looks_like_date(cells[column["date"]]) and any(
+                (_amount(cells[column[role]]) or (0.0,))[0] for role in ("debit", "credit", "amount") if role in column):
+            result.problem(
+                f"Row {layout.header_index + 2 + offset} looks like a transaction, but the statement seemed to end at row "
+                f"{layout.header_index + 2 + end} (a summary row or blank rows). Remove the rows in between and upload again."
+            )
+            break
     if "amount" in column and "type" not in column and found and not said_which_way:
         result.problem(
             f"Every amount in {labels[column['amount']]} is positive and nothing says which are money in and which "
