@@ -82,7 +82,7 @@
 
 {# Change one transaction's category; never remembered for its merchant. #}
 {% macro row_category_form(tx_id, current, label, categories, own) -%}
-<form method="post" action="{{ url_for('main.change_transaction_category', transaction_id=tx_id) }}" class="row-edit" data-autosave>
+<form method="post" action="{{ url_for('main.change_transaction_category', transaction_id=tx_id) }}" class="row-edit" data-autosave autocomplete="off">
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
   {{ caller() if caller }}
   <label class="sr-only" for="rc{{ tx_id }}">Category for {{ label }}</label>

@@ -318,3 +318,11 @@ def test_the_page_script_gets_a_specific_error(client, db, logged_in):
     stale = client.post("/categories", data={"merchant": "ZOMATO", "category": "Groceries"}, headers=JSON)
     assert stale.status_code == 400 and "Reload the page" in stale.get_json()["error"]
     assert categories(db, logged_in) == [("UPI/ZOMATO LTD/412345678901", "Dining")]
+
+
+def test_auto_saving_forms_never_get_an_old_value_back_from_the_browser(client, db, logged_in):
+    # Regression: Firefox refills a form after a reload, so after Undo the select showed the category just undone.
+    add(db, logged_in, "UPI/ZOMATO LTD/412345678901", "Dining")
+    for path in ("/dashboard", "/categories"):
+        forms = re.findall(r"<form[^>]*data-autosave[^>]*>", client.get(path).get_data(as_text=True))
+        assert forms and all('autocomplete="off"' in form for form in forms), path
