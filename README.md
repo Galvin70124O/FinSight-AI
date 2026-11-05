@@ -43,9 +43,10 @@ To refresh them (and the pictures on the landing page), see
   [How categories are chosen](#how-categories-are-chosen)).
 - **Categories page** to fix categories later: every merchant with its
   current category, Uncategorized first and searchable. Change all of a
-  merchant's transactions at once (remembered for future imports), or open
-  it and change single transactions (not remembered). Single transactions
-  can also be changed from the overview's latest transactions.
+  merchant's transactions at once, or open it and change single
+  transactions. Picking a category saves it straight away, and a toast
+  offers Undo, which puts back every row's earlier category. Single
+  transactions can also be changed from the overview's latest transactions.
 - **Load sample data** on an empty overview: eight months of sample
   transactions loaded into your account only.
 - Balance, plus this month's income, spending and savings, each compared with
@@ -138,14 +139,16 @@ When rows have no category, FinSight suggests one per merchant and shows every
 suggestion on a review page before anything is saved. Three layers decide, in
 this order (`ml/categorise.py`):
 
-1. **Your corrections.** When you change a merchant's category on the review
-   page with "Remember" ticked, or change a merchant on the Categories page,
-   the merchant name and your category are saved for your account and always
-   win on later imports. They never affect another account. "Remember" is
-   ticked by default for businesses and unticked for transfers to people (a
-   P2A transfer, a personal UPI handle, or a name such as `RAHUL S`), since
-   next month's transfer to the same person may be for something else.
-   Changing a single transaction is never remembered.
+1. **Your corrections.** When you change a merchant's category with
+   "Remember" ticked (on the review page, or with "Change all to" on the
+   Categories page), the merchant name and your category are saved for your
+   account and always win on later imports. They never affect another
+   account. "Remember" is ticked by default for businesses and unticked for
+   transfers to people: a P2A transfer, a personal UPI handle, or a name such
+   as `RAHUL S` in a UPI, IMPS or NEFT description (a plain note such as
+   "Dinner out" counts as a business). Next month's transfer to the same
+   person may be for something else. Changing a single transaction is never
+   remembered.
 2. **Keyword rules.** The description is cleaned first: upper case; UPI, NEFT,
    IMPS, ACH and similar prefixes, reference and card numbers, dates, branch
    codes and the `@okaxis` part of UPI handles are removed. Then a fixed list of
