@@ -24,3 +24,6 @@ trained_models/
 
 # Local code-graph output (graphify)
 graphify-out/
+
+# Local drafts, not part of the app
+Claude outputs/
