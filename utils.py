@@ -173,8 +173,7 @@ def clean_transaction_dataframe(df: pd.DataFrame) -> pd.DataFrame:
     if df.empty:
         raise CSVValidationError("The uploaded CSV is empty.")
 
-    df = df.copy()
-    df.columns = [str(col).strip() for col in df.columns]
+    df = normalize_transaction_columns(df)  # a copy with " date " or "AMOUNT" named as the README promises
 
     missing_columns = [col for col in REQUIRED_COLUMNS if col not in df.columns]
     if missing_columns:

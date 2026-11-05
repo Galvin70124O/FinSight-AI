@@ -37,6 +37,12 @@ def test_non_csv_extension_is_rejected(client, db, logged_in):
     assert count(db) == 0
 
 
+def test_column_names_in_any_case_are_imported(client, db, logged_in):
+    page = upload(client, b" date ,CATEGORY,amount,Type,description\n2025-01-01,Food,250,Expense,Lunch\n").get_data(as_text=True)
+    assert "Imported 1 transaction." in page
+    assert count(db) == 1
+
+
 def test_missing_columns_are_reported(client, db, logged_in):
     page = upload(client, b"Date,Amount\n2025-01-02,250\n").get_data(as_text=True)
     assert "Missing required columns: Type, Description" in page
