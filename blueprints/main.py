@@ -32,6 +32,7 @@ main_bp = Blueprint("main", __name__)
 logger = logging.getLogger(__name__)
 
 REVIEW_MAX_AGE = 3600  # seconds a review form stays valid
+BANK_TYPE_WORDS = {"dr", "cr", "d", "c", "debit", "credit", "withdrawal", "deposit"}
 MERCHANT_ROWS_PAGE = 20  # transactions shown per merchant on the Categories page, then "Show more"
 ROWS_SHOWN_PER_MERCHANT = 10  # enough to recognise a merchant; keeps a 2 MB file's review page light
 TOO_MANY_ROWS = (
@@ -141,20 +142,20 @@ def upload():
         data = file.read()  # at most MAX_CONTENT_LENGTH (2 MB); Flask refuses anything bigger
         try:
             db = get_db()
-            own_columns = _finsight_columns(file.filename, data)
-            if {column.lower() for column in REQUIRED_COLUMNS} <= own_columns:  # our own format: its original path, unchanged
+            own_columns, dr_cr = _finsight_format(file.filename, data)
+            if {column.lower() for column in REQUIRED_COLUMNS} <= own_columns and not dr_cr:  # our own format: its original path
                 return _import_finsight_csv(db, data, filename)
             # A bank statement. The file's own name is used to tell its type and in messages about it.
+            grid = statement_parser.read_grid(data, file.filename)
             try:
-                layout = statement_parser.locate(statement_parser.read_grid(data, file.filename))
+                layout = statement_parser.locate(grid)
             except StatementError:
-                if own_columns:  # our format with columns missing: name them, as before
+                if len(own_columns) >= 2:  # our format with columns missing (Date,Amount): name them, as before
                     return _import_finsight_csv(db, data, filename)
                 raise
-            mapping = get_column_mapping(db, session["user_id"], layout.key)  # this user's own, for this header
-            if not mapping or len(mapping[0]) != layout.width:
-                mapping = (statement_parser.guess_roles(layout), None)
-            result = statement_parser.convert(layout, *mapping)
+            saved = get_column_mapping(db, session["user_id"], layout.key)  # this user's own, for this header row
+            roles = saved and statement_parser.fit_roles(saved[0], layout.width)
+            result = statement_parser.convert(layout, roles or statement_parser.guess_roles(layout), saved[1] if roles else None)
             if not result.ok:
                 if result.date_example:
                     text, day_first, month_first = result.date_example
@@ -173,12 +174,21 @@ def upload():
     return render_template("upload.html")
 
 
-def _finsight_columns(name: str, data: bytes) -> set[str]:
-    """FinSight's own column names (date, category, amount, type, description) in the first row of a CSV."""
+def _finsight_format(name: str, data: bytes) -> tuple[set[str], bool]:
+    """FinSight's own column names (date, category, amount, type, description) in the first row of a CSV, and
+    whether its Type column says Dr/Cr like a bank's: such a file goes to the statement reader, which knows those
+    words, Indian commas and day-first dates, instead of having those rows dropped."""
     if not name.lower().endswith(".csv"):
-        return set()
-    first_line = data[:4096].decode("utf-8-sig", "replace").splitlines()[:1]
-    return {cell.strip().lower() for row in csv.reader(first_line) for cell in row} & {column.lower() for column in COLUMNS}
+        return set(), False
+    rows = csv.reader(io.StringIO(data.decode("utf-8-sig", "replace")))
+    own: set[str] = set()
+    try:
+        header = [cell.strip().lower() for cell in next(rows, [])]
+        own = set(header) & {column.lower() for column in COLUMNS}
+        at = header.index("type") if "type" in own else None
+        return own, at is not None and any(len(row) > at and row[at].strip().lower() in BANK_TYPE_WORDS for row in rows)
+    except csv.Error:  # a field over csv's size limit: pandas reads our own format as before; others get a message
+        return own, False
 
 
 def _import_finsight_csv(db, data: bytes, filename: str):

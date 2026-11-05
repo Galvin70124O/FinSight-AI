@@ -121,9 +121,24 @@ def test_one_users_mapping_is_never_used_for_another(app, db):
     assert get_column_mapping(db, ravi_id, key_of(UNKNOWN)) is None
 
 
-def test_a_mapping_for_a_different_number_of_columns_is_not_used(client, db, logged_in):
+def test_a_mapping_fits_a_stray_extra_column_but_not_a_missing_one(client, db, logged_in):
     save_column_mapping(db, logged_in, key_of(UNKNOWN), UNKNOWN_ROLES + ["ignore"], None)
+    assert "Read 2 transactions" in upload(client, UNKNOWN, "s.csv")
+    save_column_mapping(db, logged_in, key_of(UNKNOWN), ["date", "description", "debit", "ignore", "credit"], None)
     assert "Pick the Date column." in upload(client, UNKNOWN, "s.csv")
+
+
+def test_a_csv_with_our_column_names_but_dr_and_cr_is_read_as_a_bank_statement(client, db, logged_in):
+    content = b'Date,Description,Amount,Type\n25/10/2026,UPI-BIGBASKET,"1,250.00",Dr\n26/10/2026,NEFT-SALARY,85000,Cr\n'
+    page = upload(client, content, "export.csv")
+    assert "Read 2 transactions from rows 2–3 (Generic layout)." in page and "Check the categories" in page
+
+
+def test_a_field_longer_than_csvs_limit_keeps_our_format_working_and_explains_a_statement(client, db, logged_in):
+    ours = upload(client, b"Date,Category,Amount,Type,Description\n2025-01-01,Food,1,Expense," + b"x" * 200_000 + b"\n", "s.csv")
+    assert "Imported 1 transaction." in ours
+    statement = upload(client, b"Date,Narration,Debit,Credit\n25/10/2026," + b"x" * 200_000 + b",5,\n", "s.csv")
+    assert "could not be read as a CSV" in statement and "Import failed" not in statement
 
 
 def test_saving_a_mapping_again_replaces_it_and_stores_no_statement_text(db, logged_in):
