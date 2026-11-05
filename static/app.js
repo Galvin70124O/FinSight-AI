@@ -221,8 +221,21 @@ document.addEventListener('DOMContentLoaded', () => {
     if (form.dataset.sent) { event.preventDefault(); return; }
     form.dataset.sent = 'true';
     const button = form.querySelector('[type="submit"]');
-    if (button) { button.setAttribute('aria-disabled', 'true'); button.textContent = 'Saving…'; }
+    if (button) {
+      button.dataset.label = button.textContent;
+      button.setAttribute('aria-disabled', 'true');
+      button.textContent = button.dataset.busy || 'Saving…';
+    }
   }));
+  // Back restores a sent page from the browser's cache as it was left: let its forms be sent again.
+  window.addEventListener('pageshow', (event) => {
+    if (!event.persisted) return;
+    document.querySelectorAll('form[data-sent]').forEach((form) => {
+      delete form.dataset.sent;
+      const button = form.querySelector('[type="submit"][data-label]');
+      if (button) { button.removeAttribute('aria-disabled'); button.textContent = button.dataset.label; }
+    });
+  });
 
   // ---------- Categories: filter merchants as you type (the Search button does the same on the server) ----------
   const merchantFilter = document.querySelector('[data-merchant-filter]');

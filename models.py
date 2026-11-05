@@ -8,7 +8,7 @@ from typing import Any
 import pandas as pd
 from werkzeug.security import check_password_hash, generate_password_hash
 
-from database import IntegrityError
+from database import IntegrityError, lock_user_writes
 from ml.categorise import merchant_key
 
 
@@ -104,6 +104,7 @@ def imported_signatures(db, user_id: int) -> set[tuple[str, float, str, str]]:
 
 def save_transactions(db, user_id: int, transactions_df, source_file: str | None = None) -> int:
     """Insert cleaned transaction rows into the database without duplicates."""
+    lock_user_writes(db, user_id)  # before reading: a second save of the same file waits, then skips these rows
     existing_keys = imported_signatures(db, user_id)
 
     new_rows = []

@@ -10,7 +10,7 @@
       <p class="sub">The file is read in memory and never saved on disk. Rows you have already imported are skipped.</p>
     </div>
   </header>
-  <form method="post" enctype="multipart/form-data" class="form">
+  <form method="post" enctype="multipart/form-data" class="form" data-once>
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <label class="dropzone" data-dropzone>
       <input class="dropzone-input" type="file" name="file" accept=".csv,.xlsx,.xls,text/csv" required aria-describedby="fileHint">
@@ -20,7 +20,7 @@
     </label>
     <div class="form-actions">
       <a class="btn btn-secondary" href="{{ url_for('main.dashboard') }}">Cancel</a>
-      <button class="btn btn-primary" type="submit">Import</button>
+      <button class="btn btn-primary" type="submit" data-busy="Importing…">Import</button>
     </div>
   </form>
 

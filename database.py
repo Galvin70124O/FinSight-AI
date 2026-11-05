@@ -228,6 +228,18 @@ def get_db():
     return g.db
 
 
+def lock_user_writes(db, user_id: int) -> None:
+    """Make another request saving rows for this user wait until this one commits, so it then sees these rows
+    (a double tap on Import saves once). The caller's commit releases the lock."""
+    if isinstance(db, sqlite3.Connection):
+        if not db.in_transaction:  # a review save has written its token already, so it holds the lock
+            db.execute("BEGIN IMMEDIATE")  # SQLite's write lock covers the whole file
+    else:
+        # NO KEY UPDATE, not UPDATE: an import token's foreign key holds KEY SHARE on this row, and two review
+        # saves each waiting to turn that into UPDATE would deadlock.
+        db.execute("SELECT id FROM users WHERE id = ? FOR NO KEY UPDATE", (user_id,))
+
+
 def close_db(_error: Exception | None = None) -> None:
     """Close the current database connection."""
     db = g.pop("db", None)

@@ -3,3 +3,5 @@ pytest>=8.0
 playwright>=1.48,<2
 # Writes the .xls test statement in memory; the app never imports it
 xlwt==1.3.0
+# An embedded Postgres for the double-import test (tests/test_double_import.py); those cases skip without it
+pgserver==0.1.4
