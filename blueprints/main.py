@@ -21,7 +21,8 @@ from ml.pipeline import INSIGHTS_VERSION, compute_insights
 from ml.statement_parser import StatementError
 from models import (
     claim_import_token, get_cached_insights, get_category_overrides, get_column_mapping, get_user_categories, get_user_transactions,
-    clear_insights, imported_signatures, merchant_rows, recategorise, restore_categories, save_category_overrides, save_insights, save_transactions, transaction_signature,
+    clear_insights, imported_signatures, merchant_rows, recategorise, restore_categories, save_category_overrides, save_column_mapping,
+    save_insights, save_transactions, transaction_signature,
 )
 from utils import (
     COLUMNS, REQUIRED_COLUMNS, CSVValidationError, plural, build_dashboard_payload, clean_transaction_dataframe,
@@ -37,6 +38,10 @@ ROWS_SHOWN_PER_MERCHANT = 10  # enough to recognise a merchant; keeps a 2 MB fil
 TOO_MANY_ROWS = (
     "This file has too many rows to review in one go. Split it into smaller CSV files (for example one per "
     "quarter, each with the header row) and upload them one at a time. Rows you have already imported are skipped."
+)
+COLUMNS_TOO_BIG = (
+    "This file is too big to match its columns in one go. Upload one month of it first, with the header row: "
+    "FinSight remembers the columns you pick, and the whole file then imports without this step."
 )
 
 
@@ -159,13 +164,11 @@ def upload():
                     return _import_finsight_csv(db, data, filename)
                 raise
             saved = get_column_mapping(db, session["user_id"], layout.key)  # this user's own, for this header row
-            roles = saved and statement_parser.fit_roles(saved[0], layout.width)
-            result = statement_parser.convert(layout, roles or statement_parser.guess_roles(layout), saved[1] if roles else None)
-            if not result.ok:
-                if result.date_example:
-                    text, day_first, month_first = result.date_example
-                    raise StatementError(f"Dates such as {text} could be {day_first} or {month_first}, and the file doesn't say which.")
-                raise StatementError(" ".join(result.errors))
+            fitted = saved and statement_parser.fit_roles(saved[0], layout.width)
+            roles = fitted or statement_parser.guess_roles(layout)
+            result = statement_parser.convert(layout, roles, saved[1] if fitted else None)
+            if not result.ok:  # the column screen, with the saved choice preselected when it still fits
+                return _columns(layout, roles, result, filename)
             flash(_read_message(layout, result), "info")
             return _import(db, session["user_id"], clean_transaction_dataframe(result.frame), filename)
         except (CSVValidationError, StatementError) as exc:
@@ -209,6 +212,63 @@ def _import_finsight_csv(db, data: bytes, filename: str):
     df = read_uploaded_csv(io.BytesIO(data))
     validate_uploaded_csv(df)
     return _import(db, session["user_id"], clean_transaction_dataframe(df), filename)
+
+
+def _columns_serializer() -> URLSafeTimedSerializer:
+    # As on the review page: the file's rows wait in the form, signed so they can't be altered, never on disk.
+    return URLSafeTimedSerializer(current_app.secret_key, salt="import-columns")
+
+
+def _columns(layout, roles: list[str], result, filename: str, date_order: str | None = None):
+    """Ask which column is which, showing what stopped the reader. map_columns() reads the answer."""
+    payload = _columns_serializer().dumps({"u": session["user_id"], "f": filename, "h": layout.header_index,
+                                           "g": [layout.header, *layout.rows]})
+    # The form posts the rows back with one short field per column; keep it under the request limit.
+    if len(payload) + 64 * layout.width > current_app.config["MAX_CONTENT_LENGTH"] - 4096:
+        flash(COLUMNS_TOO_BIG, "danger")
+        return redirect(url_for("main.upload"))
+    columns = []
+    for index, (label, role) in enumerate(zip(layout.labels, roles)):
+        cells = (row[index].strip() for row in layout.rows if index < len(row))
+        named = index < len(layout.header) and layout.header[index]
+        columns.append({"label": label if named else label[:1].upper() + label[1:],  # "Column E" on a line of its own
+                        "role": role, "samples": [cell for cell in cells if cell][:3]})
+    return render_template(
+        "import_columns.html", columns=columns, payload=payload, filename=filename, header_row=layout.header_index + 1,
+        errors=result.errors, more=result.error_count - len(result.errors), date_example=result.date_example,
+        date_order=date_order, fix_rows=any(error.startswith("Row ") for error in result.errors),
+    )
+
+
+@main_bp.route("/upload/columns", methods=["POST"])
+def map_columns():
+    """Read the statement again with the columns picked on the column screen, and remember them once it reads."""
+    user_id = session["user_id"]
+    try:
+        data = _columns_serializer().loads(request.form.get("payload", ""), max_age=REVIEW_MAX_AGE)
+    except BadSignature:  # also covers an expired form
+        data = None
+    if not data or data.get("u") != user_id:
+        flash("This page has expired or could not be read, so nothing was imported. Please upload the file again.", "danger")
+        return redirect(url_for("main.upload"))
+
+    layout = statement_parser.Layout(data["h"], data["g"][0], data["g"][1:])
+    roles = [request.form.get(f"role-{i}", "") for i in range(layout.width)]  # convert() checks every value
+    date_order = request.form.get("date_order") if request.form.get("date_order") in ("day", "month") else None
+    result = statement_parser.convert(layout, roles, date_order)
+    if not result.ok:
+        return _columns(layout, roles, result, data["f"], date_order)
+    db = get_db()
+    save_column_mapping(db, user_id, layout.key, roles, date_order)  # only a choice that reads the file
+    flash(_read_message(layout, result), "info")
+    try:
+        return _import(db, user_id, clean_transaction_dataframe(result.frame), data["f"])
+    except CSVValidationError as exc:
+        flash(str(exc), "danger")
+    except Exception:
+        logger.exception("Statement import failed for user %s", user_id)
+        flash("Import failed. Please check the file and try again.", "danger")
+    return redirect(url_for("main.upload"))
 
 
 def _read_message(layout, result) -> str:

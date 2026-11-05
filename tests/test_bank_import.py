@@ -1,7 +1,11 @@
-"""Bank statements through the upload page: read, then handed to the existing review and Save."""
+"""Bank statements through the upload page: read, then handed to the existing review and Save. When the reader
+needs help, the column screen asks which column is which and remembers the answer."""
 import csv
 import io
+import random
+import re
 from pathlib import Path
+from urllib.parse import urlencode
 
 import pytest
 
@@ -82,19 +86,118 @@ def test_files_that_are_not_statements_are_refused_with_a_specific_message(clien
     assert saved(db, logged_in) == []
 
 
-def test_a_statement_that_needs_checking_is_not_imported(client, db, logged_in):
-    page = upload(client, b"Account,XXXX1234\n\nDate,Narration,Debit,Credit\n31/02/2026,Groceries,500,\n", "s.csv")
-    assert "Row 4: &#39;31/02/2026&#39; is not a valid date." in page
-    assert saved(db, logged_in) == []
+def test_a_statement_that_needs_checking_shows_its_columns_and_saves_nothing(client, db, logged_in):
+    content = b"Account,XXXX1234\n\nDate,Narration,Debit,Credit\n31/02/2026,Groceries,500,\n"
+    page = upload(client, content, "s.csv")
+    assert "Match the columns" in page and "Row 4: &#39;31/02/2026&#39; is not a valid date." in page
+    assert saved(db, logged_in) == [] and get_column_mapping(db, logged_in, key_of(content)) is None
 
 
 UNKNOWN = b"My bank export\n\nWhen,What,Money out,Money in\n25/10/2026,Groceries,500,\n26/10/2026,Salary,,9000\n"
 UNKNOWN_ROLES = ["date", "description", "debit", "credit"]
 AMBIGUOUS = b"Date,Description,Debit,Credit,Balance\n03/04/2026,Groceries,500,,100\n05/04/2026,Salary,,9000,200\n"
+AMBIGUOUS_ROLES = ["date", "description", "debit", "credit", "ignore"]
 
 
 def key_of(content: bytes) -> str:
     return locate(read_grid(content, "s.csv")).key
+
+
+def mapping_form(page: str) -> dict[str, str]:
+    """The column screen's fields as a browser sends them: hidden fields, each column's chosen role, a ticked radio."""
+    fields = dict(re.findall(r'<input type="hidden" name="([^"]+)" value="([^"]*)"', page))
+    for name, body in re.findall(r'<select[^>]*name="(role-\d+)"[^>]*>(.*?)</select>', page, re.S):
+        fields[name] = re.search(r'<option value="([^"]*)" selected>', body).group(1)
+    fields.update(re.findall(r'<input type="radio" name="(date_order)" value="([^"]*)"[^>]*checked', page))
+    return fields
+
+
+def pick(page: str, roles: list[str], **extra) -> dict[str, str]:
+    return {**mapping_form(page), **{f"role-{i}": role for i, role in enumerate(roles)}, **extra}
+
+
+def test_columns_picked_on_the_screen_are_read_and_remembered_for_next_time(client, db, logged_in):
+    page = upload(client, UNKNOWN, "s.csv")
+    assert "Match the columns" in page and "Pick the Date column." in page and 'action="/upload/columns"' in page
+    assert get_column_mapping(db, logged_in, key_of(UNKNOWN)) is None
+
+    review = client.post("/upload/columns", data=pick(page, UNKNOWN_ROLES), follow_redirects=True).get_data(as_text=True)
+    assert "Read 2 transactions from rows 4–5 (Generic layout)." in review and "Check the categories" in review
+    assert get_column_mapping(db, logged_in, key_of(UNKNOWN)) == (UNKNOWN_ROLES, None)
+    assert "Match the columns" not in upload(client, UNKNOWN, "s.csv")  # remembered: no screen the second time
+
+
+def test_wrong_picks_come_back_with_the_problem_and_nothing_is_remembered(client, db, logged_in):
+    page = upload(client, UNKNOWN, "s.csv")
+    again = client.post("/upload/columns", data=pick(page, ["date", "description", "debit", "ignore"])).get_data(as_text=True)
+    assert "Pick the Credit column too, or one Amount column instead of Debit." in again
+    assert [mapping_form(again)[f"role-{i}"] for i in range(4)] == ["date", "description", "debit", "ignore"]  # kept, not re-guessed
+    assert get_column_mapping(db, logged_in, key_of(UNKNOWN)) is None and saved(db, logged_in) == []
+
+
+def test_ambiguous_dates_are_asked_and_the_answer_is_remembered(client, db, logged_in):
+    page = upload(client, AMBIGUOUS, "s.csv")
+    assert "Dates such as 03/04/2026 could be read two ways." in page
+    assert "3 Apr 2026" in page and "4 Mar 2026" in page and "date_order" not in mapping_form(page)  # nothing chosen for you
+    review = client.post("/upload/columns", data=pick(page, AMBIGUOUS_ROLES, date_order="month"),
+                         follow_redirects=True).get_data(as_text=True)
+    assert "Read 2 transactions" in review and "4 Mar 2026" in review and "4 May 2026" in review
+    assert get_column_mapping(db, logged_in, key_of(AMBIGUOUS)) == (AMBIGUOUS_ROLES, "month")
+
+
+def test_a_remembered_mapping_that_no_longer_reads_comes_back_preselected(client, db, logged_in):
+    save_column_mapping(db, logged_in, key_of(UNKNOWN), ["date", "description", "debit", "ignore"], None)
+    page = upload(client, UNKNOWN, "s.csv")
+    assert "Pick the Credit column too" in page
+    assert [mapping_form(page)[f"role-{i}"] for i in range(4)] == ["date", "description", "debit", "ignore"]
+
+
+def test_the_column_screen_only_takes_back_its_own_signed_rows(app, db):
+    asha, ravi = app.test_client(), app.test_client()
+    register_and_login(asha, "asha")
+    ravi_id = register_and_login(ravi, "ravi")
+    form = pick(upload(asha, UNKNOWN, "s.csv"), UNKNOWN_ROLES, csrf_token=csrf_token(ravi, "/upload"))
+    for payload in (form["payload"], form["payload"][:-6] + "AAAAAA"):  # another user's, then a changed one
+        page = ravi.post("/upload/columns", data={**form, "payload": payload}, follow_redirects=True).get_data(as_text=True)
+        assert "expired or could not be read, so nothing was imported" in page
+    assert get_column_mapping(db, ravi_id, key_of(UNKNOWN)) is None
+
+
+def test_text_from_the_file_is_shown_as_text_on_the_column_screen(client, db, logged_in):
+    page = upload(client, b"When,<b>What</b>,Money out,Money in\n25/10/2026,<script>alert(1)</script>,500,\n", "s.csv")
+    assert "Match the columns" in page and "<script>alert(1)</script>" not in page and "<b>What</b>" not in page
+    assert "&lt;script&gt;alert(1)&lt;/script&gt;" in page and "&lt;b&gt;What&lt;/b&gt;" in page
+
+
+def test_a_file_too_big_for_the_column_screen_says_what_to_do(app, client, db, logged_in):
+    app.config["MAX_CONTENT_LENGTH"] = 4096 + 100  # leaves no room for the rows in the form
+    page = upload(client, UNKNOWN, "s.csv")
+    assert "Match the columns" not in page and "Upload one month of it first" in page
+
+
+def test_the_largest_accepted_spreadsheet_round_trips_through_the_column_screen(app, client, db, logged_in):
+    """About 37,000 rows of an unknown layout in a 2 MB .xlsx, with a unique reference on every row: more text than
+    a 2 MB CSV holds, and the column screen sends all of it back."""
+    rng = random.Random(1)
+    rows, balance = [["When", "What", "Ref", "Money out", "Money in", "Left"]], 9_000_000.0
+    for _ in range(37_000):
+        out = round(rng.uniform(20, 5000), 2)
+        balance -= out
+        rows.append([f"{rng.randint(1, 28):02d}/{rng.randint(1, 12):02d}/2025",
+                     f"UPI/SHOP {rng.randint(1, 300)}/{rng.randint(10 ** 11, 10 ** 12 - 1)}/Paid via PhonePe",
+                     str(rng.randint(10 ** 11, 10 ** 12 - 1)), out, None, round(balance, 2)])
+    content = xlsx_bytes(rows)
+    assert 1_900_000 < len(content) < app.config["MAX_CONTENT_LENGTH"] - 10_000
+
+    page = upload(client, content, "big.xlsx")
+    assert "Match the columns" in page
+    assert "enctype" not in page.split('action="/upload/columns"')[1].split(">")[0]  # URL-encoded: see the template
+    form = pick(page, ["date", "description", "ignore", "debit", "credit", "ignore"])
+    request_size = len(urlencode(form))
+    print(f"\n{len(content):,} B xlsx: column screen request {request_size:,} B of {app.config['MAX_CONTENT_LENGTH']:,}")
+    assert request_size < app.config["MAX_CONTENT_LENGTH"]
+    review = client.post("/upload/columns", data=form, follow_redirects=True).get_data(as_text=True)
+    assert "Read 37,000 transactions" in review and "Check the categories" in review
 
 
 def test_a_remembered_mapping_imports_the_same_layout_without_asking(client, db, logged_in):
@@ -105,8 +208,8 @@ def test_a_remembered_mapping_imports_the_same_layout_without_asking(client, db,
 
 
 def test_a_remembered_mapping_also_settles_ambiguous_dates(client, db, logged_in):
-    assert "could be 3 Apr 2026 or 4 Mar 2026" in upload(client, AMBIGUOUS, "s.csv")
-    save_column_mapping(db, logged_in, key_of(AMBIGUOUS), ["date", "description", "debit", "credit", "ignore"], "month")
+    assert "Dates such as 03/04/2026 could be read two ways." in upload(client, AMBIGUOUS, "s.csv")
+    save_column_mapping(db, logged_in, key_of(AMBIGUOUS), AMBIGUOUS_ROLES, "month")
     page = upload(client, AMBIGUOUS, "s.csv")
     assert "Read 2 transactions" in page and "4 Mar 2026" in page and "4 May 2026" in page
 
