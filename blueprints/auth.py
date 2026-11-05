@@ -7,8 +7,7 @@ from flask import Blueprint, current_app, flash, redirect, render_template, requ
 
 from database import IntegrityError, get_db
 from models import (
-    User, attempt_wait, clear_attempts, create_user, delete_user, get_user_by_email, get_user_by_username, record_attempt,
-    verify_password,
+    attempt_wait, clear_attempts, create_user, delete_user, get_user_by_email, get_user_by_username, record_attempt, verify_password,
 )
 from utils import plural
 

@@ -6,7 +6,6 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-import pandas as pd
 from werkzeug.security import check_password_hash, generate_password_hash
 
 from database import IntegrityError, lock_user_writes
@@ -30,20 +29,6 @@ class User:
             email=row["email"],
             password_hash=row["password_hash"],
         )
-
-
-@dataclass
-class Transaction:
-    """Transaction domain object."""
-
-    id: int | None
-    user_id: int
-    date: str
-    category: str
-    amount: float
-    type: str
-    description: str
-    source_file: str | None = None
 
 
 def transaction_signature(date_value: Any, amount: Any, transaction_type: Any, description: Any) -> tuple[str, float, str, str]:
@@ -111,29 +96,7 @@ def save_transactions(db, user_id: int, transactions_df, source_file: str | None
     new_rows = []
     for row in transactions_df.to_dict("records"):
         transaction_date = row["Date"].date().isoformat() if hasattr(row["Date"], "date") else str(row["Date"])
-        transaction_type = str(row.get("Transaction_Type", row.get("Type", "Expense")))
-        metadata = {}
-        for column in transactions_df.columns:
-            if column in {"Date", "Category", "Amount", "Type", "Description", "Transaction_Type", "Year", "Month", "Month_Number", "Day", "Day_Name", "Week", "Quarter", "Weekend"}:
-                continue
-            value = row[column]
-            if pd is not None and hasattr(value, "isna") and value.isna():
-                continue
-            metadata[column] = value
-        metadata_json = json.dumps(metadata) if metadata else None
-        payload = (
-            transaction_date,
-            str(row["Category"]),
-            float(row["Amount"]),
-            str(row["Type"]),
-            str(row["Description"]),
-            source_file or "",
-            transaction_type,
-            metadata.get("account") if isinstance(metadata, dict) and "account" in metadata else None,
-            metadata.get("currency") if isinstance(metadata, dict) and "currency" in metadata else None,
-            metadata.get("tags") if isinstance(metadata, dict) and "tags" in metadata else None,
-            metadata_json,
-        )
+        payload = (transaction_date, str(row["Category"]), float(row["Amount"]), str(row["Type"]), str(row["Description"]), source_file or "")
         signature = transaction_signature(payload[0], payload[2], payload[3], payload[4])
         if signature in existing_keys:
             continue
@@ -144,43 +107,13 @@ def save_transactions(db, user_id: int, transactions_df, source_file: str | None
     if new_rows:
         db.executemany(
             """
-            INSERT INTO transactions (
-                user_id, date, category, amount, type, description, source_file,
-                transaction_type, account, currency, tags, metadata, merchant_key
-            )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO transactions (user_id, date, category, amount, type, description, source_file, merchant_key)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """,
             new_rows,
         )
     db.commit()
     return len(new_rows)
-
-
-def deduplicate_transactions_in_db(db, user_id: int | None = None) -> int:
-    """Remove duplicate transactions from the database using a canonical signature."""
-    query = "SELECT id, user_id, date, amount, type, description FROM transactions"
-    params: tuple[Any, ...] = ()
-    if user_id is not None:
-        query += " WHERE user_id = ?"
-        params = (user_id,)
-
-    rows = db.execute(query, params).fetchall()
-    seen: set[tuple[str, float, str, str]] = set()
-    duplicate_ids: list[int] = []
-
-    for row in rows:
-        signature = transaction_signature(row["date"], row["amount"], row["type"], row["description"])
-        if signature in seen:
-            duplicate_ids.append(row["id"])
-        else:
-            seen.add(signature)
-
-    if duplicate_ids:
-        placeholders = ",".join("?" for _ in duplicate_ids)
-        db.execute(f"DELETE FROM transactions WHERE id IN ({placeholders})", duplicate_ids)
-        db.commit()
-
-    return len(duplicate_ids)
 
 
 def get_user_transactions(db, user_id: int):
