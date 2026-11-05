@@ -183,23 +183,32 @@ def claim_import_token(db, user_id: int, token: str) -> bool:
     return True
 
 
-ATTEMPT_LIMIT = 5  # sign-in or sign-up tries per username and per address...
-ATTEMPT_WINDOW = timedelta(minutes=15)  # ...in this long
+# Tries allowed per key kind, and for how long each try counts (and is kept). An address gets more room than a
+# username because a hostel or campus network shares one; the per-username limit is the protection that holds.
+ATTEMPT_LIMITS = {
+    "login-user": (5, timedelta(minutes=15)),
+    "login-ip": (30, timedelta(minutes=15)),
+    "register-user": (5, timedelta(minutes=15)),
+    "register-ip": (10, timedelta(hours=1)),
+}
 
 
 def attempt_wait(db, keys: list[str]) -> int:
     """Seconds until one more try is allowed for every key ("login-ip:203.0.113.5"), 0 when it is allowed now.
-    The fifth most recent try in the window decides: once it is 15 minutes old, the limit lifts."""
+    For a limit of 5, the fifth most recent try in the window decides: once it leaves the window, the limit lifts."""
     now = datetime.now(timezone.utc)
-    db.execute("DELETE FROM auth_attempts WHERE attempted_at < ?", ((now - ATTEMPT_WINDOW).isoformat(timespec="microseconds"),))
+    for kind, (_, window) in ATTEMPT_LIMITS.items():
+        db.execute("DELETE FROM auth_attempts WHERE key LIKE ? AND attempted_at < ?",
+                   (kind + ":%", (now - window).isoformat(timespec="microseconds")))
     db.commit()
     wait = 0.0
     for key in keys:
+        limit, window = ATTEMPT_LIMITS[key.split(":", 1)[0]]
         row = db.execute(
-            "SELECT attempted_at FROM auth_attempts WHERE key = ? ORDER BY attempted_at DESC LIMIT 1 OFFSET ?", (key, ATTEMPT_LIMIT - 1)
+            "SELECT attempted_at FROM auth_attempts WHERE key = ? ORDER BY attempted_at DESC LIMIT 1 OFFSET ?", (key, limit - 1)
         ).fetchone()
         if row is not None:
-            wait = max(wait, (datetime.fromisoformat(row["attempted_at"]) + ATTEMPT_WINDOW - now).total_seconds())
+            wait = max(wait, (datetime.fromisoformat(row["attempted_at"]) + window - now).total_seconds())
     return math.ceil(wait)
 
 
