@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import csv
+import io
 import logging
 import os
 import re
@@ -13,13 +15,18 @@ from itsdangerous import BadSignature, URLSafeTimedSerializer
 from werkzeug.utils import secure_filename
 
 from database import get_db
+from ml import statement_parser
 from ml.categorise import CATEGORIES, UNCATEGORISED, categorise, looks_like_person
 from ml.pipeline import INSIGHTS_VERSION, compute_insights
+from ml.statement_parser import StatementError
 from models import (
     claim_import_token, get_cached_insights, get_category_overrides, get_user_categories, get_user_transactions,
     clear_insights, imported_signatures, merchant_rows, recategorise, restore_categories, save_category_overrides, save_insights, save_transactions, transaction_signature,
 )
-from utils import CSVValidationError, plural, allowed_file, build_dashboard_payload, clean_transaction_dataframe, read_uploaded_csv, shift_to_recent_months, validate_uploaded_csv
+from utils import (
+    COLUMNS, REQUIRED_COLUMNS, CSVValidationError, plural, build_dashboard_payload, clean_transaction_dataframe,
+    read_uploaded_csv, shift_to_recent_months, validate_uploaded_csv,
+)
 
 main_bp = Blueprint("main", __name__)
 logger = logging.getLogger(__name__)
@@ -128,23 +135,31 @@ def upload():
             flash("No file was selected.", "danger")
             return redirect(url_for("main.upload"))
 
-        if not allowed_file(file.filename):
-            flash("Only CSV files are supported.", "danger")
-            return redirect(url_for("main.upload"))
-
         # The file is parsed in memory and never written to disk; only its
         # sanitised name is kept as a label on the imported rows.
         filename = secure_filename(file.filename) or "upload.csv"
+        data = file.read()  # at most MAX_CONTENT_LENGTH (2 MB); Flask refuses anything bigger
         try:
-            df = read_uploaded_csv(file.stream)
-            validate_uploaded_csv(df)
-            cleaned_df = clean_transaction_dataframe(df)
             db = get_db()
-            if (cleaned_df["Category"] == "").any():
-                return _review(db, session["user_id"], cleaned_df, filename)
-            saved_rows = save_transactions(db, session["user_id"], cleaned_df, source_file=filename)
-            refresh_insights(db, session["user_id"])
-        except CSVValidationError as exc:
+            own_columns = _finsight_columns(file.filename, data)
+            if {column.lower() for column in REQUIRED_COLUMNS} <= own_columns:  # our own format: its original path, unchanged
+                return _import_finsight_csv(db, data, filename)
+            # A bank statement. The file's own name is used to tell its type and in messages about it.
+            try:
+                layout = statement_parser.locate(statement_parser.read_grid(data, file.filename))
+            except StatementError:
+                if own_columns:  # our format with columns missing: name them, as before
+                    return _import_finsight_csv(db, data, filename)
+                raise
+            result = statement_parser.convert(layout, statement_parser.guess_roles(layout))
+            if not result.ok:
+                if result.date_example:
+                    text, day_first, month_first = result.date_example
+                    raise StatementError(f"Dates such as {text} could be {day_first} or {month_first}, and the file doesn't say which.")
+                raise StatementError(" ".join(result.errors))
+            flash(_read_message(layout, result), "info")
+            return _import(db, session["user_id"], clean_transaction_dataframe(result.frame), filename)
+        except (CSVValidationError, StatementError) as exc:
             flash(str(exc), "danger")
             return redirect(url_for("main.upload"))
         except Exception:
@@ -152,11 +167,40 @@ def upload():
             flash("Import failed. Please check that the file matches the CSV format and try again.", "danger")
             return redirect(url_for("main.upload"))
 
-        flash(f"Imported {plural(saved_rows, 'transaction')}.", "success")
-
-        return redirect(url_for("main.dashboard"))
-
     return render_template("upload.html")
+
+
+def _finsight_columns(name: str, data: bytes) -> set[str]:
+    """FinSight's own column names (date, category, amount, type, description) in the first row of a CSV."""
+    if not name.lower().endswith(".csv"):
+        return set()
+    first_line = data[:4096].decode("utf-8-sig", "replace").splitlines()[:1]
+    return {cell.strip().lower() for row in csv.reader(first_line) for cell in row} & {column.lower() for column in COLUMNS}
+
+
+def _import_finsight_csv(db, data: bytes, filename: str):
+    df = read_uploaded_csv(io.BytesIO(data))
+    validate_uploaded_csv(df)
+    return _import(db, session["user_id"], clean_transaction_dataframe(df), filename)
+
+
+def _read_message(layout, result) -> str:
+    """'Read 6 transactions from rows 10–17 (HDFC Bank layout). 1 row with no debit or credit was skipped.'"""
+    message = (f"Read {plural(len(result.frame), 'transaction')} from rows {result.first_row}–{result.last_row} "
+               f"({layout.preset_label} layout).")
+    if result.skipped:
+        message += f" {plural(result.skipped, 'row')} with no debit or credit {'was' if result.skipped == 1 else 'were'} skipped."
+    return message
+
+
+def _import(db, user_id: int, df: pd.DataFrame, filename: str):
+    """Show cleaned rows on the review page when some need a category, or save them straight away."""
+    if (df["Category"] == "").any():
+        return _review(db, user_id, df, filename)
+    saved_rows = save_transactions(db, user_id, df, source_file=filename)
+    refresh_insights(db, user_id)
+    flash(f"Imported {plural(saved_rows, 'transaction')}.", "success")
+    return redirect(url_for("main.dashboard"))
 
 
 def _review_serializer() -> URLSafeTimedSerializer:

@@ -13,7 +13,7 @@
   <form method="post" enctype="multipart/form-data" class="form">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <label class="dropzone" data-dropzone>
-      <input class="dropzone-input" type="file" name="file" accept=".csv,text/csv" required aria-describedby="fileHint">
+      <input class="dropzone-input" type="file" name="file" accept=".csv,.xlsx,.xls,text/csv" required aria-describedby="fileHint">
       {{ icon('upload') }}
       <span class="dropzone-title" data-dropzone-label>Choose a CSV file, or drop it here</span>
       <span class="sub" id="fileHint">CSV only, up to 2 MB. A bigger export can be split into two files and uploaded one after the other.</span>

@@ -6,7 +6,6 @@ from datetime import date
 from typing import Any
 
 import pandas as pd
-from flask import current_app
 
 
 REQUIRED_COLUMNS = ["Date", "Amount", "Type", "Description"]
@@ -161,11 +160,6 @@ def spending_tip(expense_df: pd.DataFrame, months: int) -> dict[str, Any] | None
         "share": round(float(totals.iloc[0]) / float(expense_df["Amount"].sum()) * 100, 1),
         "saving": round(monthly_average * 0.10, 2),
     }
-
-
-def allowed_file(filename: str) -> bool:
-    """Return whether the file extension is acceptable."""
-    return "." in filename and filename.rsplit(".", 1)[1].lower() in current_app.config["ALLOWED_EXTENSIONS"]
 
 
 def clean_transaction_dataframe(df: pd.DataFrame) -> pd.DataFrame:

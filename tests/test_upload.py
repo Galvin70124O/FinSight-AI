@@ -33,7 +33,7 @@ def test_valid_csv_is_imported_and_not_kept_on_disk(app, client, db, logged_in):
 
 def test_non_csv_extension_is_rejected(client, db, logged_in):
     page = upload(client, VALID_CSV, "tx.xlsx").get_data(as_text=True)
-    assert "Only CSV files are supported." in page
+    assert "tx.xlsx is named like an Excel file but is plain text." in page
     assert count(db) == 0
 
 
