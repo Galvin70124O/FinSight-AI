@@ -133,6 +133,11 @@
     {% endif %}
 
     {% if signed_in %}
+    {# Result of a category change, with Undo (static/app.js). #}
+    <div class="toast" id="toast" role="status" aria-live="polite" data-undo-url="{{ url_for('main.undo_category_change') }}" hidden>
+      <span data-toast-text></span>
+      <button class="toast-undo" type="button" data-toast-undo>Undo</button>
+    </div>
     {# Command palette: Ctrl/Cmd+K or "/". Commands come from the JSON below plus the dashboard's sections and transactions. #}
     <div class="palette" id="palette" hidden>
       <div class="palette-scrim" data-palette-close></div>

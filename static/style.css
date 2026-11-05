@@ -437,6 +437,24 @@ svg { flex: none; }
 .cat-date { color: var(--muted); font-size: 13px; }
 .cat-row .amount { white-space: nowrap; }
 .row-edit .select { flex: 1; }
+.categories .row-edit .m-remember { flex-basis: 100%; }
+.save-status { min-width: 4.5rem; color: var(--muted); font-size: 13px; }
+.save-status.is-error { flex-basis: 100%; min-width: 0; color: var(--bad); }
+
+/* The result of a change, with Undo. Floats above everything, so it is the one other place with a shadow. */
+.toast {
+  position: fixed; left: 50%; bottom: calc(var(--s6) + env(safe-area-inset-bottom, 0px)); z-index: 45;
+  display: flex; align-items: center; gap: var(--s4); width: max-content; max-width: min(36rem, calc(100% - 2 * var(--s4)));
+  padding: var(--s2) var(--s2) var(--s2) var(--s4); border-radius: var(--r-sm); background: var(--ink); color: var(--bg);
+  box-shadow: var(--shadow-pop); font-size: 14px;
+  transform: translate(-50%, 0); opacity: 1; transition: transform .2s var(--ease-out), opacity .2s var(--ease-out);
+}
+.toast[hidden] {
+  display: flex; visibility: hidden; transform: translate(-50%, 12px); opacity: 0;
+  transition: transform .15s var(--ease-out), opacity .15s var(--ease-out), visibility 0s linear .15s;  /* fade, then hide */
+}
+.toast-undo[hidden] { display: none; }
+.toast-undo { min-height: 36px; padding: 0 var(--s3); border: 0; border-radius: var(--r-sm); background: none; color: var(--bg); font-weight: 500; text-decoration: underline; text-underline-offset: 3px; }
 
 .danger-zone { margin-top: var(--s12); padding-top: var(--s8); border-top: 1px solid var(--line); }
 .danger-zone .sub { margin: var(--s1) 0 var(--s5); }
@@ -487,7 +505,7 @@ button, .btn, .chip, .seg-btn, .tab, .nav-link, summary { -webkit-user-select: n
 
 /* Fingers need 44px targets and 16px fields (iOS zooms into anything smaller). */
 @media (pointer: coarse) {
-  .btn, .seg-btn, .chip, .select, .search-trigger, .skip-link, .m-rows summary, .m-remember, .tx-edit summary, .m-toggle { min-height: 44px; }
+  .btn, .seg-btn, .chip, .select, .search-trigger, .skip-link, .m-rows summary, .m-remember, .tx-edit summary, .m-toggle, .toast-undo { min-height: 44px; }
   .chip { min-width: 44px; }
   .icon-button { width: 44px; height: 44px; }
   .select, .input { font-size: 16px; }
@@ -533,6 +551,7 @@ button, .btn, .chip, .seg-btn, .tab, .nav-link, summary { -webkit-user-select: n
   .tab .icon { width: 22px; height: 22px; }
   .content { padding: var(--s6) calc(var(--s4) + env(safe-area-inset-right, 0px)) calc(56px + var(--s12) + env(safe-area-inset-bottom, 0px)) calc(var(--s4) + env(safe-area-inset-left, 0px)); }
   .review-actions { bottom: calc(56px + env(safe-area-inset-bottom, 0px)); padding-bottom: var(--s4); }
+  .toast { bottom: calc(56px + var(--s4) + env(safe-area-inset-bottom, 0px)); }
 
   .hero, .feature, .how { grid-template-columns: minmax(0, 1fr); gap: var(--s8); }
   .hero { padding: var(--s8) 0 var(--s16); }
@@ -573,4 +592,5 @@ button, .btn, .chip, .seg-btn, .tab, .nav-link, summary { -webkit-user-select: n
   .chart::before { animation: none; }
   .reveal-ready [data-reveal] > * { transform: none; transition: opacity .2s ease; }
   .btn:active { transform: none; }
+  .toast, .toast[hidden] { transform: translate(-50%, 0); }  /* fades only */
 }

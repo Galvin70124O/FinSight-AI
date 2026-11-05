@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% from '_macros.html' import icon, category_icon, category_options, row_category_form, flashes_at %}
+{% from '_macros.html' import icon, category_icon, category_options, row_category_form, flashes_at, save_state %}
 {% block title %}Categories · FinSight AI{% endblock %}
 {% block description %}Every merchant in your transactions with its category. Change a whole merchant or a single transaction.{% endblock %}
 
@@ -57,17 +57,17 @@
       <div class="m-choose">
         <span class="m-choose-label" aria-hidden="true">Change all to</span>
         {% if m.key %}
-        <form method="post" action="{{ url_for('main.categories') }}" class="row-edit">
+        <form method="post" action="{{ url_for('main.categories') }}" class="row-edit" data-autosave data-merchant="{{ m.anchor }}">
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
           <input type="hidden" name="merchant" value="{{ m.key }}">
           {{ state() }}
+          {# Set before picking: a person's transfers are not remembered unless asked, as next month's may be for something else. #}
+          <label class="m-remember"><input type="checkbox" name="remember" value="1"{{ ' checked' if not m.person }}>Remember for this {{ 'person' if m.person else 'merchant' }}</label>
           <select class="select" name="category" required aria-label="Category for all {{ label }} transactions" aria-describedby="{{ m.anchor }}-now">
             <option value="">Choose a category</option>
             {{ category_options(m.category, categories, own_categories) }}
           </select>
-          <button class="btn btn-secondary" type="submit">Save</button>
-          {# A person's transfers are not remembered unless asked: next month's may be for something else. #}
-          <label class="m-remember"><input type="checkbox" name="remember" value="1"{{ ' checked' if not m.person }}>Remember for this {{ 'person' if m.person else 'merchant' }}</label>
+          {{ save_state() }}
         </form>
         {% else %}
         <p class="sub">No name to remember them by: change these one at a time.</p>

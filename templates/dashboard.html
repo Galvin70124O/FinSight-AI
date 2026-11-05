@@ -279,7 +279,7 @@
         <tr data-type="{{ tx['Type'] }}" data-date="{{ tx['Date'] }}" data-amount="{{ tx['Amount'] }}" data-category="{{ tx['Category'] }}">
           <td class="num muted hide-sm nowrap tx-date">{{ tx['Date']|day }}</td>
           <td>
-            <span class="cat-cell">{{ category_icon(tx['Category']) }}<span>{{ tx['Category'] }}
+            <span class="cat-cell">{{ category_icon(tx['Category']) }}<span><span data-category-name>{{ tx['Category'] }}</span>
               <span class="cell-sub desc-sm" title="{{ tx['Description'] }}">{{ tx['Description'] }}</span>
               <span class="cell-sub">{{ tx['Date']|day }}</span></span></span>
             <details class="tx-edit">

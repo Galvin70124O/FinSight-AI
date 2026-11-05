@@ -74,9 +74,15 @@
 {%- endfor %}
 {%- endmacro %}
 
+{# Picking a category saves it at once (static/app.js); without JavaScript the Save button does. #}
+{% macro save_state() -%}
+<span class="save-status" data-save-status role="status"></span>
+<noscript><button class="btn btn-secondary" type="submit">Save</button></noscript>
+{%- endmacro %}
+
 {# Change one transaction's category; never remembered for its merchant. #}
 {% macro row_category_form(tx_id, current, label, categories, own) -%}
-<form method="post" action="{{ url_for('main.change_transaction_category', transaction_id=tx_id) }}" class="row-edit">
+<form method="post" action="{{ url_for('main.change_transaction_category', transaction_id=tx_id) }}" class="row-edit" data-autosave>
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
   {{ caller() if caller }}
   <label class="sr-only" for="rc{{ tx_id }}">Category for {{ label }}</label>
@@ -84,7 +90,7 @@
     <option value="">Choose a category</option>
     {{ category_options(current, categories, own) }}
   </select>
-  <button class="btn btn-secondary" type="submit">Save</button>
+  {{ save_state() }}
 </form>
 {%- endmacro %}
 

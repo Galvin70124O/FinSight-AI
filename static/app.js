@@ -237,6 +237,91 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  // ---------- Category selects save as soon as one is picked; a toast offers Undo ----------
+  const toast = document.getElementById('toast');
+  const toastText = toast?.querySelector('[data-toast-text]');
+  const toastUndo = toast?.querySelector('[data-toast-undo]');
+  let toastTimer;
+  const hideToast = () => { if (toast) toast.hidden = true; };
+  const failure = (error) => (error instanceof TypeError ? 'no connection. Check it and try again.' : error.message);
+  const postJson = async (url, body) => {
+    const response = await fetch(url, { method: 'POST', body, headers: { Accept: 'application/json' } });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok || !data.ok) throw new Error(data.error || `the server answered ${response.status}.`);
+    return data;
+  };
+  const showToast = (message, undoToken, csrf) => {
+    if (!toast) return;
+    toastText.textContent = message;
+    toastUndo.hidden = !undoToken;
+    toastUndo.onclick = async () => {
+      toastUndo.disabled = true;
+      clearTimeout(toastTimer);
+      toastText.textContent = 'Undoing…';
+      const body = new FormData();
+      body.append('undo', undoToken);
+      body.append('csrf_token', csrf);
+      try {
+        await postJson(toast.dataset.undoUrl, body);
+        location.reload();  // every row shows its earlier category again, with "Undone" beside it
+      } catch (error) {
+        toastText.textContent = `Couldn't undo: ${failure(error)}`;
+        toastUndo.disabled = false;
+      }
+    };
+    toast.hidden = false;
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(hideToast, 8000);
+  };
+  toast?.addEventListener('pointerenter', () => clearTimeout(toastTimer));
+  toast?.addEventListener('focusin', () => clearTimeout(toastTimer));
+  toast?.addEventListener('pointerleave', () => { toastTimer = setTimeout(hideToast, 4000); });
+
+  // Show the new category where it is on screen. Names go in as text; the icon is the server's escaped markup.
+  const showCategory = (form, data) => {
+    const merchant = form.dataset.merchant;
+    if (merchant) {
+      const now = document.getElementById(`${merchant}-now`);
+      if (now) { now.innerHTML = data.icon; now.append(data.category); }
+      document.querySelectorAll(`#${merchant} .cat-rows select[name="category"]`).forEach((select) => {
+        select.value = data.category;
+        select.dataset.saved = data.category;
+      });
+      return;
+    }
+    const row = form.closest('tr');
+    if (row) {
+      row.dataset.category = data.category;
+      row.querySelector('[data-category-name]').textContent = data.category;
+      const icon = row.querySelector('.cat-icon');
+      if (icon) icon.outerHTML = data.icon;
+    }
+  };
+
+  document.querySelectorAll('form[data-autosave]').forEach((form) => {
+    const select = form.querySelector('select[name="category"]');
+    const status = form.querySelector('[data-save-status]');
+    const say = (text, error = false) => { status.textContent = text; status.classList.toggle('is-error', error); };
+    select.dataset.saved = select.value;
+    const save = async () => {
+      if (!select.value || select.value === select.dataset.saved) { say(''); return; }
+      say('Saving…');
+      try {
+        const data = await postJson(form.action, new FormData(form));
+        select.dataset.saved = select.value;
+        say('Saved');
+        showCategory(form, data);
+        showToast(data.message, data.undo, form.elements.csrf_token.value);
+      } catch (error) {
+        select.value = select.dataset.saved;
+        say(`Couldn't save: ${failure(error)}`, true);
+      }
+    };
+    let wait;
+    // A closed select changes on every arrow key; save the value the user stops on.
+    select.addEventListener('change', () => { clearTimeout(wait); wait = setTimeout(save, 400); });
+  });
+
   // ---------- Command palette (Ctrl/Cmd+K, or "/") ----------
   const palette = document.getElementById('palette');
   if (!palette) return;
