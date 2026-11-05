@@ -53,3 +53,20 @@ def test_wrong_password_or_missing_confirmation_deletes_nothing(app, db):
 def test_deleting_needs_a_signed_in_user(client):
     response = client.post("/account/delete", data={"password": "x", "confirm": "DELETE", "csrf_token": csrf_token(client, "/login")})
     assert response.status_code == 302 and "/login" in response.headers["Location"]
+
+
+def test_a_device_still_signed_in_after_the_account_is_deleted_is_signed_out(app):
+    laptop = app.test_client()
+    register_and_login(laptop)
+    phones = [app.test_client() for _ in range(3)]  # one per request: the first redirect signs a device out
+    for phone in phones:
+        phone.post("/login", data={"username": "asha", "password": "correct-horse-battery", "csrf_token": csrf_token(phone, "/login")})
+    token = csrf_token(phones[2], "/dashboard")  # taken before the delete, as an open page would have it
+    assert "have been deleted" in delete(laptop)
+
+    responses = phones[0].get("/"), phones[1].get("/dashboard"), phones[2].post("/demo-data", data={"csrf_token": token})
+    for phone, response in zip(phones, responses):
+        assert response.status_code == 302 and response.headers["Location"].endswith("/login")
+        with phone.session_transaction() as session:
+            assert "user_id" not in session
+    assert "This account was deleted, so you were signed out." in phones[0].get("/login").get_data(as_text=True)

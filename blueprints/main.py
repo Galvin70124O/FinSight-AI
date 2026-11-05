@@ -43,10 +43,16 @@ TOO_MANY_ROWS = (
 @main_bp.before_request
 def require_login():
     """Protect application routes from unauthenticated access."""
+    user_id = session.get("user_id")
+    # Before the public pages too: "/" shows the overview to a signed-in session.
+    if user_id is not None and get_db().execute("SELECT 1 FROM users WHERE id = ?", (user_id,)).fetchone() is None:
+        session.clear()  # the account was deleted on another device; its rows are gone
+        flash("This account was deleted, so you were signed out.", "info")
+        return redirect(url_for("auth.login"))
     allowed_routes = {"auth.login", "auth.register", "static", "main.index", "main.privacy", "main.terms"}
     if request.endpoint in allowed_routes:
         return None
-    if "user_id" not in session:
+    if user_id is None:
         return redirect(url_for("auth.login"))
     return None
 
