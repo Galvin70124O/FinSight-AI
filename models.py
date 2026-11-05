@@ -278,9 +278,8 @@ def merchant_rows(db, user_id: int, key: str, limit: int | None = None) -> list:
     return db.execute(sql + (" LIMIT ?" if limit else ""), (user_id, key, limit) if limit else (user_id, key)).fetchall()
 
 
-def recategorise(db, user_id: int, transaction_ids: list[int], category: str, remember_as: str = "") -> int:
-    """Set the category of some of this user's transactions and, given a merchant key, remember it for that
-    merchant, all in one commit. Rows of other users are never touched. Returns how many rows changed."""
+def _set_category(db, user_id: int, transaction_ids: list[int], category: str) -> int:
+    """Set the category of some of this user's rows; the caller commits. Other users' rows are never touched."""
     changed = 0
     for start in range(0, len(transaction_ids), 500):  # well under SQLite's limit on query parameters
         chunk = transaction_ids[start:start + 500]
@@ -289,10 +288,30 @@ def recategorise(db, user_id: int, transaction_ids: list[int], category: str, re
             (category, user_id, *chunk),
         )
         changed += cursor.rowcount
+    return changed
+
+
+def recategorise(db, user_id: int, transaction_ids: list[int], category: str, remember_as: str = "") -> int:
+    """Set the category of some of this user's transactions and, given a merchant key, remember it for that
+    merchant, all in one commit. Returns how many rows changed."""
+    changed = _set_category(db, user_id, transaction_ids, category)
     if remember_as:
         _remember(db, user_id, remember_as, category)
     db.commit()
     return changed
+
+
+def restore_categories(db, user_id: int, previous: dict[str, list[int]], merchant_key: str = "", previous_override: str | None = None) -> int:
+    """Undo a change: give each row its earlier category and, given the merchant whose correction the change
+    saved, put that correction back as it was (or remove it if there was none), all in one commit."""
+    restored = sum(_set_category(db, user_id, ids, category) for category, ids in previous.items())
+    if merchant_key:
+        if previous_override is None:
+            db.execute("DELETE FROM category_overrides WHERE user_id = ? AND merchant_key = ?", (user_id, merchant_key))
+        else:
+            _remember(db, user_id, merchant_key, previous_override)
+    db.commit()
+    return restored
 
 
 def delete_user(db, user_id: int) -> None:

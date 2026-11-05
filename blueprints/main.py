@@ -8,7 +8,7 @@ import zlib
 from collections import Counter
 
 import pandas as pd
-from flask import Blueprint, abort, current_app, flash, get_flashed_messages, redirect, render_template, request, session, url_for
+from flask import Blueprint, abort, current_app, flash, get_flashed_messages, get_template_attribute, jsonify, redirect, render_template, request, session, url_for
 from itsdangerous import BadSignature, URLSafeTimedSerializer
 from werkzeug.utils import secure_filename
 
@@ -17,7 +17,7 @@ from ml.categorise import CATEGORIES, UNCATEGORISED, categorise, looks_like_pers
 from ml.pipeline import INSIGHTS_VERSION, compute_insights
 from models import (
     claim_import_token, get_cached_insights, get_category_overrides, get_user_categories, get_user_transactions,
-    clear_insights, imported_signatures, merchant_rows, recategorise, save_category_overrides, save_insights, save_transactions, transaction_signature,
+    clear_insights, imported_signatures, merchant_rows, recategorise, restore_categories, save_category_overrides, save_insights, save_transactions, transaction_signature,
 )
 from utils import CSVValidationError, plural, allowed_file, build_dashboard_payload, clean_transaction_dataframe, read_uploaded_csv, shift_to_recent_months, validate_uploaded_csv
 
@@ -180,6 +180,34 @@ def _allowed_categories(db, user_id: int) -> set[str]:
 _ANCHOR = re.compile(r"m[0-9a-f]{1,8}")
 
 
+UNDO_MAX_AGE = 600  # seconds an Undo stays possible
+
+
+def _wants_json() -> bool:
+    """The page script asks for JSON; a plain form post (no JavaScript) gets the redirect."""
+    return request.accept_mimetypes.best == "application/json"
+
+
+def _undo_serializer() -> URLSafeTimedSerializer:
+    return URLSafeTimedSerializer(current_app.secret_key, salt="category-undo")
+
+
+def _changed(anchor: str, message: str, category: str, undo: dict, back: str):
+    """The answer to a successful change: JSON with an Undo token for the page script, else a redirect."""
+    if _wants_json():
+        icon = get_template_attribute("_macros.html", "category_icon")(category)
+        return jsonify(ok=True, message=message, category=category, icon=str(icon), undo=_undo_serializer().dumps(undo))
+    _flash_at(anchor, message, "success")
+    return redirect(back)
+
+
+def _refused(anchor: str | None, message: str, back: str, status: int = 400):
+    if _wants_json():
+        return jsonify(ok=False, error=message), status
+    _flash_at(anchor, message, "danger")
+    return redirect(back)
+
+
 def _flash_at(anchor: str | None, message: str, kind: str) -> None:
     """A message shown beside the merchant or section the page scrolls back to, not at the top out of view."""
     flash(message, f"at-{anchor} {kind}" if anchor else kind)
@@ -239,15 +267,18 @@ def categories():
         category = request.form.get("category", "").strip()
         remember = bool(request.form.get("remember"))  # ticked by default for businesses, unticked for people
         if not rows:
-            flash("That merchant is not in your transactions. Nothing was changed.", "danger")
-        elif category not in _allowed_categories(db, user_id):
-            _flash_at(anchor, "Choose a category from the list. Nothing was changed.", "danger")
-        else:
-            changed = recategorise(db, user_id, [row["id"] for row in rows], category, remember_as=key if remember else "")
-            clear_insights(db, user_id)
-            note = "Future imports use it too." if remember else "Not remembered for future imports."
-            _flash_at(anchor, f"{key}: {plural(changed, 'transaction')} now in {category}. {note}", "success")
-        return redirect(back)
+            return _refused(None, "That merchant is not in your transactions. Nothing was changed.", back, 404)
+        if category not in _allowed_categories(db, user_id):
+            return _refused(anchor, "Choose a category from the list. Nothing was changed.", back)
+        previous: dict[str, list[int]] = {}
+        for row in rows:
+            previous.setdefault(row["category"], []).append(row["id"])
+        previous_override = get_category_overrides(db, user_id).get(key)
+        changed = recategorise(db, user_id, [row["id"] for row in rows], category, remember_as=key if remember else "")
+        clear_insights(db, user_id)
+        note = "Remembered for future imports." if remember else "Not remembered for future imports."
+        undo = {"u": user_id, "rows": previous, "merchant": key if remember else "", "override": previous_override, "anchor": anchor, "back": back}
+        return _changed(anchor, f"{key}: {plural(changed, 'transaction')} changed to {category}. {note}", category, undo, back)
 
     merchants = _merchants(db, user_id)
 
@@ -292,13 +323,34 @@ def change_transaction_category(transaction_id: int):
         anchor, back = "transactions", url_for("main.dashboard", _anchor="transactions")
     category = request.form.get("category", "").strip()
     if category not in _allowed_categories(db, user_id):
-        _flash_at(anchor, "Choose a category from the list. Nothing was changed.", "danger")
-        return redirect(back)
-    if not recategorise(db, user_id, [transaction_id], category):
-        abort(404)  # not one of this user's transactions
+        return _refused(anchor, "Choose a category from the list. Nothing was changed.", back)
+    row = db.execute("SELECT category FROM transactions WHERE id = ? AND user_id = ?", (transaction_id, user_id)).fetchone()
+    if row is None:  # not one of this user's transactions
+        if _wants_json():
+            return jsonify(ok=False, error="That transaction is not in your account any more. Reload the page."), 404
+        abort(404)
+    recategorise(db, user_id, [transaction_id], category)
     clear_insights(db, user_id)
-    _flash_at(anchor, f"Changed one transaction to {category}.", "success")
-    return redirect(back)
+    undo = {"u": user_id, "rows": {row["category"]: [transaction_id]}, "merchant": "", "override": None, "anchor": anchor, "back": back}
+    return _changed(anchor, f"One transaction changed to {category}.", category, undo, back)
+
+
+@main_bp.route("/categories/undo", methods=["POST"])
+def undo_category_change():
+    """Put back what one change replaced: each row's earlier category and the merchant's earlier correction."""
+    user_id, db = session["user_id"], get_db()
+    try:
+        data = _undo_serializer().loads(request.form.get("undo", ""), max_age=UNDO_MAX_AGE)
+    except BadSignature:  # also covers an expired Undo
+        data = None
+    if not data or data.get("u") != user_id:
+        return _refused(None, "That change can no longer be undone. Change it back by hand.", url_for("main.categories"))
+    restore_categories(db, user_id, {category: [int(i) for i in ids] for category, ids in data["rows"].items()}, data["merchant"], data["override"])
+    clear_insights(db, user_id)
+    if _wants_json():
+        _flash_at(data["anchor"], "Undone. The earlier categories are back.", "success")  # shown after the page reloads
+        return jsonify(ok=True)
+    return _changed(data["anchor"], "Undone. The earlier categories are back.", "", data, data["back"])
 
 
 def _review(db, user_id: int, df: pd.DataFrame, filename: str):

@@ -1,7 +1,7 @@
 import os
 import logging
 from datetime import date
-from flask import Flask, flash, redirect, render_template, request, url_for
+from flask import Flask, flash, jsonify, redirect, render_template, request, url_for
 from flask_wtf.csrf import CSRFError, CSRFProtect
 
 from blueprints.auth import auth_bp
@@ -41,6 +41,8 @@ def create_app(test_config: dict | None = None) -> Flask:
 
     @app.errorhandler(CSRFError)
     def handle_csrf_error(_error: CSRFError):
+        if request.accept_mimetypes.best == "application/json":  # the page script: say so in the row, no redirect
+            return jsonify(ok=False, error="Your session expired or the page is out of date. Reload the page and try again."), 400
         flash("Your session expired or the form was out of date. Please try again.", "danger")
         # Send people back to the form they submitted. A POST-only address has no page of its own
         # (redirecting there would show "405 Method Not Allowed"), so those go to the page with the form.

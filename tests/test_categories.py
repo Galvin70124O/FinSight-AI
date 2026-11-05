@@ -38,7 +38,7 @@ def test_one_row_changes_alone_and_is_not_remembered(client, db, logged_in):
     import_statement(client)
     page = change_row(client, tx_id(db, "UPI/ZOMATO LTD/412345678901", logged_in), "Groceries").get_data(as_text=True)
 
-    assert "Changed one transaction to Groceries." in page
+    assert "One transaction changed to Groceries." in page
     assert categories(db, logged_in)[:2] == [("UPI/ZOMATO LTD/412345678901/Paid via PhonePe", "Groceries"),
                                              ("UPI/ZOMATO LTD/412345678902/Paid via PhonePe", "Dining")]
     assert db.execute("SELECT COUNT(*) FROM category_overrides").fetchone()[0] == 0
@@ -126,7 +126,7 @@ def test_changing_a_merchant_changes_all_its_rows_and_is_remembered_for_that_use
 
     page = change_merchant(asha, "ZOMATO", "Groceries").get_data(as_text=True)
 
-    assert "ZOMATO: 2 transactions now in Groceries." in page
+    assert "ZOMATO: 2 transactions changed to Groceries." in page
     assert [c for _, c in categories(db, asha_id)] == ["Groceries", "Groceries", "Groceries"]
     assert [c for _, c in categories(db, ravi_id)] == ["Dining", "Uncategorized"]
     assert [tuple(r) for r in db.execute("SELECT user_id, merchant_key, category FROM category_overrides")] == [(asha_id, "ZOMATO", "Groceries")]
@@ -217,11 +217,11 @@ def test_the_result_of_a_change_is_shown_beside_what_changed(client, db, logged_
     add(db, logged_in, "UPI/ZOMATO LTD/412345678901", "Dining")
     page = change_merchant(client, "ZOMATO", "Groceries").get_data(as_text=True)
     merchant = re.search(r'<li class="merchant cat-merchant" id="m[0-9a-f]+".*?</li>', page, re.S).group(0)
-    assert "now in Groceries" in merchant and 'class="flash-stack"' not in page
+    assert "changed to Groceries" in merchant and 'class="flash-stack"' not in page
 
     overview = change_row(client, tx_id(db, "UPI/ZOMATO", logged_in), "Dining").get_data(as_text=True)
     section = overview[overview.index('id="transactions"'):]
-    assert "Changed one transaction to Dining." in section.split("</table>")[0] and 'class="flash-stack"' not in overview
+    assert "One transaction changed to Dining." in section.split("</table>")[0] and 'class="flash-stack"' not in overview
 
 
 def test_a_change_made_while_searching_still_shows_its_merchant_and_result(client, db, logged_in):
@@ -229,13 +229,13 @@ def test_a_change_made_while_searching_still_shows_its_merchant_and_result(clien
     add(db, logged_in, "UPI/ZOMATO LTD/412345678902", "Uncategorized", date="2026-03-02")
     row = tx_id(db, "UPI/ZOMATO", logged_in)
     page = change_merchant(client, "BLINKIT", "Groceries", q="uncategorized").get_data(as_text=True)
-    assert "BLINKIT: 1 transaction now in Groceries." in page  # no longer matches the search, but shown
+    assert "BLINKIT: 1 transaction changed to Groceries." in page  # no longer matches the search, but shown
 
     page = client.post(f"/transactions/{row}/category", data={
         "category": "Dining", "return_to": "categories", "anchor": f"m{zlib.crc32(b'ZOMATO'):x}",
         "q": "uncategorized", "csrf_token": csrf_token(client, "/categories"),
     }, follow_redirects=True).get_data(as_text=True)
-    assert "Changed one transaction to Dining." in page
+    assert "One transaction changed to Dining." in page
 
 
 def test_changing_all_of_a_person_is_remembered_only_when_ticked(client, db, logged_in):
@@ -254,3 +254,67 @@ def test_changing_all_of_a_person_is_remembered_only_when_ticked(client, db, log
     change_merchant(client, "RAHUL S", "Rent", remember=True)
     change_merchant(client, "BLINKIT", "Groceries", remember=False)
     assert [tuple(r) for r in db.execute("SELECT merchant_key, category FROM category_overrides")] == [("RAHUL S", "Rent")]
+
+
+JSON = {"Accept": "application/json"}
+
+
+def change_merchant_json(client, merchant, category, remember=True):
+    data = {"merchant": merchant, "category": category, "csrf_token": csrf_token(client, "/categories")}
+    if remember:
+        data["remember"] = "1"
+    return client.post("/categories", data=data, headers=JSON)
+
+
+def undo(client, token):
+    return client.post("/categories/undo", data={"undo": token, "csrf_token": csrf_token(client, "/categories")}, headers=JSON)
+
+
+def test_undo_puts_back_a_merchants_mixed_categories_and_its_earlier_correction(client, db, logged_in):
+    from models import save_category_overrides
+
+    for i, category in enumerate(["Dining", "Groceries", "Uncategorized"]):
+        add(db, logged_in, f"UPI/ZOMATO LTD/41234567890{i}", category, date=f"2026-03-0{i + 1}")
+    save_category_overrides(db, logged_in, {"ZOMATO": "Dining"})
+    before = categories(db, logged_in)
+
+    answer = change_merchant_json(client, "ZOMATO", "Shopping").get_json()
+    assert answer["ok"] and answer["message"].startswith("ZOMATO: 3 transactions changed to Shopping") and "<svg" in answer["icon"]
+    assert {c for _, c in categories(db, logged_in)} == {"Shopping"}
+    assert db.execute("SELECT category FROM category_overrides").fetchone()[0] == "Shopping"
+
+    assert undo(client, answer["undo"]).get_json() == {"ok": True}
+    assert categories(db, logged_in) == before
+    assert db.execute("SELECT category FROM category_overrides").fetchone()[0] == "Dining"  # the earlier correction
+
+
+def test_undo_removes_a_correction_that_did_not_exist_before(client, db, logged_in):
+    add(db, logged_in, "UPI/BLINKIT/412345678901", "Uncategorized")
+    answer = change_merchant_json(client, "BLINKIT", "Groceries").get_json()
+    undo(client, answer["undo"])
+    assert categories(db, logged_in) == [("UPI/BLINKIT/412345678901", "Uncategorized")]
+    assert db.execute("SELECT COUNT(*) FROM category_overrides").fetchone()[0] == 0
+
+
+def test_undo_one_row_and_refuse_another_users_undo(app, db):
+    asha, ravi = app.test_client(), app.test_client()
+    asha_id, _ = register_and_login(asha, "asha"), register_and_login(ravi, "ravi")
+    add(db, asha_id, "UPI/ZOMATO LTD/412345678901", "Dining")
+    row = tx_id(db, "UPI/ZOMATO", asha_id)
+    answer = asha.post(f"/transactions/{row}/category", data={"category": "Groceries", "csrf_token": csrf_token(asha, "/dashboard")}, headers=JSON).get_json()
+    assert answer["ok"] and answer["message"] == "One transaction changed to Groceries."
+
+    refused = undo(ravi, answer["undo"])
+    assert refused.status_code == 400 and "can no longer be undone" in refused.get_json()["error"]
+    assert categories(db, asha_id) == [("UPI/ZOMATO LTD/412345678901", "Groceries")]
+    undo(asha, answer["undo"])
+    assert categories(db, asha_id) == [("UPI/ZOMATO LTD/412345678901", "Dining")]
+
+
+def test_the_page_script_gets_a_specific_error(client, db, logged_in):
+    add(db, logged_in, "UPI/ZOMATO LTD/412345678901", "Dining")
+    bad = change_merchant_json(client, "ZOMATO", "Free money")
+    assert bad.status_code == 400 and bad.get_json() == {"ok": False, "error": "Choose a category from the list. Nothing was changed."}
+    stale = client.post("/categories", data={"merchant": "ZOMATO", "category": "Groceries"}, headers=JSON)
+    assert stale.status_code == 400 and "Reload the page" in stale.get_json()["error"]
+    assert categories(db, logged_in) == [("UPI/ZOMATO LTD/412345678901", "Dining")]
