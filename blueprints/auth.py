@@ -27,9 +27,10 @@ def _client_ip() -> str:
     """The visitor's address. In production every request comes through Render's proxies, so remote_addr is a
     proxy's address shared by every visitor."""
     if current_app.config["IS_PRODUCTION"]:
-        # shortcut: trusts Cloudflare's CF-Connecting-IP, which Render's edge sets and overwrites; behind another
-        # proxy a visitor could send it themselves and dodge the per-address count (the per-username one holds).
-        return request.headers.get("CF-Connecting-IP") or request.remote_addr or ""
+        # shortcut: trusts Cloudflare's CF-Connecting-IP, which Render's edge sets and overwrites, else the first
+        # X-Forwarded-For entry. A visitor can write either behind another proxy and dodge the per-address count
+        # (the per-username one holds), but neither is ever one address shared by every visitor.
+        return request.headers.get("CF-Connecting-IP") or (request.access_route or [""])[0]
     return request.remote_addr or ""
 
 

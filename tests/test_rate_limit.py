@@ -64,3 +64,21 @@ def test_failed_sign_ups_never_lock_anyone_out_of_signing_in(client, db, user_id
     for i in range(5):
         register(client, "asha", f"203.0.113.{i}")
     assert login(client, "asha", "secret123", "203.0.113.0").status_code == 302
+
+
+def test_in_production_visitors_behind_the_same_proxy_have_their_own_counts(app, client, db, user_id):
+    app.config["IS_PRODUCTION"] = True  # every request arrives from Render's proxy, one shared address
+    behind = {"REMOTE_ADDR": "10.0.0.1"}
+
+    def login_via(headers, username, password):
+        return client.post("/login", data={"username": username, "password": password, "csrf_token": csrf_token(client, "/login")},
+                           headers=headers, environ_base=behind)
+
+    for name in ("ravi", "meena", "arjun", "kavya", "rahul"):
+        login_via({"X-Forwarded-For": "203.0.113.1"}, name, "wrong")
+    assert login_via({"X-Forwarded-For": "198.51.100.2"}, "asha", "secret123").status_code == 302  # someone else
+
+    for name in ("ravi", "meena", "arjun", "kavya", "rahul"):
+        login_via({"CF-Connecting-IP": "203.0.113.7", "X-Forwarded-For": f"192.0.2.{len(name)}"}, name, "wrong")
+    refused = login_via({"CF-Connecting-IP": "203.0.113.7", "X-Forwarded-For": "192.0.2.99"}, "asha", "secret123")
+    assert refused.status_code == 429  # Cloudflare's header wins over one the visitor can write
