@@ -1,0 +1,15 @@
+Kotak Mahindra Bank,,,,,,,
+Account Statement,,,,,,,
+Account No.,XXXXXX5566,,,,,,
+Name,ANANYA KRISHNAN,,,,,,
+Period,01-10-2026 to 31-10-2026,,,,,,
+,,,,,,,
+Sl. No.,Transaction Date,Value Date,Description,Chq / Ref No.,Debit,Credit,Balance
+1,01-10-2026 09:15:22,01-10-2026,UPI/OLA/512345678906/Ride to office,UPI-512345678906,312.00,,"20,688.00"
+2,03-10-2026 18:40:05,03-10-2026,IMPS/P2A/612345678908/DEEPA N/Rent share,IMPS-612345678908,,"9,000.00","29,688.00"
+3,12-10-2026 11:02:47,12-10-2026,PCD/4580XXXXXXXX1122/DMART AVENUE CHENNAI,PCD-0000000000123,"2,145.60",,"27,542.40"
+,,,,,,,
+Opening balance,"21,000.00",,,,,,
+Total debit,"2,457.60",,,,,,
+Total credit,"9,000.00",,,,,,
+Closing balance,"27,542.40",,,,,,

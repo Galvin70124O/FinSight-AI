@@ -1,0 +1,18 @@
+Account Name       :,Mr. ARJUN MENON
+Address            :,"Flat 4B, Sea Breeze Apartments, Kochi"
+Date               :,1 Nov 2026
+Account Number     :,XXXXXXX7788
+Account Description:,REGULAR SB CHQ-INDIVIDUALS
+Branch             :,PALARIVATTOM
+IFS Code           :,SBIN0000001
+"Balance as on 1 Oct 2026 :","58,200.00"
+,
+Account Statement from 1 Oct 2026 to 31 Oct 2026
+,
+Txn Date,Value Date,Description,Ref No./Cheque No.,Debit,Credit,Balance
+2 Oct 2026,2 Oct 2026,BY TRANSFER-NEFT*UTIB0000123*AXIR262751234*NORTHWIND LABS--,TRANSFER FROM 3199412345678,,"95,000.00","1,53,200.00"
+6 Oct 2026,6 Oct 2026,TO TRANSFER-UPI/DR/612345678907/BIGBASKET/YESB/bigbasket@ybl/Groceries--,TRANSFER TO 4897691234567,"3,410.75",,"1,49,789.25"
+13 Oct 2026,13 Oct 2026,ATM WDL-ATM CASH 5678 PALARIVATTOM KOCHI--,,"10,000.00",,"1,39,789.25"
+25 Oct 2026,25 Oct 2026,TO TRANSFER-INB Monthly Rent October--,TRANSFER TO 4897691234999,"22,000.00",,"1,17,789.25"
+,,,,,,
+**This is a computer generated statement and does not require a signature**,,,,,,

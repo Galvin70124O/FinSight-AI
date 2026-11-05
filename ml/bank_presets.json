@@ -1,0 +1,110 @@
+{
+  "_about": [
+    "Column names and date formats of Indian bank statement downloads, used by ml/statement_parser.py.",
+    "They are approximations taken from open-source statement parsers (see each bank's sources), not from",
+    "the banks themselves: check them against a real statement. Names match after lower-casing and dropping",
+    "punctuation, bracketed parts and the words INR and Rs, so 'Withdrawal Amount (INR )' is 'withdrawal amount'.",
+    "Roles: date, value_date (used only when there is no transaction date), description, debit, credit,",
+    "amount, type (Dr/Cr), category, and ignore (known columns such as Balance that help find the header row).",
+    "Date formats are Python strptime formats; a bank's formats settle whether 03/04/26 is day-first."
+  ],
+  "generic": {
+    "label": "Generic",
+    "date_formats": [],
+    "columns": {
+      "date": ["Date", "Txn Date", "Transaction Date", "Tran Date", "Trans Date", "Post Date", "Posting Date", "Booking Date"],
+      "value_date": ["Value Date", "Value Dt", "Value Dat"],
+      "description": ["Description", "Narration", "Particulars", "Transaction Particulars", "Remarks", "Transaction Remarks", "Details", "Transaction Details", "Txn Details"],
+      "debit": ["Debit", "Debit Amount", "Debit Amt", "Withdrawal", "Withdrawals", "Withdrawal Amt.", "Withdrawal Amount", "DR"],
+      "credit": ["Credit", "Credit Amount", "Credit Amt", "Deposit", "Deposits", "Deposit Amt.", "Deposit Amount", "CR"],
+      "amount": ["Amount", "Transaction Amount", "Txn Amount"],
+      "type": ["Type", "Transaction Type", "Dr / Cr", "DR/CR", "CR/DR", "Debit/Credit"],
+      "category": ["Category"],
+      "ignore": ["Balance", "Closing Balance", "Running Balance", "Available Balance", "Chq./Ref.No.", "Chq/Ref Number", "Ref No./Cheque No.", "Ref No/Cheque No", "Chq / Ref No.", "Cheque Number", "Cheque No", "Chq No", "CHQNO", "Reference", "Ref No", "S No.", "Sl. No.", "SRL NO", "SOL", "Init.Br", "Branch", "Branch Name"]
+    }
+  },
+  "hdfc": {
+    "label": "HDFC Bank",
+    "date_formats": ["%d/%m/%y", "%d/%m/%Y"],
+    "columns": {
+      "date": ["Date"],
+      "value_date": ["Value Dt", "Value Dat"],
+      "description": ["Narration"],
+      "debit": ["Withdrawal Amt.", "Debit Amount"],
+      "credit": ["Deposit Amt.", "Credit Amount"],
+      "ignore": ["Chq./Ref.No.", "Chq/Ref Number", "Closing Balance"]
+    },
+    "sources": [
+      "https://github.com/aakraj/kharchalens/blob/main/kharchalens/parser/hdfc_base.py",
+      "https://github.com/sakthipriyan/xfina/blob/main/src/bank_accounts/hdfc.rs",
+      "https://github.com/MalayPalace/Bank-Statement-Utility/blob/master/bank_statement_utility/services/HdfcDebitStatementProcessor.py"
+    ]
+  },
+  "sbi": {
+    "label": "State Bank of India",
+    "date_formats": ["%d %b %Y", "%d-%b-%Y", "%d/%m/%Y"],
+    "columns": {
+      "date": ["Txn Date", "Date"],
+      "value_date": ["Value Date"],
+      "description": ["Description", "Details"],
+      "debit": ["Debit"],
+      "credit": ["Credit"],
+      "ignore": ["Ref No./Cheque No.", "Ref No/Cheque No", "Balance"]
+    },
+    "sources": [
+      "https://github.com/MalayPalace/Bank-Statement-Utility/blob/master/bank_statement_utility/services/SbiDebitStatementProcessor.py",
+      "https://github.com/MalayPalace/Bank-Statement-Utility/blob/master/bank_statement_utility/config_writer.py",
+      "https://github.com/aakraj/kharchalens/blob/main/kharchalens/parser/sbi_base.py"
+    ]
+  },
+  "icici": {
+    "label": "ICICI Bank",
+    "date_formats": ["%d-%b-%Y", "%d/%m/%Y"],
+    "columns": {
+      "date": ["Transaction Date"],
+      "value_date": ["Value Date"],
+      "description": ["Transaction Remarks"],
+      "debit": ["Withdrawal Amount (INR )"],
+      "credit": ["Deposit Amount (INR )"],
+      "ignore": ["S No.", "Cheque Number", "Balance (INR )"]
+    },
+    "sources": [
+      "https://github.com/sakthipriyan/xfina/blob/main/src/bank_accounts/icici.rs",
+      "https://github.com/aakraj/kharchalens/blob/main/kharchalens/parser/icici_base.py"
+    ]
+  },
+  "axis": {
+    "label": "Axis Bank",
+    "date_formats": ["%d-%m-%Y"],
+    "columns": {
+      "date": ["Tran Date"],
+      "value_date": ["Value Date"],
+      "description": ["PARTICULARS", "Transaction Particulars"],
+      "debit": ["DR", "Debit"],
+      "credit": ["CR", "Credit"],
+      "amount": ["Amount(INR)"],
+      "type": ["DR/CR"],
+      "ignore": ["SRL NO", "CHQNO", "Chq No", "BAL", "Balance", "Balance(INR)", "SOL", "Init.Br", "Branch Name"]
+    },
+    "sources": [
+      "https://github.com/sakthipriyan/xfina/blob/main/src/bank_accounts/axis.rs",
+      "https://www.bankstatementkit.com/axis-bank-statement-converter"
+    ]
+  },
+  "kotak": {
+    "label": "Kotak Mahindra Bank",
+    "date_formats": ["%d-%m-%Y"],
+    "columns": {
+      "date": ["Transaction Date"],
+      "value_date": ["Value Date"],
+      "description": ["Description"],
+      "debit": ["Debit"],
+      "credit": ["Credit"],
+      "ignore": ["Sl. No.", "Chq / Ref No.", "Balance"]
+    },
+    "sources": [
+      "https://github.com/MalayPalace/Bank-Statement-Utility/blob/master/bank_statement_utility/services/KotakDebitStatementProcessor.py",
+      "https://github.com/MalayPalace/Bank-Statement-Utility/blob/master/bank_statement_utility/config_writer.py"
+    ]
+  }
+}
