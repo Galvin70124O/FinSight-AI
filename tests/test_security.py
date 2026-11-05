@@ -1,4 +1,5 @@
 import io
+import re
 
 import pytest
 
@@ -76,3 +77,26 @@ def test_an_out_of_date_form_on_a_post_only_address_lands_on_a_real_page(client,
     # The CSRF check fails (no token); the redirect must not be a GET to the POST-only address (a 405).
     response = client.post(path, data={}, follow_redirects=True)
     assert response.status_code == 200
+
+
+SIGNED_OUT = ["/", "/login", "/register", "/privacy", "/terms", "/no-such-page"]
+SIGNED_IN = ["/dashboard", "/categories", "/upload"]
+REVIEW_CSV = b"Date,Amount,Type,Description\n2026-10-03,486,Expense,UPI/ZOMATO LTD/412345678902\n"
+
+
+def test_every_page_sends_the_security_headers_and_runs_no_inline_script(app, client, logged_in):
+    client.post("/demo-data", data={"csrf_token": csrf_token(client, "/dashboard")})  # charts, bars and meters on the overview
+    review = client.post("/upload", data={"file": (io.BytesIO(REVIEW_CSV), "s.csv"), "csrf_token": csrf_token(client, "/upload")},
+                         content_type="multipart/form-data")
+    responses = [(path, app.test_client().get(path)) for path in SIGNED_OUT]
+    responses += [(path, client.get(path)) for path in SIGNED_IN] + [("/upload (review)", review)]
+    for path, response in responses:
+        assert response.headers.get("X-Frame-Options") == "DENY", path
+        assert response.headers.get("X-Content-Type-Options") == "nosniff", path
+        assert response.headers.get("Referrer-Policy") == "same-origin", path
+        policy = response.headers.get("Content-Security-Policy", "")
+        assert "default-src 'self'" in policy and "frame-ancestors 'none'" in policy and "unsafe-eval" not in policy, path
+        assert "script-src" not in policy or "script-src 'self';" in policy + ";", path
+        # What the policy blocks: a <script> with code in it. JSON data blocks are never run, so they stay.
+        for tag in re.findall(r"<script\b[^>]*>", response.get_data(as_text=True)):
+            assert "src=" in tag or 'type="application/json"' in tag, (path, tag)

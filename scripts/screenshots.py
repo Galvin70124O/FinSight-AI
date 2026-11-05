@@ -104,7 +104,9 @@ def sign_up(context) -> None:
 
 
 def themed_context(browser, theme: str, width: int, height: int, scale: float, storage=None):
-    context = browser.new_context(viewport={"width": width, "height": height}, device_scale_factor=scale, storage_state=storage)
+    # bypass_csp: the screenshots add a <style> tag (fixed bars made static), which the app's CSP refuses.
+    context = browser.new_context(viewport={"width": width, "height": height}, device_scale_factor=scale, storage_state=storage,
+                                  bypass_csp=True)
     context.add_init_script(f"try {{ localStorage.setItem('finsight-theme', '{theme}'); }} catch (e) {{}}")
     return context
 

@@ -13,6 +13,20 @@ from utils import CSVValidationError, format_day, format_inr, group_digits, plur
 
 csrf = CSRFProtect()
 
+# Scripts, styles, fonts and the chart library are all served by the app itself, so 'self' covers them.
+CONTENT_SECURITY_POLICY = "; ".join([
+    "default-src 'self'",
+    # Plotly adds empty <style> blocks and fills them from script. This is the hash of an empty block, so it
+    # lets those in and no inline CSS text at all.
+    "style-src 'self' 'sha256-47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU='",
+    "style-src-attr 'unsafe-inline'",  # the widths of the overview's category bars and health meter
+    "img-src 'self' data:",  # the select arrow in style.css is an SVG data URL
+    "object-src 'none'",
+    "base-uri 'self'",
+    "form-action 'self'",
+    "frame-ancestors 'none'",
+])
+
 
 class InMemoryRequest(Request):
     """Keeps uploaded files in memory. Werkzeug would move any upload over 500 KB into a temporary file on
@@ -43,6 +57,14 @@ def create_app(test_config: dict | None = None) -> Flask:
     app.register_blueprint(auth_bp)
     app.register_blueprint(main_bp)
     app.teardown_appcontext(close_db)
+
+    @app.after_request
+    def security_headers(response):
+        response.headers["Content-Security-Policy"] = CONTENT_SECURITY_POLICY
+        response.headers["X-Frame-Options"] = "DENY"  # frame-ancestors for browsers that predate it
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["Referrer-Policy"] = "same-origin"
+        return response
 
     @app.errorhandler(CSVValidationError)
     def handle_csv_validation_error(error: CSVValidationError):
