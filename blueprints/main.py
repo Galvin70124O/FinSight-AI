@@ -32,7 +32,6 @@ main_bp = Blueprint("main", __name__)
 logger = logging.getLogger(__name__)
 
 REVIEW_MAX_AGE = 3600  # seconds a review form stays valid
-BANK_TYPE_WORDS = {"dr", "cr", "d", "c", "debit", "credit", "withdrawal", "deposit"}
 MERCHANT_ROWS_PAGE = 20  # transactions shown per merchant on the Categories page, then "Show more"
 ROWS_SHOWN_PER_MERCHANT = 10  # enough to recognise a merchant; keeps a 2 MB file's review page light
 TOO_MANY_ROWS = (
@@ -142,8 +141,8 @@ def upload():
         data = file.read()  # at most MAX_CONTENT_LENGTH (2 MB); Flask refuses anything bigger
         try:
             db = get_db()
-            own_columns, dr_cr = _finsight_format(file.filename, data)
-            if {column.lower() for column in REQUIRED_COLUMNS} <= own_columns and not dr_cr:  # our own format: its original path
+            own_columns, for_reader = _finsight_format(file.filename, data)
+            if {column.lower() for column in REQUIRED_COLUMNS} <= own_columns and not for_reader:  # our own format: its original path
                 return _import_finsight_csv(db, data, filename)
             # A bank statement. The file's own name is used to tell its type and in messages about it.
             grid = statement_parser.read_grid(data, file.filename)
@@ -176,8 +175,9 @@ def upload():
 
 def _finsight_format(name: str, data: bytes) -> tuple[set[str], bool]:
     """FinSight's own column names (date, category, amount, type, description) in the first row of a CSV, and
-    whether its Type column says Dr/Cr like a bank's: such a file goes to the statement reader, which knows those
-    words, Indian commas and day-first dates, instead of having those rows dropped."""
+    whether the statement reader should read it anyway: a Type that says Dr/Cr like a bank's, or a date that is
+    not YYYY-MM-DD. The old path would drop those rows, or read 05/10/2026 as 10 May; the reader knows the words
+    and reads dates day first, or asks when the file doesn't say which."""
     if not name.lower().endswith(".csv"):
         return set(), False
     rows = csv.reader(io.StringIO(data.decode("utf-8-sig", "replace")))
@@ -185,8 +185,16 @@ def _finsight_format(name: str, data: bytes) -> tuple[set[str], bool]:
     try:
         header = [cell.strip().lower() for cell in next(rows, [])]
         own = set(header) & {column.lower() for column in COLUMNS}
-        at = header.index("type") if "type" in own else None
-        return own, at is not None and any(len(row) > at and row[at].strip().lower() in BANK_TYPE_WORDS for row in rows)
+        at = {column: header.index(column) for column in ("date", "type") if column in own}
+
+        def cell(row, column):
+            return row[at[column]].strip() if column in at and at[column] < len(row) else ""
+
+        return own, any(
+            statement_parser.says_dr_or_cr(cell(row, "type"))
+            or (cell(row, "date") and not statement_parser.ISO_DATE.match(cell(row, "date")))  # a blank date stays as before
+            for row in rows
+        )
     except csv.Error:  # a field over csv's size limit: pandas reads our own format as before; others get a message
         return own, False
 

@@ -379,6 +379,12 @@ _DEBIT_WORDS = {"dr", "d", "debit", "withdrawal", "expense"}
 _CREDIT_WORDS = {"cr", "c", "credit", "deposit", "income"}
 
 
+def says_dr_or_cr(text: str) -> bool:
+    """A bank's word for which way money went ('Dr.', 'CR', 'Debit'), read as convert() reads a Type cell.
+    FinSight's own Income and Expense don't count."""
+    return _name(text) in (_DEBIT_WORDS | _CREDIT_WORDS) - {"income", "expense"}
+
+
 def _amount(text: str) -> tuple[float, str | None] | None:
     """'1,25,000.00 Cr' -> (125000.0, 'cr'); '-500' and '(500)' -> (-500.0, None); blank or '-' -> (0.0, None).
     None when the text is not an amount. Commas go whatever their grouping, so Indian 1,25,000 reads too."""
@@ -397,10 +403,11 @@ def _amount(text: str) -> tuple[float, str | None] | None:
 
 
 _TIME = re.compile(r"\s+\d{1,2}:\d{2}(:\d{2})?(\s*[ap]\.?m\.?)?$", re.IGNORECASE)
-_ISO = re.compile(r"^\d{4}-\d{2}-\d{2}$")  # what Excel date cells become in read_grid
+ISO_DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")  # what Excel date cells become in read_grid; FinSight's own CSV dates
 DAY_FIRST = ("%d/%m/%Y", "%d/%m/%y", "%d-%m-%Y", "%d-%m-%y", "%d.%m.%Y", "%d.%m.%y")
 MONTH_FIRST = ("%m/%d/%Y", "%m/%d/%y", "%m-%d-%Y", "%m-%d-%y")
-UNAMBIGUOUS = ("%Y-%m-%d", "%Y/%m/%d", "%d %b %Y", "%d-%b-%Y", "%d-%b-%y", "%d %b %y", "%d/%b/%Y", "%d %B %Y", "%d-%B-%Y")
+UNAMBIGUOUS = ("%Y-%m-%d", "%Y/%m/%d", "%d %b %Y", "%d-%b-%Y", "%d-%b-%y", "%d %b %y", "%d/%b/%Y", "%d %B %Y", "%d-%B-%Y",
+               "%b %d, %Y", "%B %d, %Y")  # month first with its name ("Oct 5, 2026"): still unambiguous
 
 
 def _parse_date(text: str, fmt: str) -> date | None:
@@ -524,7 +531,7 @@ def convert(layout: Layout, roles: list[str], date_order: str | None = None) -> 
     if result.error_count:
         return result
 
-    texts = {text for _, text, *_ in found if text and not _ISO.match(text)}
+    texts = {text for _, text, *_ in found if text and not ISO_DATE.match(text)}
     fmt, both = _date_format(texts, _PRESETS[layout.preset]["date_formats"], date_order)
     if both:
         # An example whose two readings differ, such as 03/04/26: 3 Apr 2026 or 4 Mar 2026.
@@ -534,7 +541,7 @@ def convert(layout: Layout, roles: list[str], date_order: str | None = None) -> 
 
     rows = []
     for number, text, amount, description, category in found:
-        day = _parse_date(text, "%Y-%m-%d" if _ISO.match(text) else fmt) if text else None
+        day = _parse_date(text, "%Y-%m-%d" if ISO_DATE.match(text) else fmt) if text else None
         if day is None:
             result.problem(f"Row {number}: '{text}' is not a valid date." if text else f"Row {number}: the date is blank.")
             continue

@@ -134,6 +134,26 @@ def test_a_csv_with_our_column_names_but_dr_and_cr_is_read_as_a_bank_statement(c
     assert "Read 2 transactions from rows 2–3 (Generic layout)." in page and "Check the categories" in page
 
 
+def test_day_first_dates_in_our_own_format_are_read_day_first(client, db, logged_in):
+    content = (b"Date,Category,Amount,Type,Description\n05/10/2026,Food,100,Expense,A\n"
+               b"12/10/2026,Food,300,Expense,C\n25/10/2026,Food,200,Expense,B\n")
+    page = upload(client, content, "export.csv")
+    assert "Imported 3 transactions." in page
+    assert saved(db, logged_in) == [("2026-10-05", 100.0, "Expense"), ("2026-10-12", 300.0, "Expense"), ("2026-10-25", 200.0, "Expense")]
+
+
+def test_month_name_dates_in_our_own_format_still_import(client, db, logged_in):
+    page = upload(client, b"Date,Category,Amount,Type,Description\n\"Oct 5, 2026\",Food,100,Expense,A\n", "export.csv")
+    assert "Imported 1 transaction." in page
+    assert saved(db, logged_in) == [("2026-10-05", 100.0, "Expense")]
+
+
+def test_dr_and_cr_written_with_a_dot_are_read_as_a_bank_statement(client, db, logged_in):
+    content = b"Date,Description,Amount,Type\n2026-10-25,UPI-BIGBASKET,1250,Dr.\n2026-10-26,NEFT-SALARY,85000,Cr.\n"
+    page = upload(client, content, "export.csv")
+    assert "Read 2 transactions from rows 2–3 (Generic layout)." in page and "Check the categories" in page
+
+
 def test_a_field_longer_than_csvs_limit_keeps_our_format_working_and_explains_a_statement(client, db, logged_in):
     ours = upload(client, b"Date,Category,Amount,Type,Description\n2025-01-01,Food,1,Expense," + b"x" * 200_000 + b"\n", "s.csv")
     assert "Imported 1 transaction." in ours
