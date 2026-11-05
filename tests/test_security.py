@@ -100,3 +100,14 @@ def test_every_page_sends_the_security_headers_and_runs_no_inline_script(app, cl
         # What the policy blocks: a <script> with code in it. JSON data blocks are never run, so they stay.
         for tag in re.findall(r"<script\b[^>]*>", response.get_data(as_text=True)):
             assert "src=" in tag or 'type="application/json"' in tag, (path, tag)
+
+
+def test_each_sign_in_attempt_logs_the_address_it_is_counted_under_but_never_the_username(app, client, db, user_id, caplog):
+    app.config["IS_PRODUCTION"] = True
+    caplog.set_level("DEBUG", logger=app.logger.name)
+    for password in ("wrong", "secret123"):
+        client.post("/login", data={"username": "asha", "password": password, "csrf_token": csrf_token(client, "/login")},
+                    headers={"CF-Connecting-IP": "203.0.113.7"}, environ_base={"REMOTE_ADDR": "10.0.0.1"})
+    logged = [record.getMessage() for record in caplog.records]
+    assert [line for line in logged if "Sign-in attempt" in line] == ["Sign-in attempt from 203.0.113.7"] * 2
+    assert not any("asha" in line for line in logged)

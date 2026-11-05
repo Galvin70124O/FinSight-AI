@@ -1,6 +1,5 @@
 import io
 import os
-import logging
 from datetime import date
 from flask import Flask, Request, flash, jsonify, redirect, render_template, request, url_for
 from flask_wtf.csrf import CSRFError, CSRFProtect
@@ -43,7 +42,7 @@ def create_app(test_config: dict | None = None) -> Flask:
     app.config.from_object(Config)
     if test_config:
         app.config.update(test_config)
-    app.logger.setLevel(logging.INFO)
+    app.logger.setLevel(os.environ.get("LOG_LEVEL", "INFO").upper())
 
     os.makedirs(app.instance_path, exist_ok=True)
 

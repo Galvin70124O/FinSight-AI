@@ -104,6 +104,7 @@ requirements (Playwright) and Google Chrome, or Playwright's own Chromium
 | `DATABASE_PATH` | `instance/finsight_ai.db` | SQLite file used when `DATABASE_URL` is not set. |
 | `DATABASE_URL` | unset | A `postgres://` / `postgresql://` URL switches storage to Postgres. |
 | `FLASK_DEBUG` | unset | `1` turns on the debugger and auto-reload (local only). |
+| `LOG_LEVEL` | `INFO` | `DEBUG` also logs the address each sign-in attempt is counted under. Use it to check a deploy, then remove it. |
 | `HOST` / `PORT` | `127.0.0.1` / `5000` | Where `python app.py` listens. It binds to `0.0.0.0` only in production without debug. |
 
 ## CSV format
@@ -262,6 +263,16 @@ would save.
 4. Nothing trains during the build or at start: the category model
    (`ml/categoriser.joblib`) is committed and only loaded. `scikit-learn` is
    pinned to the version that saved it.
+5. **Check which address the sign-in limit counts.** The app reads Cloudflare's
+   `CF-Connecting-IP` header, which Render's edge should set and overwrite. After
+   the first deploy, set `LOG_LEVEL=DEBUG`, sign in once, and find
+   `Sign-in attempt from <address>` in the service's Logs. It should match your
+   public address (any "what is my IP" page), not a `10.x` address of Render's.
+   Then sign in again with a made-up `CF-Connecting-IP: 203.0.113.9` header
+   (a browser extension that edits request headers can add it): the log should
+   still show your real address. Remove `LOG_LEVEL` afterwards. If the made-up
+   address does show up, a visitor can dodge the per-address count, but the
+   limit of 5 failed sign-ins per username still holds.
 
 ## Project structure
 

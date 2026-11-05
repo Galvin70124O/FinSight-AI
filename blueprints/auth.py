@@ -99,7 +99,9 @@ def login():
         password = request.form.get("password", "")
 
         db = get_db()
-        keys = [f"login-user:{username[:200]}", f"login-ip:{_client_ip()}"]
+        ip = _client_ip()
+        current_app.logger.debug("Sign-in attempt from %s", ip)  # to check the address on Render (README, Deploying)
+        keys = [f"login-user:{username[:200]}", f"login-ip:{ip}"]
         refusal = _too_many(keys)  # checked before the password, so a locked guess costs no password hashing
         if refusal:
             flash(refusal, "danger")
