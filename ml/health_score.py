@@ -49,13 +49,17 @@ def calculate_health_score(transactions_df: pd.DataFrame) -> HealthScore:
             "name": "Savings rate",
             "points": round(50 * min(max(savings_rate / TARGET_SAVINGS_RATE, 0.0), 1.0), 1),
             "max_points": 50,
-            "detail": f"You kept {savings_rate * 100:.1f}% of your income (full marks at 20%).",
+            "detail": (
+                f"You kept {savings_rate * 100:.1f}% of your income (full marks at 20%)."
+                if savings_rate >= 0
+                else f"You spent {-savings_rate * 100:.1f}% more than your income (full marks at 20% kept)."
+            ),
         },
         {
             "name": "Months covered",
             "points": round(25 * covered / len(months), 1),
             "max_points": 25,
-            "detail": f"Income covered spending in {covered} of {len(months)} month(s).",
+            "detail": f"Income covered spending in {covered} of {len(months)} month{'' if len(months) == 1 else 's'}.",
         },
     ]
     if len(months) >= 2 and monthly_expense.mean() > 0:

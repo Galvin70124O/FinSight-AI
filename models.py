@@ -2,11 +2,14 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 import pandas as pd
 from werkzeug.security import check_password_hash, generate_password_hash
+
+from database import IntegrityError
+from ml.categorise import merchant_key
 
 
 @dataclass
@@ -42,18 +45,21 @@ class Transaction:
     source_file: str | None = None
 
 
-def _normalize_transaction_signature(date_value: Any, category: Any, amount: Any, transaction_type: Any, description: Any) -> tuple[str, str, float, str, str]:
-    """Create a stable signature for transaction deduplication."""
+def transaction_signature(date_value: Any, amount: Any, transaction_type: Any, description: Any) -> tuple[str, float, str, str]:
+    """Create a stable signature for transaction deduplication.
+
+    The category is left out on purpose: it can be filled in automatically or
+    corrected, so the same bank row may arrive with a different category.
+    """
     if hasattr(date_value, "date"):
         normalized_date = date_value.date().isoformat()
     else:
         normalized_date = str(date_value).strip()
 
-    normalized_category = str(category or "").strip().lower()
     normalized_amount = round(float(amount), 2)
     normalized_type = str(transaction_type or "Expense").strip().title()
-    normalized_description = str(description or "").strip().lower()
-    return (normalized_date, normalized_category, normalized_amount, normalized_type, normalized_description)
+    normalized_description = " ".join(str(description or "").split()).lower()
+    return (normalized_date, normalized_amount, normalized_type, normalized_description)
 
 
 def create_user(db, username: str, email: str, password: str) -> int:
@@ -90,19 +96,18 @@ def verify_password(user: User, password: str) -> bool:
     return check_password_hash(user.password_hash, password)
 
 
+def imported_signatures(db, user_id: int) -> set[tuple[str, float, str, str]]:
+    """Duplicate-check signatures of every transaction the user already has."""
+    rows = db.execute("SELECT date, amount, type, description FROM transactions WHERE user_id = ?", (user_id,)).fetchall()
+    return {transaction_signature(row["date"], row["amount"], row["type"], row["description"]) for row in rows}
+
+
 def save_transactions(db, user_id: int, transactions_df, source_file: str | None = None) -> int:
     """Insert cleaned transaction rows into the database without duplicates."""
-    existing_rows = db.execute(
-        "SELECT date, category, amount, type, description FROM transactions WHERE user_id = ?",
-        (user_id,),
-    ).fetchall()
-    existing_keys = {
-        _normalize_transaction_signature(row["date"], row["category"], row["amount"], row["type"], row["description"])
-        for row in existing_rows
-    }
+    existing_keys = imported_signatures(db, user_id)
 
-    count = 0
-    for _, row in transactions_df.iterrows():
+    new_rows = []
+    for row in transactions_df.to_dict("records"):
         transaction_date = row["Date"].date().isoformat() if hasattr(row["Date"], "date") else str(row["Date"])
         transaction_type = str(row.get("Transaction_Type", row.get("Type", "Expense")))
         metadata = {}
@@ -127,40 +132,42 @@ def save_transactions(db, user_id: int, transactions_df, source_file: str | None
             metadata.get("tags") if isinstance(metadata, dict) and "tags" in metadata else None,
             metadata_json,
         )
-        signature = _normalize_transaction_signature(payload[0], payload[1], payload[2], payload[3], payload[4])
+        signature = transaction_signature(payload[0], payload[2], payload[3], payload[4])
         if signature in existing_keys:
             continue
+        existing_keys.add(signature)
+        new_rows.append((user_id, *payload, merchant_key(payload[4])))
 
-        db.execute(
+    # One batch: a 2 MB file is ~30,000 rows, and one statement per row is ~30,000 round trips to Postgres.
+    if new_rows:
+        db.executemany(
             """
             INSERT INTO transactions (
                 user_id, date, category, amount, type, description, source_file,
-                transaction_type, account, currency, tags, metadata
+                transaction_type, account, currency, tags, metadata, merchant_key
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
-            (user_id, *payload),
+            new_rows,
         )
-        existing_keys.add(signature)
-        count += 1
     db.commit()
-    return count
+    return len(new_rows)
 
 
 def deduplicate_transactions_in_db(db, user_id: int | None = None) -> int:
     """Remove duplicate transactions from the database using a canonical signature."""
-    query = "SELECT id, user_id, date, category, amount, type, description FROM transactions"
+    query = "SELECT id, user_id, date, amount, type, description FROM transactions"
     params: tuple[Any, ...] = ()
     if user_id is not None:
         query += " WHERE user_id = ?"
         params = (user_id,)
 
     rows = db.execute(query, params).fetchall()
-    seen: set[tuple[str, str, float, str, str]] = set()
+    seen: set[tuple[str, float, str, str]] = set()
     duplicate_ids: list[int] = []
 
     for row in rows:
-        signature = _normalize_transaction_signature(row["date"], row["category"], row["amount"], row["type"], row["description"])
+        signature = transaction_signature(row["date"], row["amount"], row["type"], row["description"])
         if signature in seen:
             duplicate_ids.append(row["id"])
         else:
@@ -202,4 +209,116 @@ def save_insights(db, user_id: int, insights: dict) -> None:
         """,
         (user_id, datetime.now(timezone.utc).isoformat(timespec="seconds"), json.dumps(insights)),
     )
+    db.commit()
+
+
+def clear_insights(db, user_id: int) -> None:
+    """Drop a user's cached insights; the overview recomputes them on its next visit. Cheaper than recomputing
+    after every category change (about a second for a 31,000-row account)."""
+    db.execute("DELETE FROM user_insights WHERE user_id = ?", (user_id,))
+    db.commit()
+
+
+def get_user_categories(db, user_id: int, limit: int = 20) -> list[str]:
+    """The user's most used categories, most used first, without the blank placeholder."""
+    rows = db.execute(
+        """
+        SELECT category FROM transactions WHERE user_id = ? AND category <> 'Uncategorized'
+        GROUP BY category ORDER BY COUNT(*) DESC, category LIMIT ?
+        """,
+        (user_id, limit),
+    ).fetchall()
+    return [row["category"] for row in rows]
+
+
+def claim_import_token(db, user_id: int, token: str) -> bool:
+    """Mark one reviewed import as saved; False if it already was (a double tap or a resubmitted form).
+
+    Not committed here: the caller's save commits the token together with the rows, and a
+    second request with the same token waits on the first one's lock, then fails.
+    """
+    now = datetime.now(timezone.utc)
+    # A review form expires after an hour, so day-old tokens can never come back.
+    db.execute("DELETE FROM import_tokens WHERE created_at < ?", ((now - timedelta(days=1)).isoformat(timespec="seconds"),))
+    try:
+        db.execute("INSERT INTO import_tokens (user_id, token, created_at) VALUES (?, ?, ?)", (user_id, token, now.isoformat(timespec="seconds")))
+    except IntegrityError:
+        db.rollback()
+        return False
+    return True
+
+
+def get_category_overrides(db, user_id: int) -> dict[str, str]:
+    """The categories this user chose for merchants, by merchant key."""
+    rows = db.execute("SELECT merchant_key, category FROM category_overrides WHERE user_id = ?", (user_id,)).fetchall()
+    return {row["merchant_key"]: row["category"] for row in rows}
+
+
+def _remember(db, user_id: int, merchant_key: str, category: str) -> None:
+    """Upsert one correction; the caller commits."""
+    db.execute(
+        """
+        INSERT INTO category_overrides (user_id, merchant_key, category, updated_at) VALUES (?, ?, ?, ?)
+        ON CONFLICT (user_id, merchant_key) DO UPDATE SET category = excluded.category, updated_at = excluded.updated_at
+        """,
+        (user_id, merchant_key, category, datetime.now(timezone.utc).isoformat(timespec="seconds")),
+    )
+
+
+def save_category_overrides(db, user_id: int, overrides: dict[str, str]) -> None:
+    """Remember the user's category for each merchant, replacing any earlier choice."""
+    for merchant_key, category in overrides.items():
+        _remember(db, user_id, merchant_key, category)
+    db.commit()
+
+
+def merchant_rows(db, user_id: int, key: str, limit: int | None = None) -> list:
+    """This user's transactions from one merchant, newest first."""
+    sql = "SELECT id, date, category, amount, type, description FROM transactions WHERE user_id = ? AND merchant_key = ? ORDER BY date DESC, id DESC"
+    return db.execute(sql + (" LIMIT ?" if limit else ""), (user_id, key, limit) if limit else (user_id, key)).fetchall()
+
+
+def _set_category(db, user_id: int, transaction_ids: list[int], category: str) -> int:
+    """Set the category of some of this user's rows; the caller commits. Other users' rows are never touched."""
+    changed = 0
+    for start in range(0, len(transaction_ids), 500):  # well under SQLite's limit on query parameters
+        chunk = transaction_ids[start:start + 500]
+        cursor = db.execute(
+            f"UPDATE transactions SET category = ? WHERE user_id = ? AND id IN ({', '.join('?' * len(chunk))})",
+            (category, user_id, *chunk),
+        )
+        changed += cursor.rowcount
+    return changed
+
+
+def recategorise(db, user_id: int, transaction_ids: list[int], category: str, remember_as: str = "") -> int:
+    """Set the category of some of this user's transactions and, given a merchant key, remember it for that
+    merchant, all in one commit. Returns how many rows changed."""
+    changed = _set_category(db, user_id, transaction_ids, category)
+    if remember_as:
+        _remember(db, user_id, remember_as, category)
+    db.commit()
+    return changed
+
+
+def restore_categories(db, user_id: int, previous: dict[str, list[int]], merchant_key: str = "", previous_override: str | None = None) -> int:
+    """Undo a change: give each row its earlier category and, given the merchant whose correction the change
+    saved, put that correction back as it was (or remove it if there was none), all in one commit."""
+    restored = sum(_set_category(db, user_id, ids, category) for category, ids in previous.items())
+    if merchant_key:
+        if previous_override is None:
+            db.execute("DELETE FROM category_overrides WHERE user_id = ? AND merchant_key = ?", (user_id, merchant_key))
+        else:
+            _remember(db, user_id, merchant_key, previous_override)
+    db.commit()
+    return restored
+
+
+def delete_user(db, user_id: int) -> None:
+    """Delete a user and everything stored for them (transactions, insights, category corrections) in one commit."""
+    db.execute("DELETE FROM import_tokens WHERE user_id = ?", (user_id,))
+    db.execute("DELETE FROM category_overrides WHERE user_id = ?", (user_id,))
+    db.execute("DELETE FROM user_insights WHERE user_id = ?", (user_id,))
+    db.execute("DELETE FROM transactions WHERE user_id = ?", (user_id,))
+    db.execute("DELETE FROM users WHERE id = ?", (user_id,))
     db.commit()

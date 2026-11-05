@@ -28,7 +28,7 @@ def test_insights_are_computed_on_upload_not_on_every_dashboard_load(client, db,
 
     monkeypatch.setattr(main_module, "compute_insights", fail)
     page = client.get("/dashboard").get_data(as_text=True)
-    assert "Expected spending in Apr 2025" in page
+    assert "in Apr 2025, most likely between" in page
 
 
 def test_insights_are_per_user(app, db):
@@ -37,10 +37,10 @@ def test_insights_are_per_user(app, db):
     second_id = register_and_login(second, "ravi")
     upload(first)
 
-    assert "Expected spending" in first.get("/dashboard").get_data(as_text=True)
+    assert "You may spend about" in first.get("/dashboard").get_data(as_text=True)
     second_page = second.get("/dashboard").get_data(as_text=True)
-    assert "Expected spending" not in second_page
-    assert "Load demo data" in second_page
+    assert "You may spend about" not in second_page
+    assert "Load sample data" in second_page
 
     rows = {row["user_id"]: row["payload"] for row in db.execute("SELECT user_id, payload FROM user_insights")}
     assert '"forecast": null' in rows[second_id]

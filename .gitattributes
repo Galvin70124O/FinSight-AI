@@ -1,0 +1,3 @@
+# Vendored third-party files stay byte-identical to their release (no line-ending conversion).
+static/vendor/* -text
+static/fonts/*.woff2 binary

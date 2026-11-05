@@ -26,7 +26,7 @@ def count(db):
 def test_valid_csv_is_imported_and_not_kept_on_disk(app, client, db, logged_in):
     page = upload(client, VALID_CSV).get_data(as_text=True)
 
-    assert "Imported 2 transaction(s)" in page
+    assert "Imported 2 transactions." in page
     assert count(db) == 2
     assert not os.path.exists(os.path.join(app.root_path, "uploads", "tx.csv"))
 
@@ -39,7 +39,7 @@ def test_non_csv_extension_is_rejected(client, db, logged_in):
 
 def test_missing_columns_are_reported(client, db, logged_in):
     page = upload(client, b"Date,Amount\n2025-01-02,250\n").get_data(as_text=True)
-    assert "Missing required columns: Category, Type, Description" in page
+    assert "Missing required columns: Type, Description" in page
     assert count(db) == 0
 
 
@@ -47,6 +47,7 @@ def test_file_over_size_limit_is_rejected(client, db, logged_in):
     big = VALID_CSV + b"2025-01-03,Food,10,Expense," + b"x" * (3 * 1024 * 1024) + b"\n"
     page = upload(client, big).get_data(as_text=True)
     assert "too large" in page
+    assert "Split it into smaller CSV files" in page
     assert count(db) == 0
 
 

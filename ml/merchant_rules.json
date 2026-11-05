@@ -1,0 +1,55 @@
+{
+  "about": "Keyword rules for filling in a missing category. Checked top to bottom: the first rule with a keyword in the cleaned description wins, so put the more specific rule first (a Zomato refund is Income, Amazon Prime is Entertainment, Swiggy Instamart is Groceries). Keywords are upper case and match whole words.",
+  "categories": [
+    "Dining", "Groceries", "Transport", "Utilities", "Rent", "Shopping",
+    "Entertainment", "Healthcare", "Education", "Cash", "Income", "Other"
+  ],
+  "business_words_about": "A merchant name of 2-3 words with none of these, and no rule keyword, looks like a person (RAHUL S, KAVYA NAIR). Corrections for people are not remembered unless the user ticks the box.",
+  "business_words": [
+    "LTD", "LIMITED", "PVT", "PRIVATE", "LLP", "INC", "CO", "COMPANY", "CORPORATION", "CORP", "GROUP", "INDIA", "BANK", "PAY",
+    "STORE", "STORES", "SHOP", "MART", "MARKET", "SUPERMARKET", "BAZAAR", "TRADERS", "TRADING", "ENTERPRISES", "AGENCIES", "AGENCY",
+    "SERVICES", "SOLUTIONS", "TECH", "TECHNOLOGIES", "SYSTEMS", "INDUSTRIES", "DIGITAL", "ONLINE",
+    "MEDICALS", "MEDICAL", "PHARMA", "CHEMISTS", "CHEMIST", "DRUGGIST", "DIAGNOSTICS", "LABS", "DENTAL", "OPTICALS", "NURSING",
+    "TIFFIN", "TIFFINS", "HOTEL", "BHAVAN", "MESS", "BAKERY", "SWEETS", "FOODS", "KITCHEN", "DHABA", "CANTEEN", "JUICE", "MEALS", "BIRYANI",
+    "TRAVELS", "TOURS", "CABS", "TAXI", "MOTORS", "AUTOMOBILES", "FUELS", "STATION", "PARKING", "TOLL",
+    "ELECTRONICS", "MOBILES", "FASHION", "TEXTILES", "SILKS", "TAILORS", "BOUTIQUE", "FOOTWEAR", "JEWELLERS", "FURNITURE", "HARDWARE",
+    "SALON", "PARLOUR", "GYM", "FITNESS", "STUDIO", "GALLERY", "PRINTERS",
+    "ACADEMY", "INSTITUTE", "COACHING", "BOOK", "BOOKS", "DEPOT", "LIBRARY",
+    "PROVISIONS", "PROVISION", "GENERAL", "VEGETABLES", "FRUITS", "DAIRY", "MILK", "FARM",
+    "CENTRE", "CENTER", "HOUSE", "POINT", "CORNER", "WORLD", "ZONE", "ARCADE", "CINEMAS", "PARK", "TICKETS", "EVENT",
+    "INSURANCE", "FINANCE", "CAPITAL", "SECURITIES", "TRUST", "FOUNDATION", "SOCIETY", "CLUB",
+    "COLIVING", "RESIDENCY", "APARTMENTS", "MAINTENANCE", "RECHARGE", "PREPAID", "POSTPAID", "BILL", "FEE", "FEES", "WDL", "SELF",
+    "SAL", "INTEREST", "CREDIT", "DIVIDEND", "PAYOUT", "PAYMENT", "INVOICE", "BONUS", "REIMBURSEMENT", "INCENTIVE",
+    "SCHOLARSHIP", "DEPOSIT", "ADVANCE", "ORDER", "SUBSCRIPTION", "MEMBERSHIP", "REGISTRATION",
+    "EMPORIUM", "PALACE", "BOARD", "POWER", "FIBRE", "FIBER", "DTH", "TOPUP", "BRANCH", "BUS", "TICKET", "BOWLING", "GAMING",
+    "GRAND", "HOUSING", "SUPPLY", "SUPPLIERS", "SHOES", "CASH", "MONEY", "PIZZA", "MEAT", "CHICKEN", "TRANSPORT", "LOGISTICS"
+  ],
+  "rules": [
+    {"category": "Income", "keywords": ["SALARY", "STIPEND", "REFUND", "CASHBACK"]},
+    {"category": "Entertainment", "keywords": [
+      "NETFLIX", "SPOTIFY", "HOTSTAR", "JIOHOTSTAR", "AMAZON PRIME", "PRIME VIDEO", "PRIMEVIDEO",
+      "YOUTUBE", "BOOKMYSHOW", "PVR", "INOX", "SONYLIV", "ZEE5"
+    ]},
+    {"category": "Groceries", "keywords": [
+      "BIGBASKET", "BIG BASKET", "ZEPTO", "BLINKIT", "INSTAMART", "DMART", "D MART", "AVENUE SUPERMARTS",
+      "JIOMART", "RELIANCE FRESH", "KIRANA", "SUPERMARKET", "GROCERY", "GROCERIES"
+    ]},
+    {"category": "Rent", "keywords": ["RENT", "HOSTEL", "MESS FEE", "MESS BILL", "PG FEE", "PAYING GUEST"]},
+    {"category": "Education", "keywords": ["COLLEGE", "UNIVERSITY", "TUITION", "SCHOOL", "EXAM FEE", "COURSERA", "UDEMY", "UNACADEMY"]},
+    {"category": "Healthcare", "keywords": ["PHARMACY", "HOSPITAL", "CLINIC", "APOLLO", "PHARMEASY", "NETMEDS", "1MG"]},
+    {"category": "Cash", "keywords": ["ATM", "CASH WDL", "CASH WITHDRAWAL", "NFS"]},
+    {"category": "Transport", "keywords": [
+      "UBER", "OLA", "RAPIDO", "AUTO", "METRO", "IRCTC", "PETROL", "FUEL", "HPCL", "IOCL", "BPCL",
+      "INDIAN OIL", "BHARAT PETROLEUM", "FASTAG", "REDBUS", "NAMMA YATRI"
+    ]},
+    {"category": "Utilities", "keywords": [
+      "JIO", "AIRTEL", "VI RECHARGE", "VI PREPAID", "VI POSTPAID", "VODAFONE", "BSNL", "ELECTRICITY", "BESCOM",
+      "TNEB", "TANGEDCO", "BSES", "BROADBAND", "WIFI", "WI FI", "FIBERNET", "GAS", "LPG", "INDANE"
+    ]},
+    {"category": "Dining", "keywords": [
+      "ZOMATO", "SWIGGY", "RESTAURANT", "CAFE", "DOMINOS", "MCDONALDS", "KFC", "STARBUCKS", "PIZZA HUT",
+      "BURGER KING"
+    ]},
+    {"category": "Shopping", "keywords": ["AMAZON", "FLIPKART", "MYNTRA", "AJIO", "MEESHO", "NYKAA", "CROMA", "DECATHLON"]}
+  ]
+}

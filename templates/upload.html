@@ -1,29 +1,78 @@
 {% extends 'base.html' %}
+{% from '_macros.html' import icon %}
+{% block title %}Import a CSV · FinSight AI{% endblock %}
+{% block description %}Upload a bank or expense CSV. The file is read in memory and never saved on disk.{% endblock %}
 {% block content %}
-<section class="auth-wrap">
-  <div class="auth-card upload-card">
-    <div class="auth-brand">
-      <div class="auth-logo" aria-hidden="true">
-        <svg viewBox="0 0 64 64">
-          <path d="M16 44V18C16 14.6863 18.6863 12 22 12H44C47.3137 12 50 14.6863 50 18V44" stroke="currentColor" stroke-width="6" stroke-linecap="round"/>
-          <path d="M24 44V28" stroke="currentColor" stroke-width="6" stroke-linecap="round"/>
-          <path d="M32 44V34" stroke="currentColor" stroke-width="6" stroke-linecap="round"/>
-          <path d="M40 44V24" stroke="currentColor" stroke-width="6" stroke-linecap="round"/>
-        </svg>
-      </div>
-      <div>
-        <h2>Import transaction history</h2>
-        <p>Upload a CSV with `Date`, `Category`, `Amount`, `Type`, and `Description` columns.</p>
-      </div>
+<section class="import" aria-labelledby="pageTitle">
+  <header class="page-head">
+    <div>
+      <h1 class="page-title" id="pageTitle">Import a CSV</h1>
+      <p class="sub">The file is read in memory and never saved on disk. Rows you have already imported are skipped.</p>
     </div>
-    <form method="post" enctype="multipart/form-data" class="auth-form">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <label class="upload-file">
-        <span>Select CSV file</span>
-        <input type="file" name="file" accept=".csv" required>
-      </label>
-      <button class="action-button full" type="submit">Import data</button>
-    </form>
+  </header>
+  <form method="post" enctype="multipart/form-data" class="form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <label class="dropzone" data-dropzone>
+      <input class="dropzone-input" type="file" name="file" accept=".csv,text/csv" required aria-describedby="fileHint">
+      {{ icon('upload') }}
+      <span class="dropzone-title" data-dropzone-label>Choose a CSV file, or drop it here</span>
+      <span class="sub" id="fileHint">CSV only, up to 2 MB. A bigger export can be split into two files and uploaded one after the other.</span>
+    </label>
+    <div class="form-actions">
+      <a class="btn btn-secondary" href="{{ url_for('main.dashboard') }}">Cancel</a>
+      <button class="btn btn-primary" type="submit">Import</button>
+    </div>
+  </form>
+
+  <div class="columns">
+    <h2 class="section-title">Columns your file needs</h2>
+    <div class="table-wrap">
+      <table class="data-table">
+        <thead><tr><th scope="col">Column</th><th scope="col">Example</th><th scope="col" class="hide-sm">Notes</th></tr></thead>
+        <tbody>
+          <tr><td>Date</td><td class="num">2025-01-31</td><td class="hide-sm muted">Most date formats work. YYYY-MM-DD is safest.</td></tr>
+          <tr><td>Category <span class="muted">(optional)</span></td><td>Groceries</td><td class="hide-sm muted">Any name you use. Leave it out or blank and FinSight suggests one for you to check.</td></tr>
+          <tr><td>Amount</td><td class="num">2450.50</td><td class="hide-sm muted">A positive number, without ₹ or commas.</td></tr>
+          <tr><td>Type</td><td>Expense</td><td class="hide-sm muted">Income or Expense.</td></tr>
+          <tr><td>Description</td><td>Weekly groceries</td><td class="hide-sm muted">Anything that helps you recognise it.</td></tr>
+        </tbody>
+      </table>
+    </div>
   </div>
+
+  <section class="how-categories" id="how-categories" aria-labelledby="howTitle">
+    <h2 class="section-title" id="howTitle">How categories are chosen</h2>
+    <p>Bank statements usually have a description such as “UPI/ZOMATO/4521…” but no category. For rows without one, FinSight suggests a category per merchant and shows you every suggestion before anything is saved.</p>
+    <ol>
+      <li><strong>Your corrections come first.</strong> When you change a merchant’s category, it is remembered for your account and always wins next time.</li>
+      <li><strong>Then keyword rules.</strong> After reference numbers, dates and UPI handles are removed, a fixed list of words is checked, such as ZOMATO for Dining or BESCOM for Utilities.</li>
+      <li><strong>Then a small model</strong> that compares letter patterns with about 400 made-up example descriptions. It never learns from your data. If it is less than 60% sure, the merchant is marked “Needs a category” for you to choose.</li>
+    </ol>
+  </section>
+
+  {# Deleting cannot be undone, so it asks for the password and a typed confirmation instead of an undo toast. #}
+  <section class="danger-zone" id="delete" aria-labelledby="deleteTitle">
+    <h2 class="section-title" id="deleteTitle">Delete your account</h2>
+    <p class="sub">Removes your account, every imported transaction, your computed insights and your category corrections straight away. This cannot be undone. <a class="link" href="{{ url_for('main.privacy') }}">What is stored</a></p>
+    {% for message in get_flashed_messages(category_filter=['delete']) %}
+    <div class="flash danger" role="alert">{{ icon('alert') }}<span>{{ message }}</span></div>
+    {% endfor %}
+    <form method="post" action="{{ url_for('auth.delete_account') }}" class="form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="field-pair">
+        <label class="field">
+          <span>Your password</span>
+          <input class="input" type="password" name="password" autocomplete="current-password" required>
+        </label>
+        <label class="field">
+          <span>Type DELETE to confirm</span>
+          <input class="input" type="text" name="confirm" autocomplete="off" autocapitalize="characters" pattern="DELETE" required>
+        </label>
+      </div>
+      <div class="form-actions">
+        <button class="btn btn-danger" type="submit">Delete my account and data</button>
+      </div>
+    </form>
+  </section>
 </section>
 {% endblock %}

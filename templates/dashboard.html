@@ -1,251 +1,319 @@
 {% extends 'base.html' %}
+{% from '_macros.html' import icon, category_icon, change, row_category_form, flashes_at %}
+
+{% block title %}Overview · FinSight AI{% endblock %}
+{% block description %}Your balance, income and spending this month, where your money went, next month's forecast and unusual expenses.{% endblock %}
+
 {% block content %}
-<section class="dashboard-shell">
-  <section class="hero-panel">
-    <div class="hero-copy">
-      <p class="eyebrow">Good Evening</p>
-      <h1>Your finances are moving with intention.</h1>
-      <p>Monitor balance, spending momentum, and AI-guided next steps from one premium command center.</p>
-      <div class="hero-insight">
-        <span>AI insight</span>
-        <strong>{{ payload.insight }}</strong>
-      </div>
-    </div>
-    <div class="cta-group">
-      <a class="action-button" href="{{ url_for('main.upload') }}">Import transactions</a>
-      {% if not transactions %}
-      <form method="post" action="{{ url_for('main.load_demo_data') }}">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <button class="ghost-button" type="submit">Load demo data</button>
-      </form>
+{% set m = payload.metrics %}
+{% set flow = payload.summary.income_vs_expense %}
+{% set months = flow.labels|length %}
+{% set mom = payload.month_on_month %}
+
+<section id="top" data-section="Overview" aria-labelledby="pageTitle">
+  <header class="page-head">
+    <div>
+      <h1 class="page-title" id="pageTitle">Overview</h1>
+      {% if months %}
+      <p class="sub">{{ flow.labels[0] }}{% if months > 1 %} to {{ flow.labels[-1] }}{% endif %} · {{ transactions|length|plural('transaction') }}</p>
       {% endif %}
     </div>
-  </section>
-
-  <section class="kpi-grid" aria-label="Financial metrics">
-    <div class="kpi-item">
-      <span class="kpi-label">Balance</span>
-      <strong data-counter="{{ payload.metrics.current_balance }}" data-currency="INR">{{ payload.metrics.current_balance|inr }}</strong>
+    {% if transactions %}
+    <div class="page-actions">
+      <a class="btn btn-primary" href="{{ url_for('main.upload') }}">{{ icon('upload') }}<span>Import a CSV</span></a>
     </div>
-    <div class="kpi-item">
-      <span class="kpi-label">Income</span>
-      <strong data-counter="{{ payload.metrics.total_income }}" data-currency="INR">{{ payload.metrics.total_income|inr }}</strong>
-    </div>
-    <div class="kpi-item">
-      <span class="kpi-label">Expenses</span>
-      <strong data-counter="{{ payload.metrics.total_expense }}" data-currency="INR">{{ payload.metrics.total_expense|inr }}</strong>
-    </div>
-    <div class="kpi-item">
-      <span class="kpi-label">Savings Rate</span>
-      <strong data-counter="{{ payload.metrics.savings_rate }}" data-suffix="%" data-decimals="1">{{ payload.metrics.savings_rate }}%</strong>
-    </div>
-    <div class="kpi-item">
-      <span class="kpi-label">Financial Health</span>
-      {% if payload.metrics.health_score is not none %}
-      <strong data-counter="{{ payload.metrics.health_score }}" data-suffix="/100" data-decimals="0">{{ payload.metrics.health_score|round|int }}/100</strong>
-      {% else %}
-      <strong>&mdash;</strong>
-      {% endif %}
-    </div>
-  </section>
-
-  <section class="content-grid">
-    <article class="panel chart-panel" id="analytics">
-      <div class="panel-head">
-        <div>
-          <p class="section-label">Spending trend</p>
-          <h2>Spending over time</h2>
-        </div>
-        {% if payload.charts.spending_views %}
-        <div class="segmented" role="group" aria-label="Time range">
-          <button class="seg-btn active" type="button" data-range="month" aria-pressed="true">Month</button>
-          <button class="seg-btn" type="button" data-range="quarter" aria-pressed="false">Quarter</button>
-          <button class="seg-btn" type="button" data-range="year" aria-pressed="false">Year</button>
-        </div>
-        {% endif %}
-      </div>
-      <div class="chart-shell">{{ payload.charts.monthly_expense|safe }}</div>
-      {% if payload.charts.spending_views %}
-      <script type="application/json" id="spendingViews">{{ payload.charts.spending_views|tojson }}</script>
-      {% endif %}
-      <p class="panel-foot">Total spending per period. Hover a point for the amount and number of transactions.</p>
-    </article>
-
-    <aside class="panel insight-panel" id="insights">
-      <div class="panel-head compact-head">
-        <div>
-          <p class="section-label">AI insights</p>
-          <h2>Recommendations</h2>
-        </div>
-      </div>
-      {% set forecast = payload.insights.forecast %}
-      {% set tip = payload.insights.tip %}
-      <div class="bubble-stack">
-        <div class="bubble">
-          <span class="bubble-title">Summary</span>
-          <p>{{ payload.insight }}</p>
-        </div>
-        {% if tip %}
-        <div class="bubble accent">
-          <span class="bubble-title">Tip</span>
-          <p>{{ tip.category }} is your biggest variable expense: about {{ tip.monthly_average|inr(0) }} a month ({{ tip.share }}% of spending). Trimming it by 10% would save about {{ tip.saving|inr(0) }} a month.</p>
-        </div>
-        {% endif %}
-        {% if forecast %}
-        <div class="bubble subtle">
-          <span class="bubble-title">Forecast{% if forecast.low_confidence %} &middot; low confidence{% endif %}</span>
-          {% if forecast.enough_data %}
-          <p>Expected spending in {{ forecast.month }}: about {{ forecast.predicted|inr(0) }}, likely between {{ forecast.low|inr(0) }} and {{ forecast.high|inr(0) }} (80% range).</p>
-          <p class="bubble-note">{{ forecast.message }}</p>
-          {% else %}
-          <p>{{ forecast.message }}</p>
-          {% endif %}
-        </div>
-        {% endif %}
-      </div>
-      <div class="insight-stats">
-        <div><span>Average spend</span><strong>{{ payload.summary.average_spending|inr }}</strong></div>
-        <div><span>Top category</span><strong>{{ payload.summary.highest_spending_category }}</strong></div>
-        <div><span>Unusual</span><strong><a href="#unusual">{{ payload.insights.anomalies|length }}</a></strong></div>
-      </div>
-    </aside>
-  </section>
-
-  <section class="content-grid single-grid">
-    <article class="panel chart-panel" id="cashflow">
-      <div class="panel-head">
-        <div>
-          <p class="section-label">Cash flow</p>
-          <h2>Income vs expense by month</h2>
-        </div>
-      </div>
-      {% if payload.charts.income_vs_expense %}
-      <div class="chart-shell">{{ payload.charts.income_vs_expense|safe }}</div>
-      {% else %}
-      <div class="empty-state"><p>Your monthly income and spending will appear here once you add transactions.</p></div>
-      {% endif %}
-    </article>
-  </section>
+    {% endif %}
+  </header>
 
   {% if transactions %}
-  <section class="content-grid">
-    <article class="panel" id="unusual">
-      <div class="panel-head">
-        <div>
-          <p class="section-label">Anomaly detection</p>
-          <h2>Unusual transactions</h2>
-        </div>
-      </div>
-      {% if payload.insights.anomalies %}
-      <div class="table-wrapper">
-        <table class="transaction-table">
-          <thead>
-            <tr><th>Date</th><th>Category</th><th>Amount</th><th>Usual</th><th>Description</th></tr>
-          </thead>
-          <tbody>
-            {% for item in payload.insights.anomalies %}
-            <tr>
-              <td>{{ item.date }}</td>
-              <td>{{ item.category }}</td>
-              <td class="amount-cell expense">{{ item.amount|inr }}{% if item.ratio %} <span class="muted">({{ item.ratio }}&times;)</span>{% endif %}</td>
-              <td>{{ item.typical|inr }}</td>
-              <td>{{ item.description }}</td>
-            </tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      </div>
+  <div class="kpis">
+    <div class="kpi">
+      <p class="label">Balance</p>
+      <p class="figure figure-hero{{ ' is-neg' if m.current_balance < 0 }}">{{ m.current_balance|inr(0) }}</p>
+      <p class="sub">{{ m.total_income|inr(0) }} in, {{ m.total_expense|inr(0) }} out over {{ months|plural('month') }}</p>
+    </div>
+    {% set month_label = mom.month if mom else flow.labels[-1] %}
+    {% for key, name, up_is_good in [('income', 'Income', True), ('expense', 'Spending', False), ('saved', 'Saved', True)] %}
+    <div class="kpi">
+      <p class="label">{{ name }} in {{ month_label }}</p>
+      {% if mom %}
+        {% set value = mom[key].value %}
       {% else %}
-      <div class="empty-state"><p>Nothing unusual. Each expense is compared with the usual amount for its category (categories need at least 4 expenses).</p></div>
+        {% set value = flow.income[-1] if key == 'income' else flow.expense[-1] if key == 'expense' else flow.income[-1] - flow.expense[-1] %}
       {% endif %}
-    </article>
-
-    <aside class="panel" id="health">
-      <div class="panel-head compact-head">
-        <div>
-          <p class="section-label">Financial health</p>
-          <h2>{% if payload.insights.health and payload.insights.health.score is not none %}{{ payload.insights.health.score|round|int }}/100 &middot; {{ payload.insights.health.label }}{% else %}Not available yet{% endif %}</h2>
-        </div>
-      </div>
-      {% if payload.insights.health and payload.insights.health.score is not none %}
-      <ul class="health-breakdown">
-        {% for part in payload.insights.health.components %}
-        <li>
-          <div class="health-row"><span>{{ part.name }}</span><strong>{{ part.points }} / {{ part.max_points }}</strong></div>
-          <p>{{ part.detail }}</p>
-        </li>
-        {% endfor %}
-      </ul>
-      {% else %}
-      <div class="empty-state"><p>{{ payload.insights.health.message if payload.insights.health else "Add income transactions to see your health score." }}</p></div>
-      {% endif %}
-    </aside>
-  </section>
+      <p class="figure{{ ' is-neg' if value < 0 }}">{{ value|inr(0) }}</p>
+      {% if mom %}{{ change(mom[key].change, mom.previous_month, up_is_good) }}{% else %}<p class="change flat">First month: nothing to compare yet</p>{% endif %}
+    </div>
+    {% endfor %}
+  </div>
   {% endif %}
+</section>
 
-  <section class="content-grid lower-grid">
-    <article class="panel" id="reports">
-      <div class="panel-head">
-        <div>
-          <p class="section-label">Expense categories</p>
-          <h2>Category mix</h2>
-        </div>
+{% if transactions %}
+{% set forecast = payload.insights.forecast %}
+{% set tip = payload.insights.tip %}
+{% set n_anom = payload.insights.anomaly_count %}
+<div class="section split">
+  <section id="cashflow" data-section="Income and spending" aria-labelledby="flowTitle">
+    <div class="section-head">
+      <div>
+        <h2 class="section-title" id="flowTitle">Income and spending</h2>
+        <p class="sub">Each month, side by side</p>
       </div>
-      <div class="chart-shell compact-chart">{{ payload.charts.category_pie|safe }}</div>
-    </article>
-
-    <article class="panel" id="transactions">
-      <div class="panel-head table-head">
-        <div>
-          <p class="section-label">Recent activity</p>
-          <h2>Transactions</h2>
-        </div>
-        <div class="table-controls">
-          <select id="sortSelect" class="table-select">
-            <option value="date-desc">Newest</option>
-            <option value="date-asc">Oldest</option>
-            <option value="amount-desc">Highest</option>
-            <option value="amount-asc">Lowest</option>
-          </select>
-          <div class="filter-group">
-            <button class="filter-chip active" type="button" data-filter="all">All</button>
-            <button class="filter-chip" type="button" data-filter="Expense">Expense</button>
-            <button class="filter-chip" type="button" data-filter="Income">Income</button>
-          </div>
-        </div>
-      </div>
-
-      {% if payload.recent_transactions %}
-      <div class="table-wrapper">
-        <table class="transaction-table" id="transactionsTable">
-          <thead>
-            <tr>
-              <th>Date</th>
-              <th>Category</th>
-              <th>Type</th>
-              <th>Amount</th>
-              <th>Description</th>
-            </tr>
-          </thead>
+      <div class="legend" aria-hidden="true"><span><i class="swatch accent"></i>Income</span><span><i class="swatch"></i>Spending</span></div>
+    </div>
+    <div class="chart" id="cashflowChart" data-figure="cashflowFigure" role="img" aria-label="Bar chart of income and spending per month. The numbers are in the table below.">
+      <p class="chart-error">The chart could not load. The numbers are in the table below.</p>
+    </div>
+    <script type="application/json" id="cashflowFigure">{{ payload.charts.cashflow|tojson }}</script>
+    <details class="chart-data">
+      <summary>Show the numbers</summary>
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead><tr><th scope="col">Month</th><th scope="col" class="r">Income</th><th scope="col" class="r">Spending</th></tr></thead>
           <tbody>
-            {% for tx in payload.recent_transactions %}
-            <tr data-type="{{ tx['Type'] }}" data-date="{{ tx['Date'] }}" data-amount="{{ tx['Amount'] }}" data-category="{{ tx['Category'] }}">
-              <td>{{ tx['Date'] }}</td>
-              <td>{{ tx['Category'] }}</td>
-              <td><span class="tx-badge {{ 'expense' if tx['Type'] == 'Expense' else 'income' }}">{{ tx['Type'] }}</span></td>
-              <td class="amount-cell {{ 'expense' if tx['Type'] == 'Expense' else 'income' }}">{{ tx['Amount']|inr }}</td>
-              <td>{{ tx['Description'] }}</td>
-            </tr>
+            {% for i in range(months) %}
+            <tr><td>{{ flow.labels[i] }}</td><td class="r">{{ flow.income[i]|inr(0) }}</td><td class="r">{{ flow.expense[i]|inr(0) }}</td></tr>
             {% endfor %}
           </tbody>
         </table>
       </div>
-      {% else %}
-      <div class="empty-state">
-        <p>No transactions have been imported yet. Upload your CSV, or load the demo data to explore the dashboard.</p>
-      </div>
-      {% endif %}
-    </article>
+    </details>
   </section>
+
+  {% set cats = payload.summary.category_distribution %}
+  <section id="categories" data-section="Where your money goes" aria-labelledby="catTitle">
+    <div class="section-head">
+      <div>
+        <h2 class="section-title" id="catTitle">Where your money goes</h2>
+        <p class="sub">Share of all spending, {{ m.total_expense|inr(0) }} in total</p>
+      </div>
+    </div>
+    {% if cats %}
+    <ol class="bars">
+      {% set top = cats|map(attribute='Total')|max %}
+      {% for c in cats %}
+        {% set share = (c.Total / m.total_expense * 100) if m.total_expense else 0 %}
+        <li class="bar-row{{ ' is-rest' if c.Category == 'Everything else' }}">
+          <span class="name cat-cell">{{ category_icon(c.Category) }}<span>{{ c.Category }}</span></span>
+          <span class="num">{{ c.Total|inr(0) }}</span>
+          <span class="num share">{{ share|round(1) }}%</span>
+          <span class="bar-track" aria-hidden="true"><span class="bar-fill" style="width: {{ (c.Total / top * 100)|round(2) if top else 0 }}%"></span></span>
+        </li>
+      {% endfor %}
+    </ol>
+    {% else %}
+    <p class="empty">No spending recorded yet. Only income has been imported.</p>
+    {% endif %}
+  </section>
+</div>
+
+{% set views = payload.charts.spending_views %}
+<section class="section" id="spending" data-section="Spending and forecast" aria-labelledby="spendTitle">
+  <div class="section-head">
+    <div>
+      <h2 class="section-title" id="spendTitle">Spending and next month's forecast</h2>
+      <p class="sub">{% if forecast and forecast.enough_data %}The shaded band is where {{ forecast.month }} will most likely land (80% range).{% else %}A forecast appears once you have 3 months of transactions.{% endif %}</p>
+    </div>
+    <div class="segmented" role="group" aria-label="Group spending by">
+      <button class="seg-btn active" type="button" data-range="month" aria-pressed="true">Month</button>
+      <button class="seg-btn" type="button" data-range="quarter" aria-pressed="false">Quarter</button>
+      <button class="seg-btn" type="button" data-range="year" aria-pressed="false">Year</button>
+    </div>
+  </div>
+  <div class="legend chart-legend" aria-hidden="true">
+    <span><i class="swatch accent"></i>Spending</span>
+    {% if forecast and forecast.enough_data %}<span data-forecast-only><i class="swatch band"></i>Forecast range</span>{% endif %}
+  </div>
+  <div class="chart" id="spendingChart" data-figure="spendingFigure" role="img" aria-label="Line chart of spending per period, with next month's forecast range. The numbers are in the table below.">
+    <p class="chart-error">The chart could not load. The numbers are in the table below.</p>
+  </div>
+  <script type="application/json" id="spendingFigure">{{ payload.charts.spending|tojson }}</script>
+  <script type="application/json" id="spendingViews">{{ views|tojson }}</script>
+  <details class="chart-data">
+    <summary>Show the numbers</summary>
+    <div class="table-wrap">
+      <table class="data-table">
+        <thead><tr><th scope="col">Month</th><th scope="col" class="r">Spent</th><th scope="col" class="r">Transactions</th></tr></thead>
+        <tbody>
+          {% for i in range(views.month.x|length) %}
+          <tr><td>{{ views.month.x[i] }}</td><td class="r">{{ views.month.customdata[i][0] }}</td><td class="r">{{ views.month.customdata[i][1] }}</td></tr>
+          {% endfor %}
+          {% if forecast and forecast.enough_data %}
+          <tr><td>{{ forecast.month }} (forecast)</td><td class="r">{{ forecast.predicted|inr(0) }}</td><td class="r muted">{{ forecast.low|inr(0) }} to {{ forecast.high|inr(0) }}</td></tr>
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
+  </details>
 </section>
+
+<section class="section" id="brief" data-section="In brief" aria-labelledby="briefTitle">
+  <div class="section-head"><h2 class="section-title" id="briefTitle">In brief</h2></div>
+  <ul class="brief">
+    <li>
+      <h3>So far</h3>
+      <p>{{ payload.insight }}</p>
+    </li>
+    <li>
+      <h3>Unusual spending</h3>
+      <p>{% if n_anom %}<a class="link" href="#unusual">{{ n_anom|plural('transaction') }}</a> {{ 'looks' if n_anom == 1 else 'look' }} higher than usual for {{ 'its' if n_anom == 1 else 'their' }} category.{% else %}Nothing stands out. Every expense is close to what is usual for its category.{% endif %}</p>
+    </li>
+    {% if forecast %}
+    <li>
+      <h3>Next month</h3>
+      {% if forecast.enough_data %}
+      <p>You may spend about <strong class="num">{{ forecast.predicted|inr(0) }}</strong> in {{ forecast.month }}, most likely between {{ forecast.low|inr(0) }} and {{ forecast.high|inr(0) }}.</p>
+      <p class="note">{% if forecast.uneven %}Spending is too uneven to forecast closely. {% endif %}{{ forecast.message }}</p>
+      {% else %}
+      <p>{{ forecast.message }}</p>
+      {% endif %}
+    </li>
+    {% endif %}
+    {% if tip %}
+    <li>
+      <h3>Easiest place to save</h3>
+      <p>{{ tip.category }} costs you about {{ tip.monthly_average|inr(0) }} a month ({{ tip.share }}% of your spending). Spending 10% less there saves about {{ tip.saving|inr(0) }} a month.</p>
+    </li>
+    {% endif %}
+  </ul>
+</section>
+
+{% set health = payload.insights.health %}
+<section class="section" id="health" data-section="Health score" aria-labelledby="healthTitle">
+  <div class="section-head">
+    <div>
+      <h2 class="section-title" id="healthTitle">Health score</h2>
+      <p class="sub">Out of 100, from up to three parts. Each part shows what it added and what it cost you.</p>
+    </div>
+  </div>
+  {% if health and health.score is not none %}
+  <div class="health">
+    <div class="score">
+      <p class="figure">{{ health.shown_score }}<span> / 100</span></p>
+      <p>{{ health.label }}</p>
+      {% if health.measured_points != 100 %}<p class="sub">Scaled to 100 from the {{ health.measured_points }} points that could be measured so far.</p>{% endif %}
+    </div>
+    <ul class="parts">
+      {% for part in health.components %}
+        <li class="part">
+          <div class="part-head"><span>{{ part.name }}</span><span class="num">{{ part.shown }} of {{ part.max_points }}</span></div>
+          <div class="meter" aria-hidden="true"><span style="width: {{ (part.points / part.max_points * 100)|round(1) }}%"></span></div>
+          <p>{{ part.detail }} <span class="effect{{ ' bad' if part.lost > 0 }}">{% if part.lost > 0 %}Cost you {{ part.lost|plural('point') }}.{% else %}Full marks.{% endif %}</span></p>
+        </li>
+      {% endfor %}
+    </ul>
+  </div>
+  {% else %}
+  <p class="empty">{{ health.message if health else "Add income transactions to see your health score." }}</p>
+  {% endif %}
+</section>
+
+<section class="section" id="unusual" data-section="Unusual transactions" aria-labelledby="unusualTitle">
+  <div class="section-head">
+    <div>
+      <h2 class="section-title" id="unusualTitle">Unusual transactions</h2>
+      <p class="sub">Expenses much higher than usual for their category. A category needs at least 4 expenses before anything is flagged.</p>
+    </div>
+  </div>
+  {% if payload.insights.anomalies %}
+  <div class="table-wrap">
+    <table class="data-table">
+      <thead><tr><th scope="col" class="hide-sm">Date</th><th scope="col">Category</th><th scope="col" class="hide-sm">Description</th><th scope="col" class="r hide-sm">Usual</th><th scope="col" class="r">Amount</th></tr></thead>
+      <tbody>
+        {% for item in payload.insights.anomalies %}
+        <tr>
+          <td class="num muted hide-sm nowrap">{{ item.date|day }}</td>
+          <td>
+            <span class="cat-cell">{{ category_icon(item.category) }}<span>{{ item.category }}
+              <span class="cell-sub desc-sm" title="{{ item.description }}">{{ item.description }}</span>
+              <span class="cell-sub">{{ item.date|day }} · usually {{ item.typical|inr(0) }}</span></span></span>
+          </td>
+          <td class="hide-sm"><span class="desc" title="{{ item.description }}">{{ item.description }}</span></td>
+          <td class="r muted hide-sm">{{ item.typical|inr(0) }}</td>
+          <td class="r"><span class="amount neg">{{ item.amount|inr(0) }}</span>{% if item.ratio %}<span class="ratio">{{ '{:,.0f}'.format(item.ratio) if item.ratio >= 10 else item.ratio }}× usual</span>{% endif %}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% set hidden = payload.insights.anomaly_count - payload.insights.anomalies|length %}
+  {% if hidden > 0 %}<p class="table-foot">and {{ hidden }} more, older than these.</p>{% endif %}
+  {% else %}
+  <p class="empty">Nothing unusual. Every expense is close to what is usual for its category.</p>
+  {% endif %}
+</section>
+
+<section class="section" id="transactions" data-section="Recent transactions" aria-labelledby="txTitle">
+  <div class="section-head">
+    <div>
+      <h2 class="section-title" id="txTitle">Recent transactions</h2>
+      <p class="sub">Your latest {{ payload.recent_transactions|length }}. <a class="link" href="{{ url_for('main.categories') }}">Fix categories</a> for all your merchants.</p>
+      {{ flashes_at('transactions') }}
+    </div>
+    <div class="table-controls">
+      <div class="chips" role="group" aria-label="Show">
+        <button class="chip active" type="button" data-filter="all" aria-pressed="true">All</button>
+        <button class="chip" type="button" data-filter="Expense" aria-pressed="false">Spending</button>
+        <button class="chip" type="button" data-filter="Income" aria-pressed="false">Income</button>
+      </div>
+      <label>
+        <span class="sr-only">Sort by</span>
+        <select id="sortSelect" class="select">
+          <option value="date-desc">Newest first</option>
+          <option value="date-asc">Oldest first</option>
+          <option value="amount-desc">Largest first</option>
+          <option value="amount-asc">Smallest first</option>
+        </select>
+      </label>
+    </div>
+  </div>
+  <div class="table-wrap">
+    <table class="data-table" id="transactionsTable">
+      <thead>
+        <tr><th scope="col" class="hide-sm">Date</th><th scope="col">Category</th><th scope="col" class="hide-sm">Description</th><th scope="col" class="r">Amount</th></tr>
+      </thead>
+      <tbody>
+        {% for tx in payload.recent_transactions %}
+        {% set is_exp = tx['Type'] == 'Expense' %}
+        <tr data-type="{{ tx['Type'] }}" data-date="{{ tx['Date'] }}" data-amount="{{ tx['Amount'] }}" data-category="{{ tx['Category'] }}">
+          <td class="num muted hide-sm nowrap tx-date">{{ tx['Date']|day }}</td>
+          <td>
+            <span class="cat-cell">{{ category_icon(tx['Category']) }}<span><span data-category-name>{{ tx['Category'] }}</span>
+              <span class="cell-sub desc-sm" title="{{ tx['Description'] }}">{{ tx['Description'] }}</span>
+              <span class="cell-sub">{{ tx['Date']|day }}</span></span></span>
+            <details class="tx-edit">
+              <summary>Change</summary>
+              {{ row_category_form(tx['Id'], tx['Category'], tx['Description'], categories, own_categories) }}
+            </details>
+          </td>
+          <td class="hide-sm"><span class="desc" title="{{ tx['Description'] }}">{{ tx['Description'] }}</span></td>
+          <td class="r"><span class="amount{{ '' if is_exp else ' pos' }}">{{ '−' if is_exp else '+' }}{{ tx['Amount']|inr }}</span></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+
+{% else %}
+<section class="empty-state" aria-labelledby="emptyTitle">
+  <h2 id="emptyTitle">No transactions yet</h2>
+  <p>Upload a CSV from your bank or expense app to see your balance, where your money goes and a forecast for next month. Want to look around first? Load 8 months of sample transactions; you can upload your own later.</p>
+  <div class="page-actions">
+    <a class="btn btn-primary" href="{{ url_for('main.upload') }}">{{ icon('upload') }}<span>Import a CSV</span></a>
+    <form method="post" action="{{ url_for('main.load_demo_data') }}" id="demoForm">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button class="btn btn-secondary" type="submit">Load sample data</button>
+    </form>
+  </div>
+</section>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+{% if transactions %}
+{# plotly-basic (bar + scatter) is a third of the full bundle; served from static/vendor, loaded once, after the HTML. #}
+<script src="{{ url_for('static', filename='vendor/plotly-basic-2.27.0.min.js') }}" defer></script>
+{% endif %}
 {% endblock %}

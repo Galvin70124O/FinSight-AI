@@ -2,16 +2,30 @@ from __future__ import annotations
 
 import logging
 import math
+from datetime import date
 from typing import Any
 
 import pandas as pd
-import plotly.express as px
-import plotly.graph_objects as go
 from flask import current_app
 
 
-REQUIRED_COLUMNS = ["Date", "Category", "Amount", "Type", "Description"]
+REQUIRED_COLUMNS = ["Date", "Amount", "Type", "Description"]
+COLUMNS = ["Date", "Category", "Amount", "Type", "Description"]  # Category is optional; blank ones are filled in on import
 logger = logging.getLogger(__name__)
+TOP_CATEGORIES = 7
+ANOMALY_LIMIT = 10  # the newest ones; the dashboard says how many more there are
+OTHER_CATEGORIES = "Everything else"  # not "Other": users often have a category of that name
+
+
+def group_digits(whole: str) -> str:
+    """Indian digit grouping of a whole number's digits: '1234567' -> '12,34,567'."""
+    if len(whole) <= 3:
+        return whole
+    head, groups = whole[:-3], [whole[-3:]]
+    while head:
+        groups.insert(0, head[-2:])
+        head = head[:-2]
+    return ",".join(groups)
 
 
 def format_inr(value: Any, decimals: int | None = None) -> str:
@@ -23,15 +37,9 @@ def format_inr(value: Any, decimals: int | None = None) -> str:
     if decimals is None:
         decimals = 0 if round(amount, 2) == round(amount) else 2
     amount = round(amount, decimals)
-    sign = "-" if amount < 0 else ""
+    sign = "−" if amount < 0 else ""  # U+2212 minus, the width of "+", not a hyphen
     whole, _, fraction = f"{abs(amount):.{decimals}f}".partition(".")
-    if len(whole) > 3:
-        head, groups = whole[:-3], [whole[-3:]]
-        while head:
-            groups.insert(0, head[-2:])
-            head = head[:-2]
-        whole = ",".join(groups)
-    return f"{sign}₹{whole}" + (f".{fraction}" if fraction else "")
+    return f"{sign}₹{group_digits(whole)}" + (f".{fraction}" if fraction else "")
 
 
 def inr_axis(max_value: float, ticks: int = 5) -> dict[str, list]:
@@ -43,6 +51,63 @@ def inr_axis(max_value: float, ticks: int = 5) -> dict[str, list]:
     step = next(m * magnitude for m in (1, 2, 2.5, 5, 10) if m * magnitude >= raw_step)
     values = [step * i for i in range(math.ceil(max_value / step) + 1)]
     return {"tickvals": values, "ticktext": [format_inr(v, 0) for v in values]}
+
+
+def shift_to_recent_months(df: pd.DataFrame, today: date | None = None) -> pd.DataFrame:
+    """Move every row by the same whole number of months so the latest month is the last full month.
+
+    Used for the sample data, so it always covers the months just before ``today``. Amounts and
+    days of the month stay the same (a 31st becomes the 30th in a shorter month).
+    """
+    dates = pd.to_datetime(df["Date"])
+    months = ((pd.Period(today or date.today(), "M") - 1) - dates.max().to_period("M")).n
+    shifted = df.copy()
+    shifted["Date"] = (dates + pd.DateOffset(months=months)).dt.strftime("%Y-%m-%d")
+    return shifted
+
+
+def format_day(value: Any) -> str:
+    """An ISO date as people read it: '2025-04-27' -> '27 Apr 2025'. CSV examples keep ISO."""
+    try:
+        day = date.fromisoformat(str(value)[:10])  # stored dates are ISO; pandas guessing a format each time is slow
+    except ValueError:
+        day = pd.to_datetime(value)
+    return f"{day.day} {day:%b %Y}"
+
+
+def half_up(value: float) -> int:
+    """Round .5 up, as people expect (Python's round() sends 92.5 to 92)."""
+    return math.floor(value + 0.5)
+
+
+def whole_health(health: dict[str, Any] | None) -> dict[str, Any] | None:
+    """The health score with every part in whole points that still add up to the score shown.
+
+    Parts are rounded down, then the points left over go to the parts with the largest remainders
+    (largest-remainder rounding). With all three parts measured they total 100, so the shown parts
+    add up to the shown score; with fewer parts the score is scaled up to 100 and the parts add up
+    to the points measured.
+    """
+    if not health or health.get("score") is None:
+        return health
+    parts = health["components"]
+    measured = sum(part["max_points"] for part in parts)
+    total = half_up(health["score"]) if measured == 100 else half_up(sum(part["points"] for part in parts))
+    shown = [math.floor(part["points"]) for part in parts]
+    by_remainder = sorted(range(len(parts)), key=lambda i: parts[i]["points"] - shown[i], reverse=True)
+    for i in by_remainder[: total - sum(shown)]:
+        shown[i] += 1
+    return {
+        **health,
+        "shown_score": half_up(health["score"]),
+        "measured_points": measured,
+        "components": [{**part, "shown": n, "lost": part["max_points"] - n} for part, n in zip(parts, shown)],
+    }
+
+
+def plural(count: int, word: str) -> str:
+    """'1 month', '8 months': English plurals for the counts the app prints."""
+    return f"{group_digits(str(count))} {word}" + ("" if count == 1 else "s")
 
 
 class CSVValidationError(ValueError):
@@ -60,6 +125,7 @@ def empty_dashboard_payload() -> dict[str, Any]:
             "health_score": None,
         },
         "recent_transactions": [],
+        "month_on_month": None,
         "insight": "Upload a transaction file to begin generating insights.",
         "charts": {},
         "summary": {
@@ -74,7 +140,7 @@ def empty_dashboard_payload() -> dict[str, Any]:
                 "yearly": {"labels": [], "values": [], "counts": []},
             },
         },
-        "insights": {"forecast": None, "anomalies": [], "health": None, "tip": None},
+        "insights": {"forecast": None, "anomalies": [], "anomaly_count": 0, "health": None, "tip": None},
     }
 
 
@@ -119,17 +185,19 @@ def clean_transaction_dataframe(df: pd.DataFrame) -> pd.DataFrame:
     missing_columns = [col for col in REQUIRED_COLUMNS if col not in df.columns]
     if missing_columns:
         raise CSVValidationError(f"Missing required columns: {', '.join(missing_columns)}")
+    if "Category" not in df.columns:
+        df["Category"] = ""
 
-    df = df.loc[:, REQUIRED_COLUMNS].copy()
+    df = df.loc[:, COLUMNS].copy()
     df = df.drop_duplicates()
 
     df["Date"] = pd.to_datetime(df["Date"], errors="coerce")
-    df["Category"] = df["Category"].fillna("Uncategorized").astype(str).str.strip()
+    df["Category"] = df["Category"].fillna("").astype(str).str.strip()  # blank: to be categorised
     df["Description"] = df["Description"].fillna("No description").astype(str).str.strip()
     df["Type"] = df["Type"].fillna("Expense").astype(str).str.strip().str.title()
     df["Amount"] = pd.to_numeric(df["Amount"], errors="coerce")
 
-    df = df.dropna(subset=["Date", "Category", "Amount", "Type"])
+    df = df.dropna(subset=["Date", "Amount", "Type"])
     df = df[df["Amount"] > 0].copy()
     df = df[df["Type"].isin(["Income", "Expense"])].copy()
 
@@ -274,9 +342,12 @@ def series_dict(summary: pd.DataFrame) -> dict[str, list]:
     }
 
 
-def spending_view(summary: pd.DataFrame, axis_title: str) -> dict[str, Any]:
-    """One Month/Quarter/Year view of the spending chart, ready for Plotly.update."""
-    axis = inr_axis(summary["Total"].max() if not summary.empty else 0)
+def spending_view(summary: pd.DataFrame, axis_title: str, axis_floor: float = 0) -> dict[str, Any]:
+    """One Month/Quarter/Year view of the spending chart, ready for Plotly.update.
+
+    ``axis_floor`` stretches the ₹ axis to fit something drawn beyond the totals (the forecast band).
+    """
+    axis = inr_axis(max(summary["Total"].max() if not summary.empty else 0, axis_floor))
     return {
         "x": summary["Label"].tolist(),
         "y": summary["Total"].tolist(),
@@ -284,6 +355,53 @@ def spending_view(summary: pd.DataFrame, axis_title: str) -> dict[str, Any]:
         "tickvals": axis.get("tickvals", []),
         "ticktext": axis.get("ticktext", []),
         "axis_title": axis_title,
+    }
+
+
+def spending_figure(month_view: dict[str, Any], forecast: dict[str, Any]) -> dict[str, Any]:
+    """Monthly spending as a line, continued by next month's forecast with its 80% range as a band.
+
+    Traces carry a ``meta`` role (actual / band-low / band / forecast) so the browser can colour
+    them from the theme. The band runs from the last real month, where it is zero-width, to the
+    forecast month, where it spans low to high.
+    """
+    data = [{
+        "type": "scatter", "mode": "lines+markers", "meta": "actual", "name": "Spending",
+        "x": month_view["x"], "y": month_view["y"], "customdata": month_view["customdata"],
+        "hovertemplate": "<b>%{x}</b><br>Spent %{customdata[0]}<br>%{customdata[1]} transactions<extra></extra>",
+    }]
+    if forecast.get("enough_data") and month_view["x"]:
+        x = [month_view["x"][-1], forecast["month"]]
+        last = month_view["y"][-1]
+        label = f"Forecast {format_inr(forecast['predicted'], 0)}<br>likely {format_inr(forecast['low'], 0)} to {format_inr(forecast['high'], 0)}"
+        data += [
+            {"type": "scatter", "mode": "lines", "meta": "band-low", "x": x, "y": [last, forecast["low"]], "hoverinfo": "skip", "showlegend": False},
+            {"type": "scatter", "mode": "lines", "meta": "band", "fill": "tonexty", "x": x, "y": [last, forecast["high"]], "hoverinfo": "skip", "showlegend": False},
+            {"type": "scatter", "mode": "lines+markers", "meta": "forecast", "name": "Forecast", "x": x, "y": [last, forecast["predicted"]],
+             "customdata": ["", label], "hovertemplate": "%{customdata}<extra></extra>"},
+        ]
+    return {"data": data, "layout": {"yaxis": {"tickvals": month_view["tickvals"], "ticktext": month_view["ticktext"]}}}
+
+
+def month_on_month(labels: list[str], income: list[float], expense: list[float]) -> dict[str, Any] | None:
+    """Latest month against the one before: income, spending and amount saved, with the change in rupees.
+
+    The three lists are the dashboard's per-month series (same months, oldest first).
+    Returns None with fewer than two months, when there is nothing to compare.
+    """
+    if len(labels) < 2:
+        return None
+
+    def figure(now: float, before: float) -> dict[str, float]:
+        return {"value": round(now, 2), "previous": round(before, 2), "change": round(now - before, 2)}
+
+    saved = [i - e for i, e in zip(income, expense)]
+    return {
+        "month": labels[-1],
+        "previous_month": labels[-2],
+        "income": figure(income[-1], income[-2]),
+        "expense": figure(expense[-1], expense[-2]),
+        "saved": figure(saved[-1], saved[-2]),
     }
 
 
@@ -307,7 +425,7 @@ def build_dashboard_payload(transactions_df: pd.DataFrame, insights: dict[str, A
     current_balance = total_income - total_expense
     savings_rate = round((current_balance / total_income * 100), 1) if total_income else 0.0
     insights = insights or {}
-    health = insights.get("health")
+    health = whole_health(insights.get("health"))
 
     # Every series spans the same months, from the first to the last transaction.
     first_month = transactions_df["Date"].min().to_period("M")
@@ -327,92 +445,54 @@ def build_dashboard_payload(transactions_df: pd.DataFrame, insights: dict[str, A
 
     category_frame = category_totals.reset_index()
     category_frame.columns = ["Category", "Total"]
+    if len(category_frame) > TOP_CATEGORIES + 1:
+        # Fold the tail into one row so the listed shares always add up to 100%.
+        rest = pd.DataFrame([{"Category": OTHER_CATEGORIES, "Total": category_frame["Total"].iloc[TOP_CATEGORIES:].sum()}])
+        category_frame = pd.concat([category_frame.iloc[:TOP_CATEGORIES], rest], ignore_index=True)
 
     months = len(monthly_summary)
-    if total_income:
+    if total_income and current_balance < 0:
+        # A negative "share kept" (e.g. -3589%) means nothing to a reader; say the gap in rupees.
         insight = (
-            f"Over {months} month(s) you earned {format_inr(total_income)} and spent "
-            f"{format_inr(total_expense)}, keeping {savings_rate}% of your income."
+            f"Over {plural(months, 'month')} you earned {format_inr(total_income, 0)} and spent "
+            f"{format_inr(total_expense, 0)}: {format_inr(-current_balance, 0)} more than you earned."
+        )
+    elif total_income:
+        insight = (
+            f"Over {plural(months, 'month')} you earned {format_inr(total_income, 0)} and spent "
+            f"{format_inr(total_expense, 0)}, keeping {savings_rate}% of your income."
         )
     else:
         insight = f"You have recorded {format_inr(total_expense)} of spending. Add income transactions to see your savings rate."
 
     # The Month/Quarter/Year buttons swap these views into the spending chart.
+    forecast = insights.get("forecast") or {}
+    band_top = (forecast.get("high") or 0) if forecast.get("enough_data") else 0
     spending_views = {
-        "month": spending_view(monthly_summary, "Month"),
+        "month": spending_view(monthly_summary, "Month", band_top),
         "quarter": spending_view(quarterly_summary, "Quarter"),
         "year": spending_view(yearly_summary, "Year"),
     }
 
     charts = {
-        "monthly_expense": plot_div(
-            go.Figure(
-                data=[go.Scatter(
-                    x=spending_views["month"]["x"],
-                    y=spending_views["month"]["y"],
-                    mode="lines+markers",
-                    line=dict(color="#2dd4bf", width=3),  # straight segments: a spline overshoots the real totals
-                    fill="tozeroy",
-                    fillcolor="rgba(45, 212, 191, 0.16)",
-                    hovertemplate="<b>%{x}</b><br>Total expense: %{customdata[0]}<br>Transactions: %{customdata[1]}<extra></extra>",
-                    customdata=spending_views["month"]["customdata"],
-                )]
-            ).update_layout(
-                template="plotly_white",
-                margin=dict(l=25, r=25, t=35, b=30),
-                paper_bgcolor="rgba(0,0,0,0)",
-                plot_bgcolor="rgba(0,0,0,0)",
-                hovermode="x",
-                xaxis=dict(title="Month"),
-                yaxis=dict(
-                    title="Total expense",
-                    tickvals=spending_views["month"]["tickvals"],
-                    ticktext=spending_views["month"]["ticktext"],
-                ),
-            ),
-            div_id="spendingChart",
-        ),
+        "spending": spending_figure(spending_views["month"], forecast),
         "spending_views": spending_views,
-        "income_vs_expense": plot_div(
-            go.Figure(
-                data=[
-                    go.Bar(
-                        name=name,
-                        x=series["Label"],
-                        y=series["Total"],
-                        marker_color=color,
-                        customdata=[format_inr(total) for total in series["Total"]],
-                        hovertemplate=f"{name}: %{{customdata}}<extra></extra>",
-                    )
-                    for name, series, color in (("Income", monthly_income, "#2563eb"), ("Expense", monthly_summary, "#ef4444"))
-                ]
-            ).update_layout(
-                barmode="group",
-                template="plotly_white",
-                margin=dict(l=25, r=25, t=35, b=30),
-                paper_bgcolor="rgba(0,0,0,0)",
-                plot_bgcolor="rgba(0,0,0,0)",
-                hovermode="x unified",
-                legend=dict(orientation="h", y=1.12),
-                yaxis=inr_axis(max(monthly_income["Total"].max(), monthly_summary["Total"].max())),
-            )
-        ),
-        "category_pie": plot_div(
-            go.Figure(
-                data=[go.Pie(
-                    labels=category_frame["Category"],
-                    values=category_frame["Total"],
-                    customdata=[format_inr(total) for total in category_frame["Total"]],
-                    hovertemplate="<b>%{label}</b><br>%{customdata}<br>%{percent}<extra></extra>",
-                    marker=dict(colors=px.colors.sequential.Emrld),
-                )]
-            ).update_layout(
-                title="Spending Distribution",
-                template="plotly_white",
-                margin=dict(l=25, r=25, t=60, b=30),
-                paper_bgcolor="rgba(0,0,0,0)",
-            )
-        ),
+        "cashflow": {
+            # Grouped bars, not smoothed areas: a spline bends past the real monthly totals.
+            "data": [
+                {
+                    "type": "bar",
+                    "name": name,
+                    "meta": name.lower(),
+                    "x": series["Label"].tolist(),
+                    "y": series["Total"].tolist(),
+                    "customdata": [format_inr(total, 0) for total in series["Total"]],
+                    "hovertemplate": f"{name}: %{{customdata}}<extra></extra>",
+                }
+                for name, series in (("Income", monthly_income), ("Spending", monthly_summary))
+            ],
+            "layout": {"barmode": "group", "yaxis": inr_axis(max(monthly_income["Total"].max(), monthly_summary["Total"].max()))},
+        },
     }
 
     return {
@@ -424,6 +504,7 @@ def build_dashboard_payload(transactions_df: pd.DataFrame, insights: dict[str, A
             "health_score": health["score"] if health else None,
         },
         "recent_transactions": recent_transactions,
+        "month_on_month": month_on_month(monthly_summary["Label"].tolist(), monthly_income["Total"].tolist(), monthly_summary["Total"].tolist()),
         "insight": insight,
         "charts": charts,
         "summary": {
@@ -444,13 +525,10 @@ def build_dashboard_payload(transactions_df: pd.DataFrame, insights: dict[str, A
         },
         "insights": {
             "forecast": insights.get("forecast"),
-            "anomalies": insights.get("anomalies", []),
+            "anomalies": insights.get("anomalies", [])[:ANOMALY_LIMIT],
+            "anomaly_count": len(insights.get("anomalies", [])),
             "health": health,
             "tip": spending_tip(expense_df, months),
         },
     }
 
-
-def plot_div(fig: Any, div_id: str | None = None) -> str:
-    """Render a Plotly figure as HTML for embedding in templates."""
-    return fig.to_html(full_html=False, include_plotlyjs="cdn", div_id=div_id)

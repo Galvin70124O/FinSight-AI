@@ -20,6 +20,16 @@ def test_save_transactions_skips_duplicate_rows(db, user_id):
     assert db.execute("SELECT COUNT(*) FROM transactions WHERE user_id = ?", (user_id,)).fetchone()[0] == 3
 
 
+def test_a_row_seen_before_with_another_category_or_spacing_is_a_duplicate(db, user_id):
+    first = pd.DataFrame([{"Date": "2024-01-05", "Category": "Uncategorized", "Amount": 120.0, "Type": "Expense", "Description": "UPI/ZOMATO/4521"}])
+    again = pd.DataFrame([{"Date": "2024-01-05", "Category": "Dining", "Amount": 120.0, "Type": "Expense", "Description": "  upi/zomato/4521 "}])
+    other_day = again.assign(Date="2024-01-06")
+
+    assert save_transactions(db, user_id, first) == 1
+    assert save_transactions(db, user_id, again) == 0
+    assert save_transactions(db, user_id, other_day) == 1
+
+
 def test_spending_chart_aggregates_expenses_by_month(app):
     with app.app_context():
         payload = build_dashboard_payload(pd.DataFrame([

@@ -1,13 +1,14 @@
 import os
 import logging
-from flask import Flask, flash, redirect, request, url_for
+from datetime import date
+from flask import Flask, flash, jsonify, redirect, render_template, request, url_for
 from flask_wtf.csrf import CSRFError, CSRFProtect
 
 from blueprints.auth import auth_bp
 from blueprints.main import main_bp
 from config import Config
 from database import close_db, init_db
-from utils import CSVValidationError, format_inr
+from utils import CSVValidationError, format_day, format_inr, group_digits, plural
 
 csrf = CSRFProtect()
 
@@ -23,6 +24,11 @@ def create_app(test_config: dict | None = None) -> Flask:
     os.makedirs(app.instance_path, exist_ok=True)
 
     app.jinja_env.filters["inr"] = format_inr
+    app.jinja_env.filters["plural"] = plural
+    app.jinja_env.filters["day"] = format_day
+    app.jinja_env.filters["digits"] = lambda count: group_digits(str(count))
+    # The footer's copyright year comes from the clock, never a hard-coded number.
+    app.context_processor(lambda: {"current_year": date.today().year})
     csrf.init_app(app)
     app.register_blueprint(auth_bp)
     app.register_blueprint(main_bp)
@@ -35,14 +41,29 @@ def create_app(test_config: dict | None = None) -> Flask:
 
     @app.errorhandler(CSRFError)
     def handle_csrf_error(_error: CSRFError):
+        if request.accept_mimetypes.best == "application/json":  # the page script: say so in the row, no redirect
+            return jsonify(ok=False, error="Your session expired or the page is out of date. Reload the page and try again."), 400
         flash("Your session expired or the form was out of date. Please try again.", "danger")
-        # Send people back to the form they submitted (logout has no form page).
-        return redirect(url_for("main.index") if request.endpoint == "auth.logout" else request.path)
+        # Send people back to the form they submitted. A POST-only address has no page of its own
+        # (redirecting there would show "405 Method Not Allowed"), so those go to the page with the form.
+        if request.url_rule is not None and "GET" in request.url_rule.methods:
+            return redirect(request.path)
+        pages = {"auth.logout": "main.index", "auth.delete_account": "main.upload", "main.save_review": "main.upload"}
+        return redirect(url_for(pages.get(request.endpoint, "main.dashboard")))
+
+    @app.errorhandler(404)
+    def handle_not_found(_error):
+        return render_template("404.html"), 404
 
     @app.errorhandler(413)
     def handle_too_large(_error):
         limit_mb = app.config["MAX_CONTENT_LENGTH"] // (1024 * 1024)
-        flash(f"That file is too large. The limit is {limit_mb} MB.", "danger")
+        flash(
+            f"That file is too large. The limit is {limit_mb} MB. Split it into smaller CSV files "
+            "(for example one per year, each with the header row) and upload them one at a time. "
+            "Rows you have already imported are skipped.",
+            "danger",
+        )
         return redirect(url_for("main.upload"))
 
     with app.app_context():

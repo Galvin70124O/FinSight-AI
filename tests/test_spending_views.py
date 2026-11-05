@@ -1,5 +1,6 @@
 import json
 import re
+from datetime import date
 
 import pandas as pd
 
@@ -48,8 +49,11 @@ def test_dashboard_embeds_views_for_the_buttons(client, logged_in):
 
     embedded = re.search(r'<script type="application/json" id="spendingViews">(.*?)</script>', html, re.S)
     views = json.loads(embedded.group(1))
-    assert views["quarter"]["x"][0] == "Q3 2024"
-    assert views["year"]["x"] == ["2024", "2025"]
+    # The sample data ends last month, whatever today is.
+    last_month = pd.Period(date.today(), "M") - 1
+    assert views["month"]["x"][-1] == last_month.strftime("%b %Y")
+    assert len(views["month"]["x"]) == 8
+    assert views["year"]["x"][-1] == str(last_month.year)
 
 
 def test_empty_dashboard_has_no_range_buttons(client, logged_in):

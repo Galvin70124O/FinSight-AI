@@ -1,46 +1,81 @@
 {% extends 'base.html' %}
-{% block content %}
-<section class="landing-shell">
-  <section class="hero-panel landing-hero">
-    <div class="hero-copy">
-      <p class="eyebrow">Fintech-grade intelligence</p>
-      <h1>Turn every transaction into clear, actionable finance.</h1>
-      <p>FinSight AI gives operators, founders, and households a calm way to understand cash flow, uncover hidden spend, and act with confidence.</p>
-      <div class="cta-group">
-        <a class="action-button" href="{{ url_for('auth.register') }}">Get started</a>
-        <a class="ghost-button" href="{{ url_for('auth.login') }}">Sign in</a>
-      </div>
-      <div class="hero-badges">
-        <span>AI insights</span>
-        <span>Secure imports</span>
-        <span>Instant analytics</span>
-      </div>
+{% block title %}FinSight AI · See where your money goes{% endblock %}
+
+{# A real capture of the app with sample data, in both themes. Made by scripts/screenshots.py. #}
+{% macro shot(name, alt, lazy=True) -%}
+<figure class="shot">
+  {%- for theme in ('light', 'dark') %}
+  <picture class="shot-{{ theme }}">
+    <source media="(max-width: 640px)" srcset="{{ url_for('static', filename='img/' ~ name ~ '-phone-' ~ theme ~ '.jpg') }}">
+    <img src="{{ url_for('static', filename='img/' ~ name ~ '-' ~ theme ~ '.jpg') }}" alt="{{ alt }}"{% if lazy or theme == 'dark' %} loading="lazy"{% endif %} decoding="async">
+  </picture>
+  {%- endfor %}
+</figure>
+{%- endmacro %}
+
+{% block public %}
+<section class="hero" aria-labelledby="heroTitle" data-reveal>
+  <h1 class="hero-title" id="heroTitle">Know where your money goes</h1>
+  <div>
+    <p class="hero-lead">Upload your bank statement as a CSV. See what came in, what went out, where it went, and what next month may cost. In rupees, for students and households.</p>
+    <div class="hero-cta">
+      <a class="btn btn-primary btn-lg" href="{{ url_for('auth.register') }}">Create a free account</a>
+      <p class="sub">Already have one? <a href="{{ url_for('auth.login') }}">Sign in</a></p>
     </div>
-    <div class="hero-visual">
-      <div class="visual-stack">
-        <div class="visual-pill">Next-month forecast</div>
-        <div class="visual-card">
-          <p>Built from your own history</p>
-          <strong>A range, not a guess</strong>
-          <span>Needs 3+ months of transactions</span>
-        </div>
-      </div>
+  </div>
+  {{ shot('overview', 'The FinSight overview with 8 months of sample data: the balance, income, spending and savings for the latest month, and a short summary.', lazy=False) }}
+</section>
+
+<div class="feature-list">
+  <section class="feature" data-reveal aria-labelledby="f1">
+    <div class="feature-text">
+      <h2 id="f1">Where each rupee went</h2>
+      <p>Rent, groceries, mess fees, the auto to college: every category ranked by how much of your spending it took.</p>
     </div>
+    {{ shot('categories', 'Spending by category, ranked: rent first, then groceries, shopping, utilities and the rest, each with its amount and share.') }}
   </section>
 
-  <section class="feature-row">
-    <article class="feature-card">
-      <h3>Forecast with confidence</h3>
-      <p>See upcoming expenses and track monthly trends before they become a surprise.</p>
-    </article>
-    <article class="feature-card">
-      <h3>Own your cash flow</h3>
-      <p>Organize income, expenses, and savings in one polished operating view.</p>
-    </article>
-    <article class="feature-card">
-      <h3>Elevated experience</h3>
-      <p>Premium visuals, thoughtful motion, and responsive workflows for every screen size.</p>
-    </article>
+  <section class="feature" data-reveal aria-labelledby="f2">
+    <div class="feature-text">
+      <h2 id="f2">Next month, with an honest range</h2>
+      <p>A forecast from your own history, drawn as a band rather than one confident number. When your spending is too uneven to predict, it tells you so.</p>
+    </div>
+    {{ shot('spending', 'Monthly spending as a line, continued by a shaded band for next month’s likely range.') }}
   </section>
+
+  <section class="feature" data-reveal aria-labelledby="f3">
+    <div class="feature-text">
+      <h2 id="f3">A health score you can check</h2>
+      <p>Out of 100, with every part shown: how much you saved, how often income covered spending, and how steady your spending was.</p>
+    </div>
+    {{ shot('health', 'A health score of 92 out of 100, split into savings rate, months covered and steady spending, with the points each part cost.') }}
+  </section>
+</div>
+
+<section class="how" aria-labelledby="howTitle" data-reveal>
+  <div>
+    <h2 id="howTitle">How it works</h2>
+    <ol class="steps">
+      <li><p>Download a CSV from your bank or expense app.</p><span class="sub">It needs five columns: Date, Category, Amount, Type and Description.</span></li>
+      <li><p>Upload it to FinSight.</p><span class="sub">The file is read in memory and never saved on disk. Uploading the same rows again adds nothing twice.</span></li>
+      <li><p>Read your overview.</p><span class="sub">Or load 8 months of sample data first and look around.</span></li>
+    </ol>
+  </div>
+  <figure class="csv-example">
+    <figcaption class="section-title">A CSV that works</figcaption>
+    <div class="table-wrap csv-table">
+      <table class="data-table">
+        <caption class="sr-only">Example CSV rows</caption>
+        <thead><tr><th scope="col">Date</th><th scope="col">Category</th><th scope="col" class="r">Amount</th><th scope="col" class="csv-wide">Type</th><th scope="col" class="csv-wide">Description</th></tr></thead>
+        <tbody>
+          <tr><td class="num">2025-01-01</td><td>Income<span class="csv-sub">Income</span></td><td class="r">85000</td><td class="csv-wide">Income</td><td class="csv-wide">Monthly salary</td></tr>
+          <tr><td class="num">2025-01-03</td><td>Rent<span class="csv-sub">Expense</span></td><td class="r">22000</td><td class="csv-wide">Expense</td><td class="csv-wide">Flat rent</td></tr>
+          <tr><td class="num">2025-01-04</td><td>Groceries<span class="csv-sub">Expense</span></td><td class="r">2450.50</td><td class="csv-wide">Expense</td><td class="csv-wide">Weekly groceries</td></tr>
+          <tr><td class="num">2025-01-06</td><td>Transport<span class="csv-sub">Expense</span></td><td class="r">180</td><td class="csv-wide">Expense</td><td class="csv-wide">Auto to college</td></tr>
+          <tr><td class="num">2025-01-09</td><td>Utilities<span class="csv-sub">Expense</span></td><td class="r">1240</td><td class="csv-wide">Expense</td><td class="csv-wide">Electricity bill</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </figure>
 </section>
 {% endblock %}

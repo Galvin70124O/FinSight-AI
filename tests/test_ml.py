@@ -128,8 +128,43 @@ def test_health_score_penalises_overspending():
     assert health.components[0]["points"] == 0
     assert health.components[1]["points"] == 0
     assert health.label == "Needs attention"
+    assert health.components[0]["detail"].startswith("You spent 20.0% more than your income")
 
 
 def test_insights_are_plain_json_data():
     insights = compute_insights(monthly_spend(["2025-01", "2025-02", "2025-03"], [1000, 1100, 1200]))
     assert json.loads(json.dumps(insights)) == insights
+
+
+def test_forecast_flags_a_range_wider_than_the_forecast():
+    months = ["2024-09", "2024-10", "2024-11", "2024-12", "2025-01", "2025-02"]
+    steady = forecast_expenses(monthly_spend(months, [1000, 1050, 980, 1020, 1010, 990]))
+    one_off = forecast_expenses(monthly_spend(months, [1000, 1050, 980, 1020, 1010, 90000]))
+
+    assert not steady.uneven
+    assert one_off.uneven
+    assert one_off.high - one_off.low > one_off.predicted
+
+
+def test_health_parts_are_whole_points_that_add_up_to_the_score():
+    from utils import whole_health
+
+    def health(points, maxes=(50, 25, 25)):
+        parts = [{"name": str(i), "points": p, "max_points": m, "detail": ""} for i, (p, m) in enumerate(zip(points, maxes))]
+        score = round(100 * sum(points) / sum(maxes), 1)
+        return whole_health({"score": score, "label": "", "components": parts})
+
+    shown = health([50, 25, 16.9])
+    assert [p["shown"] for p in shown["components"]] == [50, 25, 17]
+    assert [p["lost"] for p in shown["components"]] == [0, 0, 8]
+    assert shown["shown_score"] == 92
+
+    # Rounding each part on its own would give 41 + 21 + 21 = 83 against a score of 82.
+    tricky = health([40.6, 20.6, 20.6])
+    assert tricky["shown_score"] == 82
+    assert sum(p["shown"] for p in tricky["components"]) == 82
+
+    # With only two parts measured the score is scaled; the parts add up to the points measured.
+    scaled = health([42.5, 12.5], maxes=(50, 25))
+    assert scaled["measured_points"] == 75
+    assert sum(p["shown"] for p in scaled["components"]) == 55

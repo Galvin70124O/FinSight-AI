@@ -46,3 +46,66 @@ def test_income_only_month_still_appears(app):
 def test_recent_transactions_include_income(app):
     types = {tx["Type"] for tx in payload(app)["recent_transactions"]}
     assert types == {"Income", "Expense"}
+
+
+def test_overspending_is_described_in_rupees_not_a_negative_share(app):
+    rows = ROWS + [{"Date": "2025-01-20", "Category": "Education", "Amount": 300000.0, "Type": "Expense", "Description": "Fees"}]
+    insight = payload(app, rows)["insight"]
+
+    assert "₹1,75,000 more than you earned" in insight
+    assert "keeping" not in insight and "-" not in insight
+
+
+def test_counts_of_one_are_singular(app):
+    from utils import plural
+
+    one_month = [row for row in ROWS if row["Date"].startswith("2025-01")]
+    assert payload(app, one_month)["insight"].startswith("Over 1 month you earned")
+    assert plural(1, "transaction") == "1 transaction"
+    assert plural(0, "transaction") == "0 transactions"
+
+
+def test_categories_past_the_seventh_fold_into_one_row(app):
+    names = ["Rent", "Groceries", "Dining", "Transport", "Shopping", "Bills", "Health", "Travel", "Gifts", "Books"]
+    rows = ROWS[:1] + [
+        {"Date": "2025-01-10", "Category": name, "Amount": 1000.0 * (10 - i), "Type": "Expense", "Description": name}
+        for i, name in enumerate(names)
+    ]
+    data = payload(app, rows)
+    cats = data["summary"]["category_distribution"]
+
+    assert len(cats) == 8
+    assert cats[-1] == {"Category": "Everything else", "Total": 6000.0}  # Travel + Gifts + Books
+    assert sum(c["Total"] for c in cats) == data["metrics"]["total_expense"]
+
+
+def test_eight_categories_are_listed_without_a_remainder_row(app):
+    rows = ROWS[:1] + [
+        {"Date": "2025-01-10", "Category": f"C{i}", "Amount": 100.0 + i, "Type": "Expense", "Description": "x"} for i in range(8)
+    ]
+    assert "Everything else" not in [c["Category"] for c in payload(app, rows)["summary"]["category_distribution"]]
+
+
+def test_unusual_list_is_capped_but_the_count_is_not(app):
+    anomalies = [{"date": f"2025-01-{day:02d}", "category": "Dining", "description": "x", "amount": 9000.0, "typical": 500.0, "ratio": 18.0} for day in range(1, 26)]
+    with app.app_context():
+        data = build_dashboard_payload(pd.DataFrame(ROWS), {"anomalies": anomalies})["insights"]
+
+    assert len(data["anomalies"]) == 10
+    assert data["anomaly_count"] == 25
+
+
+def test_month_on_month_compares_the_latest_two_months(app):
+    mom = payload(app)["month_on_month"]
+
+    assert (mom["month"], mom["previous_month"]) == ("Jan 2025", "Dec 2024")
+    assert mom["income"] == {"value": 90000.0, "previous": 80000.0, "change": 10000.0}
+    assert mom["expense"]["change"] == 5000.0
+    assert mom["saved"] == {"value": 65000.0, "previous": 60000.0, "change": 5000.0}
+
+
+def test_month_on_month_needs_two_months(app):
+    from utils import month_on_month
+
+    assert month_on_month(["Jan 2025"], [100.0], [50.0]) is None
+    assert payload(app, [])["month_on_month"] is None
