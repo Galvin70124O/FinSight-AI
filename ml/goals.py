@@ -16,6 +16,7 @@ NAME_MAX = 60
 TARGET_MAX = Decimal("100000000")  # ₹10 crore
 YEARS_MAX = 50
 GOALS_MAX = 20
+FULL_MONTH_DAYS = 20  # days of a first or last month the data must cover for its savings to count
 
 
 @dataclass(frozen=True)
@@ -37,8 +38,18 @@ class GoalPlan:
 def savings_rate(transactions: pd.DataFrame) -> SavingsRate:
     """The average month's savings over the same months the forecast uses, with an 80% range for that average
     (the forecast's INTERVAL, from the t-distribution): the pace a goal is saved at is the average of many
-    months, not any one month."""
+    months, not any one month. A first or last month the data covers for fewer than FULL_MONTH_DAYS days is
+    left out: a statement starting on the 25th would otherwise count as a month of almost no savings."""
     spent = monthly_expense_totals(transactions)
+    if not spent.empty:
+        dates = pd.to_datetime(transactions["Date"])
+        first, last = dates.min(), dates.max()
+        keep = spent.index
+        if first.days_in_month - first.day + 1 < FULL_MONTH_DAYS:
+            keep = keep[1:]
+        if last.day < FULL_MONTH_DAYS:
+            keep = keep[:-1]
+        spent = spent.reindex(keep)
     if len(spent) < MIN_MONTHS:
         return SavingsRate(len(spent))
     income = transactions[transactions["Type"] == "Income"]
@@ -55,7 +66,7 @@ def plan_goal(target: float, target_date: date, rate: SavingsRate, today: date) 
     months_left = _months_between(today, target_date)
     monthly_needed = round(target / months_left, 2) if months_left > 0 else None
     if rate.average is None:
-        return GoalPlan(monthly_needed, f"Import at least {MIN_MONTHS} months of transactions to estimate a date.")
+        return GoalPlan(monthly_needed, f"Import at least {MIN_MONTHS} full months of transactions to estimate a date.")
     if abs(rate.average) < 1:
         return GoalPlan(monthly_needed, "You spend about what you earn, so there's no date to give.")
     if rate.average < 0:

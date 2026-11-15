@@ -53,7 +53,7 @@ RATE = SavingsRate(months=8, average=10000.0, low=8000.0, high=12000.0)
     (60000, SavingsRate(8, 3000.0, -500.0, 6500.0), "Sep 2027 at the earliest; in slower months you'd save nothing towards it."),
     (60000, SavingsRate(8, -2300.0, -4000.0, -600.0), "You spend more than you earn on average (₹2,300 a month), so there's no date to give."),
     (60000, SavingsRate(8, 0.0, -900.0, 900.0), "You spend about what you earn, so there's no date to give."),
-    (60000, SavingsRate(2), "Import at least 3 months of transactions to estimate a date."),
+    (60000, SavingsRate(2), "Import at least 3 full months of transactions to estimate a date."),
     (10_00_00_000, SavingsRate(8, 1000.0, 900.0, 1100.0), "More than 50 years away at your average savings."),
 ])
 def test_the_date_is_a_range_at_the_users_pace_or_says_plainly_why_not(target, rate, eta):
@@ -65,14 +65,30 @@ def test_the_monthly_amount_spreads_the_target_over_the_months_left():
     assert plan_goal(120000, date(2026, 10, 1), RATE, TODAY).monthly_needed is None  # the month has passed
 
 
+def transactions(rows):
+    return pd.DataFrame([{"Date": d, "Amount": a, "Type": t, "Category": "", "Description": ""} for d, a, t in rows])
+
+
 def test_savings_rate_is_income_minus_spending_with_a_range_around_the_average():
     rows = [("2026-0%d-01" % m, 50000, "Income") for m in (1, 2, 3)]
-    rows += [("2026-01-10", 40000, "Expense"), ("2026-02-10", 42000, "Expense"), ("2026-03-10", 38000, "Expense")]
-    df = pd.DataFrame([{"Date": d, "Amount": a, "Type": t, "Category": "", "Description": ""} for d, a, t in rows])
+    rows += [("2026-01-25", 40000, "Expense"), ("2026-02-25", 42000, "Expense"), ("2026-03-25", 38000, "Expense")]
+    df = transactions(rows)
     rate = savings_rate(df)
     assert (rate.months, rate.average) == (3, 10000.0)
     assert rate.low < 10000 < rate.high and round(rate.high - 10000, 2) == round(10000 - rate.low, 2)
     assert savings_rate(df[df["Date"] < "2026-03-01"]) == SavingsRate(2)
+
+
+def test_a_partial_first_or_last_month_is_left_out_of_the_savings_rate():
+    full = [(f"2026-0{m}-01", 50000, "Income") for m in (2, 3, 4)] + [(f"2026-0{m}-25", 40000, "Expense") for m in (2, 3, 4)]
+    # Data from 25 Jan (7 days of January) to 12 May (12 days of May): those two months would count as
+    # months of big spending and no salary; they are left out, so the rate is February to April only.
+    partial = full + [("2026-01-25", 9000, "Expense"), ("2026-05-12", 9000, "Expense")]
+    assert savings_rate(transactions(partial)) == savings_rate(transactions(full))
+    assert savings_rate(transactions(partial)).months == 3
+    # 20 days of a month is enough: 12 Jan to 31 Jan counts as January.
+    january = transactions(full + [("2026-01-12", 50000, "Income"), ("2026-01-31", 40000, "Expense")])
+    assert savings_rate(january).months == 4
 
 
 def test_one_users_goals_are_out_of_another_users_reach(engine_db):
