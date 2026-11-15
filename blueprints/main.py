@@ -90,6 +90,7 @@ def _transactions_frame(rows: list[dict[str, object]]) -> pd.DataFrame:
                 "Amount": row["amount"],
                 "Type": row["type"],
                 "Description": row["description"],
+                "Merchant": row["merchant_key"],  # stored at import; find_recurring() reads it
             }
             for row in rows
         ]

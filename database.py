@@ -95,6 +95,31 @@ CREATE TABLE IF NOT EXISTS auth_attempts (
 );
 CREATE INDEX IF NOT EXISTS idx_auth_attempts_key ON auth_attempts(key, attempted_at);
 
+-- A savings goal: a name, an amount in rupees and the date it is for (YYYY-MM-DD).
+CREATE TABLE IF NOT EXISTS goals (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    name TEXT NOT NULL,
+    target_amount REAL NOT NULL,
+    target_date TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users (id)
+);
+CREATE INDEX IF NOT EXISTS idx_goals_user ON goals(user_id);
+
+-- A recurring payment the user said isn't one: its payee key, period in days and typical amount in paise (one
+-- payee can have two series at different amounts; dismissing one must not hide the other).
+CREATE TABLE IF NOT EXISTS recurring_dismissals (
+    user_id INTEGER NOT NULL,
+    payee TEXT NOT NULL,
+    period_days INTEGER NOT NULL,
+    amount_paise INTEGER NOT NULL,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (user_id, payee, period_days, amount_paise),
+    FOREIGN KEY (user_id) REFERENCES users (id)
+);
+CREATE INDEX IF NOT EXISTS idx_recurring_dismissals_user ON recurring_dismissals(user_id);
+
 CREATE TABLE IF NOT EXISTS migrations (
     name TEXT PRIMARY KEY,
     applied_at TEXT NOT NULL
@@ -168,6 +193,26 @@ CREATE TABLE IF NOT EXISTS auth_attempts (
 CREATE INDEX IF NOT EXISTS idx_auth_attempts_key ON auth_attempts(key, attempted_at);
 
 ALTER TABLE transactions ADD COLUMN IF NOT EXISTS merchant_key TEXT;
+
+CREATE TABLE IF NOT EXISTS goals (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER NOT NULL REFERENCES users (id),
+    name TEXT NOT NULL,
+    target_amount DOUBLE PRECISION NOT NULL,
+    target_date TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_goals_user ON goals(user_id);
+
+CREATE TABLE IF NOT EXISTS recurring_dismissals (
+    user_id INTEGER NOT NULL REFERENCES users (id),
+    payee TEXT NOT NULL,
+    period_days INTEGER NOT NULL,
+    amount_paise INTEGER NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (user_id, payee, period_days, amount_paise)
+);
+CREATE INDEX IF NOT EXISTS idx_recurring_dismissals_user ON recurring_dismissals(user_id);
 
 CREATE TABLE IF NOT EXISTS migrations (
     name TEXT PRIMARY KEY,

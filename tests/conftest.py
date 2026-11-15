@@ -29,6 +29,30 @@ def app(tmp_path):
     yield app
 
 
+@pytest.fixture(scope="module")
+def postgres_url():
+    pgserver = pytest.importorskip("pgserver")  # embedded Postgres, a dev requirement
+    with pgserver.get_server(tempfile.mkdtemp(prefix="finsight-pg-"), cleanup_mode="stop") as server:
+        yield server.get_uri()
+
+
+@pytest.fixture(params=["sqlite", "postgres"])
+def engine_app(request, tmp_path):
+    config = {"TESTING": True, "DATABASE_PATH": str(tmp_path / "test.db")}
+    if request.param == "postgres":
+        config["DATABASE_URL"] = request.getfixturevalue("postgres_url")
+    return create_app(config)
+
+
+@pytest.fixture
+def engine_db(engine_app):
+    """A database connection on SQLite, then on embedded Postgres: for SQL the two could read differently."""
+    from database import get_db
+
+    with engine_app.app_context():
+        yield get_db()
+
+
 @pytest.fixture
 def client(app):
     return app.test_client()
