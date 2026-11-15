@@ -17,6 +17,9 @@ trained_models/
 
 # Secrets and editor files
 .env
+.env.*
+!.env.example
+secrets.toml
 .vscode/
 .idea/
 .DS_Store

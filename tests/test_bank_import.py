@@ -86,6 +86,35 @@ def test_files_that_are_not_statements_are_refused_with_a_specific_message(clien
     assert saved(db, logged_in) == []
 
 
+WORST = FIXTURES / "worst-case"
+
+
+@pytest.mark.parametrize("name", ["header-only-known.csv", "header-only-unknown.csv"])
+def test_a_statement_with_only_column_names_says_there_are_no_transactions(client, logged_in, name):
+    page = upload(client, (WORST / name).read_bytes(), name)
+    assert "The file has column names in row 1 but no transactions below them." in page
+    assert "Match the columns" not in page
+
+
+def test_columns_with_the_same_name_are_told_apart_by_their_letter(client, logged_in):
+    page = upload(client, (WORST / "duplicate-known.csv").read_bytes(), "duplicate-known.csv")
+    assert '">Amount (column C)</b>' in page and '">Amount (column D)</b>' in page
+    labels = locate(read_grid((WORST / "duplicate-known.csv").read_bytes(), "d.csv")).labels
+    assert labels == ["Date", "Narration", "Amount (column C)", "Amount (column D)", "Balance"]
+
+
+def test_blank_columns_are_folded_but_can_still_be_mapped(client, logged_in):
+    page = upload(client, (WORST / "kitchen-sink-30-cols.csv").read_bytes(), "kitchen-sink-30-cols.csv")
+    assert "21 columns are blank in every row and will be skipped." in page
+    folded = page.split('<details class="map-blank">')[1]
+    assert len(re.findall(r'name="role-\d+"', folded)) == 21 and len(re.findall(r'name="role-\d+"', page)) == 30
+    # A blank column mapped on purpose keeps the fold open when the screen comes back.
+    payload = re.search(r'name="payload" value="([^"]+)"', page).group(1)
+    form = {"csrf_token": csrf_token(client, "/upload"), "payload": payload, **{f"role-{i}": "ignore" for i in range(30)}}
+    again = client.post("/upload/columns", data={**form, "role-9": "date"}).get_data(as_text=True)
+    assert '<details class="map-blank" open>' in again
+
+
 def test_a_statement_that_needs_checking_shows_its_columns_and_saves_nothing(client, db, logged_in):
     content = b"Account,XXXX1234\n\nDate,Narration,Debit,Credit\n31/02/2026,Groceries,500,\n"
     page = upload(client, content, "s.csv")

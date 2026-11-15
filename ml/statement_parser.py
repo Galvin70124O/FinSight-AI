@@ -203,6 +203,9 @@ def _grid(rows) -> list[list[str]]:
 
 ROLES = ("date", "description", "debit", "credit", "amount", "type", "category", "ignore")  # the mapping screen's choices
 HEADER_SCAN_ROWS = 40
+NO_TRANSACTIONS = ("The file has column names in row {row} but no transactions below them. Check the dates the "
+                   "statement covers and download it again.")
+FEWEST_NEGATIVE_DEBITS = 3  # with fewer, all-negative debits could be refunds as easily as a bank's formatting
 SHOWN_ERRORS = 5
 
 _PRESETS = {
@@ -268,9 +271,12 @@ class Layout:
 
     @cached_property
     def labels(self) -> list[str]:
-        """What to call each column in messages: its header text, or its letter when the header cell is blank."""
+        """What to call each column in messages: its header text, or its letter when the header cell is blank.
+        A name used twice gets its letter too ("Ref no (column H)"), so the two can be told apart."""
         header = self.header + [""] * (self.width - len(self.header))
-        return [cell or f"column {_letter(i)}" for i, cell in enumerate(header)]
+        names = [" ".join(cell.lower().split()) for cell in header]
+        return [(f"{cell} (column {_letter(i)})" if names.count(names[i]) > 1 else cell) if cell else f"column {_letter(i)}"
+                for i, cell in enumerate(header)]
 
     @cached_property
     def key(self) -> str:
@@ -312,6 +318,9 @@ def locate(grid: list[list[str]]) -> Layout:
             best, best_score = index, score
     if best is None:
         best = next((index for index in range(min(len(grid), HEADER_SCAN_ROWS)) if _could_be_header(grid, index)), None)
+    filled = [index for index, row in enumerate(grid) if any(row)]
+    if best is None and len(filled) == 1 and _are_names(grid[filled[0]]):  # a header row of names FinSight doesn't know
+        raise StatementError(NO_TRANSACTIONS.format(row=filled[0] + 1))
     if best is None:
         raise StatementError(
             "Couldn't find the header row (the row of column names such as Date, Narration, Debit and Credit) in "
@@ -320,9 +329,14 @@ def locate(grid: list[list[str]]) -> Layout:
     return Layout(best, grid[best], grid[best + 1:])
 
 
+def _are_names(row: list[str], least: int = 2) -> bool:
+    """At least `least` filled cells, none of them a date or an amount: a row that could be column names."""
+    cells = [cell for cell in row if cell]
+    return len(cells) >= least and not any(_looks_like_date(cell) or _amount(cell) is not None for cell in cells)
+
+
 def _could_be_header(grid, index) -> bool:
-    cells = [cell for cell in grid[index] if cell]
-    if len(cells) < 3 or any(_looks_like_date(cell) or _amount(cell) is not None for cell in cells):
+    if not _are_names(grid[index], 3):
         return False
     following = next((row for row in grid[index + 1:index + 4] if any(row)), [])
     return sum(bool(cell) for cell in following) >= 3 and any(_looks_like_date(cell) for cell in following)
@@ -476,6 +490,9 @@ def convert(layout: Layout, roles: list[str], date_order: str | None = None) -> 
     if result.error_count:
         return result
     column = {role: roles.index(role) for role in set(roles) - {"ignore"}}
+    debits_negative = _debits_negative(layout, column, labels, result)
+    if result.error_count:
+        return result
     header_names = [_name(cell) for cell in layout.header]
     found = []  # (row number, date text, signed amount, description, category)
     blanks, said_which_way, end = 0, False, len(layout.rows)
@@ -500,7 +517,7 @@ def convert(layout: Layout, roles: list[str], date_order: str | None = None) -> 
                 break
             result.skipped += 1
             continue
-        money = _signed_amount(cells, column, labels, number, result)
+        money = _signed_amount(cells, column, labels, number, result, debits_negative)
         if money is None:
             continue
         if not money[0]:
@@ -553,7 +570,27 @@ def convert(layout: Layout, roles: list[str], date_order: str | None = None) -> 
     return result
 
 
-def _signed_amount(cells, column, labels, number, result) -> tuple[float, bool] | None:
+def _debits_negative(layout: Layout, column: dict[str, int], labels: list[str], result: Result) -> bool:
+    """Whether the Debit column writes every debit as negative, (500.00) or -500: then the sign is only formatting
+    and they are money out. A few negatives among positive debits stay refunds. With fewer than
+    FEWEST_NEGATIVE_DEBITS debits, all negative, it can't be told, so the user is asked to check the column."""
+    if "debit" not in column:
+        return False
+    at = column["debit"]
+    debits = [(layout.header_index + 2 + offset, row[at].strip(), value) for offset, row in enumerate(layout.rows)
+              if at < len(row) and (value := (_amount(row[at]) or (0.0,))[0])]
+    if not debits or any(value > 0 for *_, value in debits):
+        return False
+    if len(debits) < FEWEST_NEGATIVE_DEBITS:
+        number, text, _ = debits[0]
+        result.problem(
+            f"Row {number}: '{text}' in {labels[at]} is negative, and so is every other debit. With so few debits FinSight "
+            "can't tell whether they are money out or refunds, so check that column."
+        )
+    return True
+
+
+def _signed_amount(cells, column, labels, number, result, debits_negative=False) -> tuple[float, bool] | None:
     """(amount, whether the file said which way it goes): negative is money out, 0.0 is no money.
     None after recording a problem with the row."""
     def read(role):
@@ -571,7 +608,13 @@ def _signed_amount(cells, column, labels, number, result) -> tuple[float, bool] 
                 f"Row {number} has both a debit ({cells[column['debit']].strip()}) and a credit ({cells[column['credit']].strip()})."
             )
             return None
-        return credit[0] - debit[0], True  # a negative debit is money in, as some banks write refunds
+        for role, (value, side), wrong, way in (("debit", debit, "cr", "out"), ("credit", credit, "dr", "in")):
+            if value and side == wrong:
+                result.problem(f"Row {number}: '{cells[column[role]].strip()}' says {wrong.title()}, but "
+                               f"{labels[column[role]]} is the column for money {way}.")
+                return None
+        # A negative debit is money in, as some banks write refunds, unless every debit is written that way.
+        return credit[0] - (abs(debit[0]) if debits_negative else debit[0]), True
     amount = read("amount")
     if amount is None:
         return None
@@ -581,6 +624,10 @@ def _signed_amount(cells, column, labels, number, result) -> tuple[float, bool] 
     if "type" in column:
         word = _name(cells[column["type"]])
         if word in _DEBIT_WORDS | _CREDIT_WORDS:
+            if side and side != ("dr" if word in _DEBIT_WORDS else "cr"):
+                result.problem(f"Row {number}: '{cells[column['amount']].strip()}' in {labels[column['amount']]} says "
+                               f"{side.title()}, but {labels[column['type']]} says {cells[column['type']].strip()}.")
+                return None
             return (-abs(value) if word in _DEBIT_WORDS else abs(value)), True
         result.problem(f"Row {number}: '{cells[column['type']].strip()}' in {labels[column['type']]} is neither Dr nor Cr.")
         return None

@@ -208,9 +208,35 @@ def test_amounts_in_the_ways_banks_write_them(text, expected):
     assert _amount(text) == expected
 
 
-def test_a_negative_debit_is_money_in():
-    result = parse(csv_grid("Date,Narration,Withdrawal Amt.,Deposit Amt.\n05/11/26,REFUND,-499.00,\n"))[1]
-    assert result.frame[["Amount", "Type"]].values.tolist() == [[499.0, "Income"]]
+def test_a_negative_debit_among_positive_ones_is_money_in():
+    result = parse(csv_grid("Date,Narration,Withdrawal Amt.,Deposit Amt.\n05/11/26,REFUND,-499.00,\n06/11/26,SHOP,200,\n"))[1]
+    assert result.frame[["Amount", "Type"]].values.tolist() == [[499.0, "Income"], [200.0, "Expense"]]
+
+
+WORST = Path(__file__).parent / "fixtures" / "statements" / "worst-case"
+
+
+def worst_grid(name):
+    return read_grid((WORST / name).read_bytes(), name)
+
+
+def test_debits_all_in_brackets_are_money_out_but_two_are_not_guessed():
+    result = parse(worst_grid("debits-in-brackets.csv"))[1]
+    assert result.frame[["Amount", "Type"]].values.tolist() == [
+        [486.0, "Expense"], [1240.0, "Expense"], [890.0, "Expense"], [85000.0, "Income"]]
+    few = parse(worst_grid("two-debits-in-brackets.csv"))[1]
+    assert not few.ok and few.errors == [
+        "Row 2: '(486.00)' in Withdrawal Amt. is negative, and so is every other debit. With so few debits FinSight "
+        "can't tell whether they are money out or refunds, so check that column."]
+
+
+@pytest.mark.parametrize("name, error", [
+    ("amount-formats-with-type.csv", "Row 4: '₹ 500 Dr' in Amount says Dr, but Type says Cr."),
+    ("debit-credit-conflict.csv", "Row 2: '486.00 Cr' says Cr, but Withdrawal Amt. is the column for money out."),
+])
+def test_a_dr_or_cr_on_an_amount_that_disagrees_stops_with_a_row_message(name, error):
+    result = parse(worst_grid(name))[1]
+    assert not result.ok and result.errors == [error]
 
 
 GENERIC_AMBIGUOUS = "Date,Description,Debit,Credit,Balance\n03/04/2026,Groceries,500,,100\n05/04/2026,Salary,,9000,200\n"

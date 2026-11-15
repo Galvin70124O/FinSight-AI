@@ -431,6 +431,14 @@ svg { flex: none; }
 .map-samples li { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .map-row .select { width: 100%; }
 .map-list .map-row:last-child { border-bottom: 0; }  /* the action bar's own rule follows */
+.map-blank { border-top: 1px solid var(--line); }
+.map-blank summary {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 0 var(--s2); min-height: 44px; padding: var(--s2) 0;
+  color: var(--muted); font-size: 14px; cursor: pointer;
+}
+.map-show, .map-hide { color: var(--accent); font-weight: 500; }
+.map-blank[open] .map-show, .map-blank:not([open]) .map-hide { display: none; }
+.map-blank[open] summary { border-bottom: 1px solid var(--line); }
 /* A column left as "Not needed" steps back, so the few in use stand out in a wide file. */
 .map-row:has(option[value="ignore"]:checked) .map-name b { color: var(--ink-2); font-weight: 400; }
 
@@ -526,7 +534,7 @@ button, .btn, .chip, .seg-btn, .tab, .nav-link, summary { -webkit-user-select: n
   .footer-inner a:hover { color: var(--ink); }
   .nav-link:hover { background: var(--surface-2); color: var(--ink); }
   .btn-danger:hover { background: color-mix(in srgb, var(--bad) 10%, transparent); }
-  .m-toggle:hover, .tx-edit summary:hover, .m-rows summary:hover { text-decoration: underline; text-underline-offset: 3px; }
+  .m-toggle:hover, .tx-edit summary:hover, .m-rows summary:hover, .map-blank summary:hover :is(.map-show, .map-hide) { text-decoration: underline; text-underline-offset: 3px; }
 }
 
 /* Fingers need 44px targets and 16px fields (iOS zooms into anything smaller). */

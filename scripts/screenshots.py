@@ -7,8 +7,9 @@ sample transactions, then saves:
 
 - static/img/<part>-<theme>.jpg   crops of the dashboard used on the landing page
 - docs/screenshots/<page>-<width>-<theme>.png   full pages for the README, including the
-  import review step for REVIEW_CSV (a made-up statement with no Category column) and the
-  Categories page after saving it
+  import review step for REVIEW_CSV (a made-up statement with no Category column), the column
+  screen for COLUMNS_CSV (a made-up bank layout FinSight doesn't know), the error page, and the
+  Categories page after saving the review
 
 Needs the dev requirements (Playwright) and Google Chrome, or Playwright's Chromium.
 Nothing from the run is kept: the database lives in a temporary folder.
@@ -40,11 +41,26 @@ CROP_MARGIN = 12
 # At 940px the app shows one 660px column beside the sidebar, about the width the landing page
 # displays a crop at (~750px), so the smallest chart text (12px) still shows at 13px or more.
 CROP_VIEWPORT = 940
-PAGES = {"landing": "/", "upload": "/upload", "dashboard": "/dashboard"}
+ERROR_PATH = "/screenshot-error"  # added to the app by this script only, to show the error page
+PAGES = {"landing": "/", "upload": "/upload", "dashboard": "/dashboard", "error-500": ERROR_PATH}
+# A made-up statement from a bank with no preset: account details above the header, column names FinSight
+# doesn't know, so the column screen asks which is which.
+COLUMNS_CSV = """Statement of account
+Account holder,Meera Krishnan
+Account number,XXXXXXXX4821
+Period,01/10/2026 to 31/10/2026
+
+Posted on,Details,Ref no,Paid out,Paid in,Left in account
+01/10/2026,ACH/SALARY/KAVERI SOFTLABS/OCT2026,ACH881920,,"85,000.00","1,32,410.50"
+02/10/2026,IMPS/P2A/412345678901/KAVYA NAIR/rent oct,IMPS77120,"14,000.00",,"1,18,410.50"
+03/10/2026,UPI/ZOMATO LTD/412345678902/Paid via PhonePe,UPI55102,486.00,,"1,17,924.50"
+04/10/2026,UPI/SWIGGY INSTAMART/412345678905/Order,UPI55188,"1,240.00",,"1,16,684.50"
+06/10/2026,BIL/BPAY/000123456/BESCOM,BIL20931,"1,890.00",,"1,14,794.50"
+"""
 # A made-up statement without categories: keyword rules, model guesses and merchants left for the user.
 REVIEW_CSV = """Date,Amount,Type,Description
 2026-10-01,85000,Income,ACH/SALARY/KAVERI SOFTLABS/OCT2026
-2026-10-02,14000,Expense,IMPS/P2A/412345678901/KAVYA NAIR/HDFC0001234/rent oct
+2026-10-02,14000,Expense,IMPS/P2A/412345678901/KAVYA NAIR/ABCD0001234/rent oct
 2026-10-03,486,Expense,UPI/ZOMATO LTD/412345678902/Paid via PhonePe
 2026-10-09,312,Expense,UPI/ZOMATO LTD/412345678903/Paid via PhonePe
 2026-10-17,655,Expense,UPI/ZOMATO LTD/412345678904/Paid via PhonePe
@@ -123,6 +139,10 @@ def main() -> None:
         from werkzeug.serving import make_server
         from app import app
 
+        def fail():
+            raise RuntimeError("an unexpected error, for the error page screenshot")
+
+        app.add_url_rule(ERROR_PATH, "screenshot_error", fail)
         server = make_server("127.0.0.1", PORT, app)
         threading.Thread(target=server.serve_forever, daemon=True).start()
         try:
@@ -158,6 +178,8 @@ def main() -> None:
 
                 review_csv = Path(tmp) / "statement-october.csv"
                 review_csv.write_text(REVIEW_CSV, encoding="utf-8")
+                columns_csv = Path(tmp) / "account-statement-october.csv"
+                columns_csv.write_text(COLUMNS_CSV, encoding="utf-8")
                 for theme in THEMES:
                     for width, height in WIDTHS.items():
                         # The review step only exists after an upload; nothing is saved until Save.
@@ -170,13 +192,25 @@ def main() -> None:
                         page.add_style_tag(content=".tabbar { position: static; } .review-actions { position: static; }")
                         page.screenshot(path=shots_dir / f"import-review-{width}-{theme}.png", full_page=True)
                         context.close()
+                        # The column screen, also only after an upload; nothing is saved from it either.
+                        context = themed_context(browser, theme, width, height, 1, storage)
+                        page = context.new_page()
+                        page.goto(f"{BASE}/upload")
+                        page.set_input_files("input[type=file]", str(columns_csv))
+                        page.click("form.form button[type=submit]")
+                        settle(page)
+                        page.add_style_tag(content=".tabbar { position: static; } .review-actions { position: static; }")
+                        page.screenshot(path=shots_dir / f"import-columns-{width}-{theme}.png", full_page=True)
+                        context.close()
                         for name, path in PAGES.items():
                             context = themed_context(browser, theme, width, height, 1, None if name == "landing" else storage)
                             page = context.new_page()
                             page.goto(BASE + path)
                             settle(page)
                             # A full-page capture would paint the fixed tab bar mid-page; show it at the bottom instead.
-                            page.add_style_tag(content=".tabbar { position: static; }")
+                            # Not on a page shorter than the screen (the error page): there it already is at the bottom.
+                            if page.evaluate("document.documentElement.scrollHeight > innerHeight"):
+                                page.add_style_tag(content=".tabbar { position: static; }")
                             page.screenshot(path=shots_dir / f"{name}-{width}-{theme}.png", full_page=True)
                             context.close()
 
@@ -204,7 +238,7 @@ def main() -> None:
                 browser.close()
         finally:
             server.shutdown()
-    print(f"Saved {(len(CROPS) + 1) * len(THEMES) * 2} crops to {img_dir} and {(len(PAGES) + 2) * len(WIDTHS) * len(THEMES)} pages to {shots_dir}")
+    print(f"Saved {(len(CROPS) + 1) * len(THEMES) * 2} crops to {img_dir} and {(len(PAGES) + 3) * len(WIDTHS) * len(THEMES)} pages to {shots_dir}")
 
 
 if __name__ == "__main__":

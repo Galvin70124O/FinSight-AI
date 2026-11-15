@@ -41,10 +41,7 @@
     </fieldset>
     {% endif %}
 
-    <div class="map-row map-head" aria-hidden="true"><span>Column in your file</span><span>What it holds</span></div>
-    <ol class="map-list">
-      {% for column in columns %}
-      {% set n = loop.index0 %}
+    {% macro column_row(column, roles) %}{% set n = column.index %}
       <li class="map-row">
         <div class="map-name">
           <b id="c{{ n }}">{{ column.label }}</b>
@@ -58,8 +55,22 @@
           {% for value, name in roles %}<option value="{{ value }}"{{ ' selected' if value == column.role }}>{{ name }}</option>{% endfor %}
         </select>
       </li>
-      {% endfor %}
+    {% endmacro %}
+    {% set blank = columns|rejectattr('samples')|list %}
+    <div class="map-row map-head" aria-hidden="true"><span>Column in your file</span><span>What it holds</span></div>
+    <ol class="map-list">
+      {% for column in columns|selectattr('samples') %}{{ column_row(column, roles) }}{% endfor %}
     </ol>
+    {% if blank %}
+    {# Folded, still in the form: a column whose sample misled can be opened and mapped. Open when one already is. #}
+    <details class="map-blank"{{ ' open' if blank|rejectattr('role', 'equalto', 'ignore')|list }}>
+      <summary>{{ blank|length|plural('column') }} {{ 'is' if blank|length == 1 else 'are' }} blank in every row and will be skipped.
+        <span class="map-show">Show {{ 'it' if blank|length == 1 else 'them' }}</span><span class="map-hide">Hide {{ 'it' if blank|length == 1 else 'them' }}</span></summary>
+      <ol class="map-list">
+        {% for column in blank %}{{ column_row(column, roles) }}{% endfor %}
+      </ol>
+    </details>
+    {% endif %}
 
     <div class="review-actions">
       <p class="sub">Rows you have already imported are skipped.</p>

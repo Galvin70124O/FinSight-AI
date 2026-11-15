@@ -163,6 +163,8 @@ def upload():
                 if len(own_columns) >= 2:  # our format with columns missing (Date,Amount): name them, as before
                     return _import_finsight_csv(db, data, filename)
                 raise
+            if not any(layout.rows):  # column names and nothing below: no choice of columns could help
+                raise StatementError(statement_parser.NO_TRANSACTIONS.format(row=layout.header_index + 1))
             saved = get_column_mapping(db, session["user_id"], layout.key)  # this user's own, for this header row
             fitted = saved and statement_parser.fit_roles(saved[0], layout.width)
             roles = fitted or statement_parser.guess_roles(layout)
@@ -231,7 +233,7 @@ def _columns(layout, roles: list[str], result, filename: str, date_order: str | 
     for index, (label, role) in enumerate(zip(layout.labels, roles)):
         cells = (row[index].strip() for row in layout.rows if index < len(row))
         named = index < len(layout.header) and layout.header[index]
-        columns.append({"label": label if named else label[:1].upper() + label[1:],  # "Column E" on a line of its own
+        columns.append({"index": index, "label": label if named else label[:1].upper() + label[1:],  # "Column E" on its own
                         "role": role, "samples": [cell for cell in cells if cell][:3]})
     return render_template(
         "import_columns.html", columns=columns, payload=payload, filename=filename, header_row=layout.header_index + 1,
