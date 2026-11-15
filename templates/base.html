@@ -6,19 +6,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <meta name="theme-color" content="#F7F8FA">
     <title>{% block title %}FinSight AI{% endblock %}</title>
-    <meta name="description" content="{% block description %}See where your money goes: upload a bank statement CSV and get income vs spending, where it went, unusual expenses and next month's forecast, in rupees.{% endblock %}">
-    <script>
-      // Apply the saved theme before first paint so there is no flash. Light is the default.
-      (function () {
-        try {
-          if (localStorage.getItem('finsight-theme') === 'dark') {
-            document.documentElement.setAttribute('data-theme', 'dark');
-            // The phone's status bar matches the page from the first frame.
-            document.querySelector('meta[name="theme-color"]').setAttribute('content', '#0F1114');
-          }
-        } catch (e) { /* storage blocked: keep the light default */ }
-      })();
-    </script>
+    <meta name="description" content="{% block description %}See where your money goes: upload a bank statement (CSV or Excel) and get income vs spending, where it went, unusual expenses and next month's forecast, in rupees.{% endblock %}">
+    {# Not deferred: it sets the saved theme before the first paint. #}
+    <script src="{{ url_for('static', filename='theme.js') }}"></script>
     {# Fonts are served from this app, so pages make no requests to other sites. #}
     <link rel="preload" href="{{ url_for('static', filename='fonts/ibm-plex-sans-latin.woff2') }}" as="font" type="font/woff2" crossorigin>
     <link rel="preload" href="{{ url_for('static', filename='fonts/newsreader-latin.woff2') }}" as="font" type="font/woff2" crossorigin>
@@ -67,7 +57,7 @@
           <a class="nav-link" href="{{ dash }}#spending" data-spy="spending">{{ icon('chart') }}<span>Spending</span></a>
           <a class="nav-link" href="{{ dash }}#health" data-spy="health">{{ icon('pulse') }}<span>Health score</span></a>
           <a class="nav-link" href="{{ dash }}#transactions" data-spy="transactions">{{ icon('list') }}<span>Transactions</span></a>
-          <a class="nav-link{% if request.endpoint == 'main.upload' %} active{% endif %}" href="{{ url_for('main.upload') }}">{{ icon('upload') }}<span>Import a CSV</span></a>
+          <a class="nav-link{% if request.endpoint == 'main.upload' %} active{% endif %}" href="{{ url_for('main.upload') }}">{{ icon('upload') }}<span>Import a statement</span></a>
           <a class="nav-link{% if request.endpoint == 'main.categories' %} active{% endif %}" href="{{ url_for('main.categories') }}">{{ icon('tag') }}<span>Categories</span></a>
         </nav>
         <div class="sidebar-foot">
@@ -155,7 +145,7 @@
     <script type="application/json" id="paletteCommands">
       {{ [
         {'group': 'Go to', 'label': 'Overview', 'href': url_for('main.dashboard')},
-        {'group': 'Go to', 'label': 'Import a CSV', 'href': url_for('main.upload')},
+        {'group': 'Go to', 'label': 'Import a statement', 'href': url_for('main.upload')},
         {'group': 'Go to', 'label': 'Categories', 'href': url_for('main.categories')},
         {'group': 'Actions', 'label': 'Switch light / dark theme', 'action': 'theme'},
         {'group': 'Actions', 'label': 'Log out', 'action': 'logout'},

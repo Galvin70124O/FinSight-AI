@@ -28,7 +28,6 @@ class Config:
     DATABASE_URL = os.environ.get("DATABASE_URL", "")
     DATASET_DIR = os.path.join(BASE_DIR, "dataset")
     MAX_CONTENT_LENGTH = 2 * 1024 * 1024
-    ALLOWED_EXTENSIONS = {"csv"}
     SESSION_COOKIE_HTTPONLY = True
     SESSION_COOKIE_SAMESITE = "Lax"
     SESSION_COOKIE_SECURE = IS_PRODUCTION

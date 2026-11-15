@@ -1,8 +1,8 @@
 # FinSight AI
 
-FinSight AI is a personal-finance dashboard. You import your bank or expense
-transactions as a CSV (a bank statement with no category column works too:
-FinSight suggests categories and you check them before saving), and it shows
+FinSight AI is a personal-finance dashboard. You import your bank statement
+as your bank's website gives it (CSV or Excel), or a CSV of your own; when rows
+have no category, FinSight suggests one and you check it before saving. It shows
 where your money goes: income against
 spending month by month, spending by category, a forecast for next month with
 an honest range, unusual transactions, and a health score you can see the
@@ -22,8 +22,10 @@ Real captures of the app with the bundled sample data, in both themes.
 | Landing | [![Landing page, light](docs/screenshots/landing-1440-light.png)](docs/screenshots/landing-1440-light.png) | [![Landing page, dark](docs/screenshots/landing-1440-dark.png)](docs/screenshots/landing-1440-dark.png) | [![Landing page on a phone, light](docs/screenshots/landing-390-light.png)](docs/screenshots/landing-390-light.png) | [![Landing page on a phone, dark](docs/screenshots/landing-390-dark.png)](docs/screenshots/landing-390-dark.png) |
 | Overview | [![Overview with sample data, light](docs/screenshots/dashboard-1440-light.png)](docs/screenshots/dashboard-1440-light.png) | [![Overview with sample data, dark](docs/screenshots/dashboard-1440-dark.png)](docs/screenshots/dashboard-1440-dark.png) | [![Overview on a phone, light](docs/screenshots/dashboard-390-light.png)](docs/screenshots/dashboard-390-light.png) | [![Overview on a phone, dark](docs/screenshots/dashboard-390-dark.png)](docs/screenshots/dashboard-390-dark.png) |
 | Import | [![Import page, light](docs/screenshots/upload-1440-light.png)](docs/screenshots/upload-1440-light.png) | [![Import page, dark](docs/screenshots/upload-1440-dark.png)](docs/screenshots/upload-1440-dark.png) | [![Import page on a phone, light](docs/screenshots/upload-390-light.png)](docs/screenshots/upload-390-light.png) | [![Import page on a phone, dark](docs/screenshots/upload-390-dark.png)](docs/screenshots/upload-390-dark.png) |
+| Column screen | [![Column screen for an unknown bank layout, light](docs/screenshots/import-columns-1440-light.png)](docs/screenshots/import-columns-1440-light.png) | [![Column screen for an unknown bank layout, dark](docs/screenshots/import-columns-1440-dark.png)](docs/screenshots/import-columns-1440-dark.png) | [![Column screen for an unknown bank layout on a phone, light](docs/screenshots/import-columns-390-light.png)](docs/screenshots/import-columns-390-light.png) | [![Column screen for an unknown bank layout on a phone, dark](docs/screenshots/import-columns-390-dark.png)](docs/screenshots/import-columns-390-dark.png) |
 | Category review | [![Category review step, light](docs/screenshots/import-review-1440-light.png)](docs/screenshots/import-review-1440-light.png) | [![Category review step, dark](docs/screenshots/import-review-1440-dark.png)](docs/screenshots/import-review-1440-dark.png) | [![Category review on a phone, light](docs/screenshots/import-review-390-light.png)](docs/screenshots/import-review-390-light.png) | [![Category review on a phone, dark](docs/screenshots/import-review-390-dark.png)](docs/screenshots/import-review-390-dark.png) |
 | Categories | [![Categories page, light](docs/screenshots/categories-1440-light.png)](docs/screenshots/categories-1440-light.png) | [![Categories page, dark](docs/screenshots/categories-1440-dark.png)](docs/screenshots/categories-1440-dark.png) | [![Categories page on a phone, light](docs/screenshots/categories-390-light.png)](docs/screenshots/categories-390-light.png) | [![Categories page on a phone, dark](docs/screenshots/categories-390-dark.png)](docs/screenshots/categories-390-dark.png) |
+| Error page | [![Friendly error page, light](docs/screenshots/error-500-1440-light.png)](docs/screenshots/error-500-1440-light.png) | [![Friendly error page, dark](docs/screenshots/error-500-1440-dark.png)](docs/screenshots/error-500-1440-dark.png) | [![Friendly error page on a phone, light](docs/screenshots/error-500-390-light.png)](docs/screenshots/error-500-390-light.png) | [![Friendly error page on a phone, dark](docs/screenshots/error-500-390-dark.png)](docs/screenshots/error-500-390-dark.png) |
 
 To refresh them (and the pictures on the landing page), see
 [Screenshots](#regenerating-the-screenshots) below.
@@ -32,11 +34,22 @@ To refresh them (and the pictures on the landing page), see
 
 - Accounts with hashed passwords (12 characters minimum for new accounts),
   CSRF-protected forms and POST-only logout.
+- **Sign-in limits** kept in the database, so every server process counts the
+  same tries: 5 failed sign-ins per username and 30 per address in 15 minutes,
+  and 5 sign-ups per username in 15 minutes and 10 per address in an hour (a
+  hostel or campus network shares one address).
+- **Security headers** on every response: a Content-Security-Policy that allows
+  only the app's own scripts, styles, fonts and images, plus `X-Frame-Options:
+  DENY`, `nosniff` and a same-origin referrer policy. An unexpected error shows
+  a plain error page with no details.
 - **Delete your account** on the import page: removes the account, every
-  transaction, the cached insights and your category corrections at once,
-  after a password check.
-- CSV import (parsed in memory, never stored on disk; 2 MB limit, with advice
-  to split bigger files). Re-importing the same rows does not create duplicates.
+  transaction, the cached insights, your category corrections and your saved
+  column choices at once, after a password check.
+- **Bank statements as downloaded**: CSV, .xlsx or .xls, read in memory and
+  never stored on disk (2 MB limit, with advice to split bigger files). When
+  FinSight can't tell which column is which, it asks once and remembers (see
+  [Importing bank statements](#importing-bank-statements)). Re-importing the
+  same rows does not create duplicates.
 - **Categories filled in** when a file has none: keyword rules, then a small
   model, and your own corrections always win. You check every suggestion,
   grouped by merchant, before anything is saved (see
@@ -73,8 +86,14 @@ pip install -r requirements-dev.txt
 FLASK_DEBUG=1 python app.py
 ```
 
-Open http://127.0.0.1:5000, create an account, then import a CSV or click
-**Load sample data**.
+Open http://127.0.0.1:5000, create an account, then import a statement or
+click **Load sample data**.
+
+The dev requirements add pytest, Playwright (for the screenshots), `xlwt` (to
+write the old-Excel test statement) and `pgserver`, an embedded Postgres that
+`tests/test_double_import.py` uses to check that a double-tapped import saves
+once on Postgres as well as SQLite. Those Postgres cases are skipped where
+`pgserver` isn't installed.
 
 Run the tests with:
 
@@ -104,18 +123,51 @@ requirements (Playwright) and Google Chrome, or Playwright's own Chromium
 | `DATABASE_PATH` | `instance/finsight_ai.db` | SQLite file used when `DATABASE_URL` is not set. |
 | `DATABASE_URL` | unset | A `postgres://` / `postgresql://` URL switches storage to Postgres. |
 | `FLASK_DEBUG` | unset | `1` turns on the debugger and auto-reload (local only). |
+| `LOG_LEVEL` | `INFO` | `DEBUG` also logs the address each sign-in attempt is counted under. Use it to check a deploy, then remove it. |
 | `HOST` / `PORT` | `127.0.0.1` / `5000` | Where `python app.py` listens. It binds to `0.0.0.0` only in production without debug. |
+
+## Importing bank statements
+
+Upload the statement as net banking gives it: CSV, Excel (.xlsx) or old Excel
+(.xls), up to 2 MB. Only the first sheet is read. PDF statements and workbooks
+with macros are refused with a message saying what to do instead.
+
+- **Finding the transactions.** FinSight looks for the row of column names
+  (Date, Narration, Debit, Credit and so on) in the first 40 rows, passing over
+  the account details above it, and reads down to a summary row such as
+  "Closing balance" or three blank rows. Debit and Credit columns, or one
+  Amount column with Dr/Cr, Indian amounts such as `1,25,000.00` and day-first
+  dates are all read.
+- **Known layouts.** Column names and date formats for HDFC Bank, State Bank of
+  India, ICICI Bank, Axis Bank and Kotak Mahindra Bank are in
+  `ml/bank_presets.json`. They are approximations taken from open-source
+  statement parsers (each bank lists its sources there), not from the banks,
+  so check them against a real statement.
+- **The column screen.** For any other layout, or when a date such as
+  `03/04/2026` could be day-first or month-first, FinSight shows each column
+  with its first values and asks what it holds. The answer is saved for your
+  account, as a one-way fingerprint of the header row and the role of each
+  column (nothing from the rows), and the next statement with the same columns
+  imports without asking.
+- **Rows that need fixing stop the import.** A row with money but an unreadable
+  date, an amount that isn't a number, or both a debit and a credit is named by
+  its row number as Excel shows it, and nothing is saved, so a balance never
+  goes wrong unnoticed. Rows with neither a debit nor a credit (an opening
+  balance, the second line of a long narration) are skipped and counted.
+- Between steps, the file's rows wait in the page itself, signed so they can't
+  be altered, and expire after an hour. Nothing is written to disk.
 
 ## CSV format
 
-One row per transaction, with a header row. Column names are case-insensitive.
+A CSV of your own needs one row per transaction, with a header row. Column
+names are case-insensitive.
 
 | Column | Required | Example | Notes |
 | --- | --- | --- | --- |
-| `Date` | yes | `2025-01-31` | Any format pandas can parse; ISO dates are safest. |
+| `Date` | yes | `2025-01-31` | `YYYY-MM-DD` is safest. A file with other dates (`31/01/2025`, `Oct 5, 2025`) goes through the statement reader: day first unless the file shows otherwise, and the column screen asks when a date could be read either way. |
 | `Category` | no | `Groceries` | Free text. Leave the column out, or a cell blank, and a category is suggested for you to check. Anomalies are judged within each category. |
 | `Amount` | yes | `2450.50` | Positive number in rupees, no currency symbol or commas. |
-| `Type` | yes | `Expense` | `Income` or `Expense`. Other values are skipped. |
+| `Type` | yes | `Expense` | `Income` or `Expense`; `Dr` and `Cr` are read too, through the statement reader. In a file read the original way (ISO dates, Income/Expense), other values are skipped; in one read by the statement reader, they stop the import with the row number. |
 | `Description` | yes | `Weekly groceries` | Free text. |
 
 ```csv
@@ -262,6 +314,16 @@ would save.
 4. Nothing trains during the build or at start: the category model
    (`ml/categoriser.joblib`) is committed and only loaded. `scikit-learn` is
    pinned to the version that saved it.
+5. **Check which address the sign-in limit counts.** The app reads Cloudflare's
+   `CF-Connecting-IP` header, which Render's edge should set and overwrite. After
+   the first deploy, set `LOG_LEVEL=DEBUG`, sign in once, and find
+   `Sign-in attempt from <address>` in the service's Logs. It should match your
+   public address (any "what is my IP" page), not a `10.x` address of Render's.
+   Then sign in again with a made-up `CF-Connecting-IP: 203.0.113.9` header
+   (a browser extension that edits request headers can add it): the log should
+   still show your real address. Remove `LOG_LEVEL` afterwards. If the made-up
+   address does show up, a visitor can dodge the per-address count, but the
+   limit of 5 failed sign-ins per username still holds.
 
 ## Project structure
 

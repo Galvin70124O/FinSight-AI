@@ -1,14 +1,14 @@
 from __future__ import annotations
 
 import json
+import math
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-import pandas as pd
 from werkzeug.security import check_password_hash, generate_password_hash
 
-from database import IntegrityError
+from database import IntegrityError, lock_user_writes
 from ml.categorise import merchant_key
 
 
@@ -29,20 +29,6 @@ class User:
             email=row["email"],
             password_hash=row["password_hash"],
         )
-
-
-@dataclass
-class Transaction:
-    """Transaction domain object."""
-
-    id: int | None
-    user_id: int
-    date: str
-    category: str
-    amount: float
-    type: str
-    description: str
-    source_file: str | None = None
 
 
 def transaction_signature(date_value: Any, amount: Any, transaction_type: Any, description: Any) -> tuple[str, float, str, str]:
@@ -104,34 +90,13 @@ def imported_signatures(db, user_id: int) -> set[tuple[str, float, str, str]]:
 
 def save_transactions(db, user_id: int, transactions_df, source_file: str | None = None) -> int:
     """Insert cleaned transaction rows into the database without duplicates."""
+    lock_user_writes(db, user_id)  # before reading: a second save of the same file waits, then skips these rows
     existing_keys = imported_signatures(db, user_id)
 
     new_rows = []
     for row in transactions_df.to_dict("records"):
         transaction_date = row["Date"].date().isoformat() if hasattr(row["Date"], "date") else str(row["Date"])
-        transaction_type = str(row.get("Transaction_Type", row.get("Type", "Expense")))
-        metadata = {}
-        for column in transactions_df.columns:
-            if column in {"Date", "Category", "Amount", "Type", "Description", "Transaction_Type", "Year", "Month", "Month_Number", "Day", "Day_Name", "Week", "Quarter", "Weekend"}:
-                continue
-            value = row[column]
-            if pd is not None and hasattr(value, "isna") and value.isna():
-                continue
-            metadata[column] = value
-        metadata_json = json.dumps(metadata) if metadata else None
-        payload = (
-            transaction_date,
-            str(row["Category"]),
-            float(row["Amount"]),
-            str(row["Type"]),
-            str(row["Description"]),
-            source_file or "",
-            transaction_type,
-            metadata.get("account") if isinstance(metadata, dict) and "account" in metadata else None,
-            metadata.get("currency") if isinstance(metadata, dict) and "currency" in metadata else None,
-            metadata.get("tags") if isinstance(metadata, dict) and "tags" in metadata else None,
-            metadata_json,
-        )
+        payload = (transaction_date, str(row["Category"]), float(row["Amount"]), str(row["Type"]), str(row["Description"]), source_file or "")
         signature = transaction_signature(payload[0], payload[2], payload[3], payload[4])
         if signature in existing_keys:
             continue
@@ -142,43 +107,13 @@ def save_transactions(db, user_id: int, transactions_df, source_file: str | None
     if new_rows:
         db.executemany(
             """
-            INSERT INTO transactions (
-                user_id, date, category, amount, type, description, source_file,
-                transaction_type, account, currency, tags, metadata, merchant_key
-            )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO transactions (user_id, date, category, amount, type, description, source_file, merchant_key)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """,
             new_rows,
         )
     db.commit()
     return len(new_rows)
-
-
-def deduplicate_transactions_in_db(db, user_id: int | None = None) -> int:
-    """Remove duplicate transactions from the database using a canonical signature."""
-    query = "SELECT id, user_id, date, amount, type, description FROM transactions"
-    params: tuple[Any, ...] = ()
-    if user_id is not None:
-        query += " WHERE user_id = ?"
-        params = (user_id,)
-
-    rows = db.execute(query, params).fetchall()
-    seen: set[tuple[str, float, str, str]] = set()
-    duplicate_ids: list[int] = []
-
-    for row in rows:
-        signature = transaction_signature(row["date"], row["amount"], row["type"], row["description"])
-        if signature in seen:
-            duplicate_ids.append(row["id"])
-        else:
-            seen.add(signature)
-
-    if duplicate_ids:
-        placeholders = ",".join("?" for _ in duplicate_ids)
-        db.execute(f"DELETE FROM transactions WHERE id IN ({placeholders})", duplicate_ids)
-        db.commit()
-
-    return len(duplicate_ids)
 
 
 def get_user_transactions(db, user_id: int):
@@ -248,6 +183,47 @@ def claim_import_token(db, user_id: int, token: str) -> bool:
     return True
 
 
+# Tries allowed per key kind, and for how long each try counts (and is kept). An address gets more room than a
+# username because a hostel or campus network shares one; the per-username limit is the protection that holds.
+ATTEMPT_LIMITS = {
+    "login-user": (5, timedelta(minutes=15)),
+    "login-ip": (30, timedelta(minutes=15)),
+    "register-user": (5, timedelta(minutes=15)),
+    "register-ip": (10, timedelta(hours=1)),
+}
+
+
+def attempt_wait(db, keys: list[str]) -> int:
+    """Seconds until one more try is allowed for every key ("login-ip:203.0.113.5"), 0 when it is allowed now.
+    For a limit of 5, the fifth most recent try in the window decides: once it leaves the window, the limit lifts."""
+    now = datetime.now(timezone.utc)
+    for kind, (_, window) in ATTEMPT_LIMITS.items():
+        db.execute("DELETE FROM auth_attempts WHERE key LIKE ? AND attempted_at < ?",
+                   (kind + ":%", (now - window).isoformat(timespec="microseconds")))
+    db.commit()
+    wait = 0.0
+    for key in keys:
+        limit, window = ATTEMPT_LIMITS[key.split(":", 1)[0]]
+        row = db.execute(
+            "SELECT attempted_at FROM auth_attempts WHERE key = ? ORDER BY attempted_at DESC LIMIT 1 OFFSET ?", (key, limit - 1)
+        ).fetchone()
+        if row is not None:
+            wait = max(wait, (datetime.fromisoformat(row["attempted_at"]) + window - now).total_seconds())
+    return math.ceil(wait)
+
+
+def record_attempt(db, keys: list[str]) -> None:
+    """Count one try against each key. Kept in the database so every worker process sees the same count."""
+    now = datetime.now(timezone.utc).isoformat(timespec="microseconds")  # one width, so the text sorts by time
+    db.executemany("INSERT INTO auth_attempts (key, attempted_at) VALUES (?, ?)", [(key, now) for key in keys])
+    db.commit()
+
+
+def clear_attempts(db, key: str) -> None:
+    db.execute("DELETE FROM auth_attempts WHERE key = ?", (key,))
+    db.commit()
+
+
 def get_category_overrides(db, user_id: int) -> dict[str, str]:
     """The categories this user chose for merchants, by merchant key."""
     rows = db.execute("SELECT merchant_key, category FROM category_overrides WHERE user_id = ?", (user_id,)).fetchall()
@@ -269,6 +245,27 @@ def save_category_overrides(db, user_id: int, overrides: dict[str, str]) -> None
     """Remember the user's category for each merchant, replacing any earlier choice."""
     for merchant_key, category in overrides.items():
         _remember(db, user_id, merchant_key, category)
+    db.commit()
+
+
+def get_column_mapping(db, user_id: int, header_key: str) -> tuple[list[str], str | None] | None:
+    """The column roles this user confirmed for statements with this header row, and the day/month order."""
+    row = db.execute(
+        "SELECT roles, date_order FROM column_mappings WHERE user_id = ? AND header_key = ?", (user_id, header_key)
+    ).fetchone()
+    return (json.loads(row["roles"]), row["date_order"]) if row else None
+
+
+def save_column_mapping(db, user_id: int, header_key: str, roles: list[str], date_order: str | None) -> None:
+    """Remember a confirmed mapping for this user: the header row's fingerprint and one role per column only."""
+    db.execute(
+        """
+        INSERT INTO column_mappings (user_id, header_key, roles, date_order, updated_at) VALUES (?, ?, ?, ?, ?)
+        ON CONFLICT (user_id, header_key) DO UPDATE SET roles = excluded.roles, date_order = excluded.date_order,
+            updated_at = excluded.updated_at
+        """,
+        (user_id, header_key, json.dumps(roles), date_order, datetime.now(timezone.utc).isoformat(timespec="seconds")),
+    )
     db.commit()
 
 
@@ -315,9 +312,11 @@ def restore_categories(db, user_id: int, previous: dict[str, list[int]], merchan
 
 
 def delete_user(db, user_id: int) -> None:
-    """Delete a user and everything stored for them (transactions, insights, category corrections) in one commit."""
+    """Delete a user and everything stored for them (transactions, insights, category corrections, statement
+    column mappings) in one commit."""
     db.execute("DELETE FROM import_tokens WHERE user_id = ?", (user_id,))
     db.execute("DELETE FROM category_overrides WHERE user_id = ?", (user_id,))
+    db.execute("DELETE FROM column_mappings WHERE user_id = ?", (user_id,))
     db.execute("DELETE FROM user_insights WHERE user_id = ?", (user_id,))
     db.execute("DELETE FROM transactions WHERE user_id = ?", (user_id,))
     db.execute("DELETE FROM users WHERE id = ?", (user_id,))

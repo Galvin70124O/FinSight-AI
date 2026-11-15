@@ -1,11 +1,15 @@
 from __future__ import annotations
 
+import math
 import re
 
-from flask import Blueprint, flash, redirect, render_template, request, session, url_for
+from flask import Blueprint, current_app, flash, redirect, render_template, request, session, url_for
 
 from database import IntegrityError, get_db
-from models import User, create_user, delete_user, get_user_by_email, get_user_by_username, verify_password
+from models import (
+    attempt_wait, clear_attempts, create_user, delete_user, get_user_by_email, get_user_by_username, record_attempt, verify_password,
+)
+from utils import plural
 
 auth_bp = Blueprint("auth", __name__)
 
@@ -19,6 +23,23 @@ def password_rule():
     return {"min_password_length": MIN_PASSWORD_LENGTH}
 
 
+def _client_ip() -> str:
+    """The visitor's address. In production every request comes through Render's proxies, so remote_addr is a
+    proxy's address shared by every visitor."""
+    if current_app.config["IS_PRODUCTION"]:
+        # shortcut: trusts Cloudflare's CF-Connecting-IP, which Render's edge sets and overwrites, else the first
+        # X-Forwarded-For entry. A visitor can write either behind another proxy and dodge the per-address count
+        # (the per-username one holds), but neither is ever one address shared by every visitor.
+        return request.headers.get("CF-Connecting-IP") or (request.access_route or [""])[0]
+    return request.remote_addr or ""
+
+
+def _too_many(keys: list[str]) -> str | None:
+    """The refusal message when one of the keys has had 5 tries in the last 15 minutes."""
+    wait = attempt_wait(get_db(), keys)
+    return f"Too many attempts. Try again in {plural(math.ceil(wait / 60), 'minute')}." if wait else None
+
+
 @auth_bp.route("/register", methods=["GET", "POST"])
 def register():
     """Register a new user account."""
@@ -27,6 +48,14 @@ def register():
         email = request.form.get("email", "").strip()
         password = request.form.get("password", "")
         confirm_password = request.form.get("confirm_password", "")
+
+        # Separate from the sign-in keys, so sign-up tries with someone's username never lock them out.
+        keys = [f"register-user:{username[:200]}", f"register-ip:{_client_ip()}"]
+        refusal = _too_many(keys)
+        if refusal:
+            flash(refusal, "danger")
+            return render_template("register.html"), 429
+        record_attempt(get_db(), keys)  # every try counts: mass sign-ups are made of ones that work
 
         if not username or not email or not password:
             flash("Please complete all fields.", "danger")
@@ -70,10 +99,20 @@ def login():
         password = request.form.get("password", "")
 
         db = get_db()
+        ip = _client_ip()
+        current_app.logger.debug("Sign-in attempt from %s", ip)  # to check the address on Render (README, Deploying)
+        keys = [f"login-user:{username[:200]}", f"login-ip:{ip}"]
+        refusal = _too_many(keys)  # checked before the password, so a locked guess costs no password hashing
+        if refusal:
+            flash(refusal, "danger")
+            return render_template("login.html"), 429
         user = get_user_by_username(db, username)
         if user is None or not verify_password(user, password):
+            record_attempt(db, keys)  # unknown usernames count too, so the limit doesn't tell which exist
             flash("Incorrect username or password.", "danger")
             return render_template("login.html")
+        # Only this username's count: an address's stays, or a guesser could reset it by signing in to their own account.
+        clear_attempts(db, keys[0])
 
         # Start a fresh session so nothing from before login carries over.
         session.clear()
@@ -109,5 +148,5 @@ def delete_account():
 
     delete_user(get_db(), user.id)
     session.clear()
-    flash("Your account, transactions, insights and category corrections have been deleted.", "success")
+    flash("Your account, transactions, insights, category corrections and saved column choices have been deleted.", "success")
     return redirect(url_for("main.index"))

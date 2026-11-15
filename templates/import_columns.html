@@ -1,0 +1,84 @@
+{% extends 'base.html' %}
+{% from '_macros.html' import icon %}
+{% block title %}Match the columns · FinSight AI{% endblock %}
+{% block description %}Tell FinSight which column of your bank statement holds the date, the description and the money.{% endblock %}
+{% block content %}
+{# The names match the words convert() uses in its messages ("Pick the Debit column"). #}
+{% set roles = [('ignore', 'Not needed'), ('date', 'Date'), ('description', 'Description'), ('debit', 'Debit (money out)'),
+                ('credit', 'Credit (money in)'), ('amount', 'Amount (in and out)'), ('type', 'Type (Dr or Cr)'), ('category', 'Category')] %}
+<section class="map" aria-labelledby="pageTitle">
+  <header class="page-head">
+    <div>
+      <h1 class="page-title" id="pageTitle">Match the columns</h1>
+      <p class="sub">{{ filename }}: the column names are in row {{ header_row|digits }}. Pick what each column holds. FinSight remembers your choice for statements with the same columns, never the file itself.</p>
+    </div>
+  </header>
+
+  {% if errors %}
+  <div class="flash danger map-problems" role="alert">
+    {{ icon('alert') }}
+    <div>
+      <p>The file can’t be read with these columns yet:</p>
+      <ul>{% for error in errors %}<li>{{ error }}</li>{% endfor %}</ul>
+      {% if more %}<p>And {{ more|plural('more problem') }} like these.</p>{% endif %}
+      {% if fix_rows %}<p class="sub">If the columns are right, correct those rows in the file and upload it again.</p>{% endif %}
+    </div>
+  </div>
+  {% endif %}
+
+  {# URL-encoded like the review form (no enctype): a multipart text field is capped at 500 KB, and the rows of
+     a 2 MB spreadsheet take about 1.6 MB here. #}
+  <form method="post" action="{{ url_for('main.map_columns') }}" class="map-form" data-once>
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="payload" value="{{ payload }}">
+
+    {% if date_example %}
+    {% set text, day_first, month_first = date_example %}
+    <fieldset class="map-dates">
+      <legend>Dates such as {{ text }} could be read two ways. Which is right?</legend>
+      <label class="map-choice"><input type="radio" name="date_order" value="day" required{{ ' checked' if date_order == 'day' }}>Day first: {{ day_first }}</label>
+      <label class="map-choice"><input type="radio" name="date_order" value="month" required{{ ' checked' if date_order == 'month' }}>Month first: {{ month_first }}</label>
+    </fieldset>
+    {% endif %}
+
+    {% macro column_row(column, roles) %}{% set n = column.index %}
+      <li class="map-row">
+        <div class="map-name">
+          <b id="c{{ n }}">{{ column.label }}</b>
+          {% if column.samples %}
+          <ul class="map-samples" id="s{{ n }}">{% for cell in column.samples %}<li title="{{ cell }}">{{ cell }}</li>{% endfor %}</ul>
+          {% else %}
+          <span class="map-samples" id="s{{ n }}">Blank in every row</span>
+          {% endif %}
+        </div>
+        <select class="select" name="role-{{ n }}" aria-labelledby="c{{ n }}" aria-describedby="s{{ n }}">
+          {% for value, name in roles %}<option value="{{ value }}"{{ ' selected' if value == column.role }}>{{ name }}</option>{% endfor %}
+        </select>
+      </li>
+    {% endmacro %}
+    {% set blank = columns|rejectattr('samples')|list %}
+    <div class="map-row map-head" aria-hidden="true"><span>Column in your file</span><span>What it holds</span></div>
+    <ol class="map-list">
+      {% for column in columns|selectattr('samples') %}{{ column_row(column, roles) }}{% endfor %}
+    </ol>
+    {% if blank %}
+    {# Folded, still in the form: a column whose sample misled can be opened and mapped. Open when one already is. #}
+    <details class="map-blank"{{ ' open' if blank|rejectattr('role', 'equalto', 'ignore')|list }}>
+      <summary>{{ blank|length|plural('column') }} {{ 'is' if blank|length == 1 else 'are' }} blank in every row and will be skipped.
+        <span class="map-show">Show {{ 'it' if blank|length == 1 else 'them' }}</span><span class="map-hide">Hide {{ 'it' if blank|length == 1 else 'them' }}</span></summary>
+      <ol class="map-list">
+        {% for column in blank %}{{ column_row(column, roles) }}{% endfor %}
+      </ol>
+    </details>
+    {% endif %}
+
+    <div class="review-actions">
+      <p class="sub">Rows you have already imported are skipped.</p>
+      <div class="form-actions">
+        <a class="btn btn-secondary" href="{{ url_for('main.upload') }}">Cancel</a>
+        <button class="btn btn-primary" type="submit" data-busy="Reading…">Use these columns</button>
+      </div>
+    </div>
+  </form>
+</section>
+{% endblock %}

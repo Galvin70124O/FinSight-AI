@@ -7,3 +7,7 @@ scikit-learn==1.9.1
 scipy>=1.13,<2
 gunicorn>=22.0
 psycopg[binary]>=3.1,<4
+# Bank statements: .xlsx (openpyxl, which uses defusedxml for safe XML parsing) and old .xls (xlrd)
+openpyxl==3.1.5
+defusedxml==0.7.1
+xlrd==2.0.2

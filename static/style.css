@@ -361,6 +361,7 @@ svg { flex: none; }
 .form-actions { display: flex; justify-content: flex-end; gap: var(--s2); }
 .columns { margin-top: var(--s8); }
 .columns h2 { margin-bottom: var(--s3); }
+.columns > .sub { max-width: 72ch; margin-bottom: var(--s4); }
 
 .how-categories { margin-top: var(--s8); }
 .how-categories h2 { margin-bottom: var(--s2); }
@@ -407,6 +408,39 @@ svg { flex: none; }
   gap: var(--s3) var(--s4); margin-top: var(--s6); padding: var(--s4) 0 calc(var(--s4) + env(safe-area-inset-bottom, 0px));
   border-top: 1px solid var(--line); background: var(--bg);
 }
+
+/* Column screen: one row per column of the file, its first values, and what it holds. The review page's
+   hairline rows and sticky actions, so the two import steps read as one flow. */
+.map { max-width: 840px; }
+.map .page-head .sub { max-width: 72ch; overflow-wrap: anywhere; }  /* bank file names can be one long word */
+.map-problems { margin-bottom: var(--s6); }
+.map-problems > div { display: grid; gap: var(--s2); min-width: 0; overflow-wrap: anywhere; }
+.map-problems ul { display: grid; gap: var(--s1); padding-left: 1.2em; list-style: disc; }
+.map-dates { display: grid; justify-items: start; gap: var(--s1); margin: 0 0 var(--s8); padding: 0; border: 0; }
+.map-dates legend { margin-bottom: var(--s2); padding: 0; font-weight: 500; text-wrap: balance; }
+.map-choice { display: inline-flex; align-items: center; gap: var(--s2); min-height: 32px; font-variant-numeric: tabular-nums; cursor: pointer; }
+.map-choice input { width: 18px; height: 18px; margin: 0; accent-color: var(--accent); }
+.map-row {
+  display: grid; grid-template-columns: minmax(0, 1fr) 15rem; gap: var(--s2) var(--s6); align-items: start;
+  padding: var(--s3) 0; border-bottom: 1px solid var(--line);
+}
+.map-head { padding: 0 0 var(--s2); border-bottom-color: var(--line-strong); color: var(--muted); font-size: 13px; font-weight: 500; }
+.map-name { display: grid; gap: 2px; min-width: 0; }
+.map-name b { font-weight: 500; overflow-wrap: anywhere; }
+.map-samples { display: grid; min-width: 0; color: var(--muted); font-size: 13px; font-variant-numeric: tabular-nums; }
+.map-samples li { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.map-row .select { width: 100%; }
+.map-list .map-row:last-child { border-bottom: 0; }  /* the action bar's own rule follows */
+.map-blank { border-top: 1px solid var(--line); }
+.map-blank summary {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 0 var(--s2); min-height: 44px; padding: var(--s2) 0;
+  color: var(--muted); font-size: 14px; cursor: pointer;
+}
+.map-show, .map-hide { color: var(--accent); font-weight: 500; }
+.map-blank[open] .map-show, .map-blank:not([open]) .map-hide { display: none; }
+.map-blank[open] summary { border-bottom: 1px solid var(--line); }
+/* A column left as "Not needed" steps back, so the few in use stand out in a wide file. */
+.map-row:has(option[value="ignore"]:checked) .map-name b { color: var(--ink-2); font-weight: 400; }
 
 /* Changing one row's category: a quiet "Change" under the category, the form only when opened. */
 .tx-edit { margin-top: 2px; font-size: 14px; }
@@ -500,12 +534,12 @@ button, .btn, .chip, .seg-btn, .tab, .nav-link, summary { -webkit-user-select: n
   .footer-inner a:hover { color: var(--ink); }
   .nav-link:hover { background: var(--surface-2); color: var(--ink); }
   .btn-danger:hover { background: color-mix(in srgb, var(--bad) 10%, transparent); }
-  .m-toggle:hover, .tx-edit summary:hover, .m-rows summary:hover { text-decoration: underline; text-underline-offset: 3px; }
+  .m-toggle:hover, .tx-edit summary:hover, .m-rows summary:hover, .map-blank summary:hover :is(.map-show, .map-hide) { text-decoration: underline; text-underline-offset: 3px; }
 }
 
 /* Fingers need 44px targets and 16px fields (iOS zooms into anything smaller). */
 @media (pointer: coarse) {
-  .btn, .seg-btn, .chip, .select, .search-trigger, .skip-link, .m-rows summary, .m-remember, .tx-edit summary, .m-toggle, .toast-undo { min-height: 44px; }
+  .btn, .seg-btn, .chip, .select, .search-trigger, .skip-link, .m-rows summary, .m-remember, .tx-edit summary, .m-toggle, .toast-undo, .map-choice { min-height: 44px; }
   .chip { min-width: 44px; }
   .icon-button { width: 44px; height: 44px; }
   .select, .input { font-size: 16px; }
@@ -582,6 +616,8 @@ button, .btn, .chip, .seg-btn, .tab, .nav-link, summary { -webkit-user-select: n
   .hide-sm { display: none; }
   .cat-row { grid-template-columns: minmax(0, 1fr) auto; }
   .cat-row .row-edit { grid-column: 1 / -1; }
+  .map-row { grid-template-columns: minmax(0, 1fr); }
+  .map-head { display: none; }
   .review-actions .form-actions { flex: 1; }
   .review-actions .btn-primary { flex: 1; }
   .cell-sub { display: block; margin-top: 2px; color: var(--muted); font-size: 13px; overflow-wrap: anywhere; }

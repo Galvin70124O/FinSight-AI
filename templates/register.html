@@ -1,12 +1,12 @@
 {% extends 'base.html' %}
 {% block title %}Create account · FinSight AI{% endblock %}
-{% block description %}Create a free FinSight AI account, then upload a CSV or explore with sample data.{% endblock %}
+{% block description %}Create a free FinSight AI account, then upload a bank statement or explore with sample data.{% endblock %}
 {% block public %}
 <section class="auth">
   <div class="auth-card">
     <div class="auth-head">
       <h1 class="page-title">Create your account</h1>
-      <p class="sub">Free. Then upload a CSV, or look around with sample data.</p>
+      <p class="sub">Free. Then upload a bank statement, or look around with sample data.</p>
     </div>
     <form method="post" class="form">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">

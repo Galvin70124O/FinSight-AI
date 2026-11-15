@@ -33,8 +33,14 @@ def test_valid_csv_is_imported_and_not_kept_on_disk(app, client, db, logged_in):
 
 def test_non_csv_extension_is_rejected(client, db, logged_in):
     page = upload(client, VALID_CSV, "tx.xlsx").get_data(as_text=True)
-    assert "Only CSV files are supported." in page
+    assert "tx.xlsx is named like an Excel file but is plain text." in page
     assert count(db) == 0
+
+
+def test_column_names_in_any_case_are_imported(client, db, logged_in):
+    page = upload(client, b" date ,CATEGORY,amount,Type,description\n2025-01-01,Food,250,Expense,Lunch\n").get_data(as_text=True)
+    assert "Imported 1 transaction." in page
+    assert count(db) == 1
 
 
 def test_missing_columns_are_reported(client, db, logged_in):
@@ -47,7 +53,19 @@ def test_file_over_size_limit_is_rejected(client, db, logged_in):
     big = VALID_CSV + b"2025-01-03,Food,10,Expense," + b"x" * (3 * 1024 * 1024) + b"\n"
     page = upload(client, big).get_data(as_text=True)
     assert "too large" in page
-    assert "Split it into smaller CSV files" in page
+    assert "Split it into smaller files" in page
+    assert count(db) == 0
+
+
+def test_uploads_over_500_kb_stay_in_memory(client, db, logged_in, monkeypatch):
+    import werkzeug.formparser
+
+    def no_disk(*args, **kwargs):
+        raise AssertionError("the upload was spooled to a temporary file on disk")
+
+    monkeypatch.setattr(werkzeug.formparser, "SpooledTemporaryFile", no_disk)
+    page = upload(client, (b"a" * 99 + b"\n") * 7_000).get_data(as_text=True)  # 700 KB
+    assert "find the header row" in page
     assert count(db) == 0
 
 

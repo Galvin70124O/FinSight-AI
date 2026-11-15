@@ -17,7 +17,7 @@
 <section class="hero" aria-labelledby="heroTitle" data-reveal>
   <h1 class="hero-title" id="heroTitle">Know where your money goes</h1>
   <div>
-    <p class="hero-lead">Upload your bank statement as a CSV. See what came in, what went out, where it went, and what next month may cost. In rupees, for students and households.</p>
+    <p class="hero-lead">Upload your bank statement, as CSV or Excel. See what came in, what went out, where it went, and what next month may cost. In rupees, for students and households.</p>
     <div class="hero-cta">
       <a class="btn btn-primary btn-lg" href="{{ url_for('auth.register') }}">Create a free account</a>
       <p class="sub">Already have one? <a href="{{ url_for('auth.login') }}">Sign in</a></p>
@@ -56,7 +56,7 @@
   <div>
     <h2 id="howTitle">How it works</h2>
     <ol class="steps">
-      <li><p>Download a CSV from your bank or expense app.</p><span class="sub">It needs five columns: Date, Category, Amount, Type and Description.</span></li>
+      <li><p>Download your statement from your bank, as CSV or Excel.</p><span class="sub">FinSight finds the date, description and money columns, and asks once if it can’t tell. A CSV of your own needs the five columns shown.</span></li>
       <li><p>Upload it to FinSight.</p><span class="sub">The file is read in memory and never saved on disk. Uploading the same rows again adds nothing twice.</span></li>
       <li><p>Read your overview.</p><span class="sub">Or load 8 months of sample data first and look around.</span></li>
     </ol>

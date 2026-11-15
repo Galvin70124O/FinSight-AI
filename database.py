@@ -75,6 +75,26 @@ CREATE TABLE IF NOT EXISTS import_tokens (
     FOREIGN KEY (user_id) REFERENCES users (id)
 );
 
+-- A statement layout the user mapped: a fingerprint of its header row and one role per column. Never the
+-- header text or any row of the statement.
+CREATE TABLE IF NOT EXISTS column_mappings (
+    user_id INTEGER NOT NULL,
+    header_key TEXT NOT NULL,
+    roles TEXT NOT NULL,
+    date_order TEXT,
+    updated_at TEXT NOT NULL,
+    PRIMARY KEY (user_id, header_key),
+    FOREIGN KEY (user_id) REFERENCES users (id)
+);
+
+-- Recent sign-in and sign-up tries, to slow down password guessing: a key such as "login-ip:203.0.113.5"
+-- or "login-user:asha" and a time. Rows older than 15 minutes are deleted at the next try.
+CREATE TABLE IF NOT EXISTS auth_attempts (
+    key TEXT NOT NULL,
+    attempted_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_auth_attempts_key ON auth_attempts(key, attempted_at);
+
 CREATE TABLE IF NOT EXISTS migrations (
     name TEXT PRIMARY KEY,
     applied_at TEXT NOT NULL
@@ -131,6 +151,21 @@ CREATE TABLE IF NOT EXISTS import_tokens (
     created_at TEXT NOT NULL,
     PRIMARY KEY (user_id, token)
 );
+
+CREATE TABLE IF NOT EXISTS column_mappings (
+    user_id INTEGER NOT NULL REFERENCES users (id),
+    header_key TEXT NOT NULL,
+    roles TEXT NOT NULL,
+    date_order TEXT,
+    updated_at TEXT NOT NULL,
+    PRIMARY KEY (user_id, header_key)
+);
+
+CREATE TABLE IF NOT EXISTS auth_attempts (
+    key TEXT NOT NULL,
+    attempted_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_auth_attempts_key ON auth_attempts(key, attempted_at);
 
 ALTER TABLE transactions ADD COLUMN IF NOT EXISTS merchant_key TEXT;
 
@@ -205,6 +240,18 @@ def get_db():
             conn.execute("PRAGMA foreign_keys = ON")
             g.db = conn
     return g.db
+
+
+def lock_user_writes(db, user_id: int) -> None:
+    """Make another request saving rows for this user wait until this one commits, so it then sees these rows
+    (a double tap on Import saves once). The caller's commit releases the lock."""
+    if isinstance(db, sqlite3.Connection):
+        if not db.in_transaction:  # a review save has written its token already, so it holds the lock
+            db.execute("BEGIN IMMEDIATE")  # SQLite's write lock covers the whole file
+    else:
+        # NO KEY UPDATE, not UPDATE: an import token's foreign key holds KEY SHARE on this row, and two review
+        # saves each waiting to turn that into UPDATE would deadlock.
+        db.execute("SELECT id FROM users WHERE id = ? FOR NO KEY UPDATE", (user_id,))
 
 
 def close_db(_error: Exception | None = None) -> None:

@@ -17,6 +17,9 @@ trained_models/
 
 # Secrets and editor files
 .env
+.env.*
+!.env.example
+secrets.toml
 .vscode/
 .idea/
 .DS_Store
@@ -24,3 +27,9 @@ trained_models/
 
 # Local code-graph output (graphify)
 graphify-out/
+
+# Local drafts, not part of the app
+Claude outputs/
+
+# Design detector settings (Impeccable), per machine
+.impeccable/

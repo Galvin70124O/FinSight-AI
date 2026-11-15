@@ -6,7 +6,6 @@ from datetime import date
 from typing import Any
 
 import pandas as pd
-from flask import current_app
 
 
 REQUIRED_COLUMNS = ["Date", "Amount", "Type", "Description"]
@@ -129,16 +128,8 @@ def empty_dashboard_payload() -> dict[str, Any]:
         "insight": "Upload a transaction file to begin generating insights.",
         "charts": {},
         "summary": {
-            "average_spending": 0.0,
-            "highest_spending_category": "N/A",
-            "monthly_spending_trend": [],
             "category_distribution": [],
             "income_vs_expense": {"labels": [], "income": [], "expense": []},
-            "chart_series": {
-                "monthly": {"labels": [], "values": [], "counts": []},
-                "quarterly": {"labels": [], "values": [], "counts": []},
-                "yearly": {"labels": [], "values": [], "counts": []},
-            },
         },
         "insights": {"forecast": None, "anomalies": [], "anomaly_count": 0, "health": None, "tip": None},
     }
@@ -163,11 +154,6 @@ def spending_tip(expense_df: pd.DataFrame, months: int) -> dict[str, Any] | None
     }
 
 
-def allowed_file(filename: str) -> bool:
-    """Return whether the file extension is acceptable."""
-    return "." in filename and filename.rsplit(".", 1)[1].lower() in current_app.config["ALLOWED_EXTENSIONS"]
-
-
 def clean_transaction_dataframe(df: pd.DataFrame) -> pd.DataFrame:
     """Validate, clean, and standardize uploaded transaction data."""
     if df is None:
@@ -179,8 +165,7 @@ def clean_transaction_dataframe(df: pd.DataFrame) -> pd.DataFrame:
     if df.empty:
         raise CSVValidationError("The uploaded CSV is empty.")
 
-    df = df.copy()
-    df.columns = [str(col).strip() for col in df.columns]
+    df = normalize_transaction_columns(df)  # a copy with " date " or "AMOUNT" named as the README promises
 
     missing_columns = [col for col in REQUIRED_COLUMNS if col not in df.columns]
     if missing_columns:
@@ -204,7 +189,6 @@ def clean_transaction_dataframe(df: pd.DataFrame) -> pd.DataFrame:
     if df.empty:
         raise CSVValidationError("No valid transactions remained after cleaning. Please review the uploaded CSV.")
 
-    df = enrich_transaction_dataframe(df)
     return df.reset_index(drop=True)
 
 
@@ -249,12 +233,12 @@ def normalize_transaction_columns(df: pd.DataFrame) -> pd.DataFrame:
 def prepare_transactions(transactions_df: pd.DataFrame) -> pd.DataFrame:
     """Normalize and deduplicate income and expense transactions for analytics and charting."""
     if transactions_df is None or transactions_df.empty:
-        return pd.DataFrame(columns=["Date", "Category", "Amount", "Type", "Description", "Year", "Month", "Month_Number", "Day", "Day_Name", "Week", "Quarter", "Weekend"])
+        return pd.DataFrame(columns=COLUMNS)
 
     df = normalize_transaction_columns(transactions_df)
 
     if "Date" not in df.columns:
-        return pd.DataFrame(columns=["Date", "Category", "Amount", "Type", "Description", "Year", "Month", "Month_Number", "Day", "Day_Name", "Week", "Quarter", "Weekend"])
+        return pd.DataFrame(columns=COLUMNS)
 
     if "Type" not in df.columns:
         df["Type"] = df.get("Transaction_Type", "Expense")
@@ -275,32 +259,8 @@ def prepare_transactions(transactions_df: pd.DataFrame) -> pd.DataFrame:
     df = df.drop_duplicates(subset=["Date", "Category", "Amount", "Type", "Description"], keep="first")
 
     if df.empty:
-        return pd.DataFrame(columns=["Date", "Category", "Amount", "Type", "Description", "Year", "Month", "Month_Number", "Day", "Day_Name", "Week", "Quarter", "Weekend"])
+        return pd.DataFrame(columns=COLUMNS)
 
-    df = enrich_transaction_dataframe(df)
-    return df.reset_index(drop=True)
-
-
-def enrich_transaction_dataframe(df: pd.DataFrame) -> pd.DataFrame:
-    """Create calendar-based columns from the transaction date."""
-    df = df.copy()
-    if "Date" not in df.columns:
-        raise ValueError("Transactions must include a Date column.")
-
-    df["Date"] = pd.to_datetime(df["Date"], errors="coerce")
-    df = df.dropna(subset=["Date"]).copy()
-
-    if df.empty:
-        raise ValueError("No valid transaction dates were found.")
-
-    df["Year"] = df["Date"].dt.year
-    df["Month"] = df["Date"].dt.strftime("%b")
-    df["Month_Number"] = df["Date"].dt.month
-    df["Day"] = df["Date"].dt.day
-    df["Day_Name"] = df["Date"].dt.day_name()
-    df["Week"] = df["Date"].dt.isocalendar().week.astype(int)
-    df["Quarter"] = df["Date"].dt.quarter
-    df["Weekend"] = df["Date"].dt.dayofweek >= 5
     return df.reset_index(drop=True)
 
 
@@ -332,14 +292,6 @@ def period_totals(df: pd.DataFrame, freq: str, start=None, end=None) -> pd.DataF
         "Total": grouped["Total"].astype(float).round(2).to_numpy(),
         "Count": grouped["Count"].astype(int).to_numpy(),
     })
-
-
-def series_dict(summary: pd.DataFrame) -> dict[str, list]:
-    return {
-        "labels": summary["Label"].tolist(),
-        "values": summary["Total"].tolist(),
-        "counts": summary["Count"].tolist(),
-    }
 
 
 def spending_view(summary: pd.DataFrame, axis_title: str, axis_floor: float = 0) -> dict[str, Any]:
@@ -436,8 +388,6 @@ def build_dashboard_payload(transactions_df: pd.DataFrame, insights: dict[str, A
     yearly_summary = period_totals(expense_df, "Y", first_month.asfreq("Y"), last_month.asfreq("Y"))
 
     category_totals = expense_df.groupby("Category")["Amount"].sum().sort_values(ascending=False)
-    highest_spending_category = category_totals.index[0] if not category_totals.empty else "N/A"
-    average_spending = round(float(expense_df["Amount"].mean()), 2) if not expense_df.empty else 0.0
 
     recent_transactions_df = transactions_df.sort_values("Date", ascending=False).head(recent_limit).copy()
     recent_transactions_df["Date"] = recent_transactions_df["Date"].dt.strftime("%Y-%m-%d")
@@ -508,19 +458,11 @@ def build_dashboard_payload(transactions_df: pd.DataFrame, insights: dict[str, A
         "insight": insight,
         "charts": charts,
         "summary": {
-            "average_spending": average_spending,
-            "highest_spending_category": highest_spending_category,
-            "monthly_spending_trend": monthly_summary.drop(columns="Period").to_dict("records"),
             "category_distribution": category_frame.to_dict("records"),
             "income_vs_expense": {
                 "labels": monthly_summary["Label"].tolist(),
                 "income": monthly_income["Total"].tolist(),
                 "expense": monthly_summary["Total"].tolist(),
-            },
-            "chart_series": {
-                "monthly": series_dict(monthly_summary),
-                "quarterly": series_dict(quarterly_summary),
-                "yearly": series_dict(yearly_summary),
             },
         },
         "insights": {

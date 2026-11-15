@@ -28,15 +28,13 @@ def test_each_range_has_its_own_view(app):
     assert views["year"]["ticktext"][0] == "₹0"
 
 
-def test_views_match_chart_series(app):
+def test_each_view_totals_spending_per_range(app):
     with app.app_context():
-        payload = build_dashboard_payload(pd.DataFrame(ROWS))
+        views = build_dashboard_payload(pd.DataFrame(ROWS))["charts"]["spending_views"]
 
-    series = payload["summary"]["chart_series"]
-    views = payload["charts"]["spending_views"]
-    for range_name, series_name in (("month", "monthly"), ("quarter", "quarterly"), ("year", "yearly")):
-        assert views[range_name]["x"] == series[series_name]["labels"]
-        assert views[range_name]["y"] == series[series_name]["values"]
+    assert views["month"]["y"] == [1000.0, 2000.0, 4000.0, 125000.0]
+    assert views["year"]["y"] == [3000.0, 129000.0]
+    assert [count for _, count in views["month"]["customdata"]] == [1, 1, 1, 1]
 
 
 def test_dashboard_embeds_views_for_the_buttons(client, logged_in):
