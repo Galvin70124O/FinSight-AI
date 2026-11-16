@@ -5,7 +5,9 @@ from flask import Flask, Request, flash, jsonify, redirect, render_template, req
 from flask_wtf.csrf import CSRFError, CSRFProtect
 
 from blueprints.auth import auth_bp
+from blueprints.goals import goals_bp
 from blueprints.main import main_bp
+from blueprints.recurring import recurring_bp
 from config import Config
 from database import close_db, init_db
 from utils import CSVValidationError, format_day, format_inr, group_digits, plural
@@ -55,6 +57,8 @@ def create_app(test_config: dict | None = None) -> Flask:
     csrf.init_app(app)
     app.register_blueprint(auth_bp)
     app.register_blueprint(main_bp)
+    app.register_blueprint(goals_bp)
+    app.register_blueprint(recurring_bp)
     app.teardown_appcontext(close_db)
 
     @app.after_request

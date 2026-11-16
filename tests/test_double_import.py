@@ -1,5 +1,4 @@
 """A double tap on Import sends two requests at once: the rows must be saved once, on SQLite and Postgres."""
-import tempfile
 import threading
 import uuid
 
@@ -7,7 +6,6 @@ import pandas as pd
 import pytest
 
 import models
-from app import create_app
 from database import get_db
 from models import claim_import_token, create_user, save_transactions
 
@@ -18,21 +16,6 @@ ROWS = pd.DataFrame({
     "Type": ["Expense", "Expense", "Income"],
     "Description": ["Lunch", "Flat rent", "Salary"],
 })
-
-
-@pytest.fixture(scope="module")
-def postgres_url():
-    pgserver = pytest.importorskip("pgserver")  # embedded Postgres, a dev requirement
-    with pgserver.get_server(tempfile.mkdtemp(prefix="finsight-pg-"), cleanup_mode="stop") as server:
-        yield server.get_uri()
-
-
-@pytest.fixture(params=["sqlite", "postgres"])
-def engine_app(request, tmp_path):
-    config = {"TESTING": True, "DATABASE_PATH": str(tmp_path / "test.db")}
-    if request.param == "postgres":
-        config["DATABASE_URL"] = request.getfixturevalue("postgres_url")
-    return create_app(config)
 
 
 def save_twice_at_once(app, monkeypatch, with_token: bool) -> int:

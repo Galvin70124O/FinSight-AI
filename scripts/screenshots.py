@@ -10,6 +10,8 @@ sample transactions, then saves:
   import review step for REVIEW_CSV (a made-up statement with no Category column), the column
   screen for COLUMNS_CSV (a made-up bank layout FinSight doesn't know), the error page, and the
   Categories page after saving the review
+- docs/screenshots/<goals|recurring>[-empty]-<width>-<theme>.png   the two sections, filled (the sample
+  user has two goals and one dismissed payment) and empty (a second user with one month of REVIEW_CSV)
 
 Needs the dev requirements (Playwright) and Google Chrome, or Playwright's Chromium.
 Nothing from the run is kept: the database lives in a temporary folder.
@@ -20,6 +22,7 @@ import os
 import sys
 import tempfile
 import threading
+from datetime import date
 from pathlib import Path
 
 from playwright.sync_api import sync_playwright
@@ -28,6 +31,10 @@ ROOT = Path(__file__).resolve().parents[1]
 PORT = 5077
 BASE = f"http://127.0.0.1:{PORT}"
 USER = {"username": "sample", "email": "sample@example.com", "password": "sample-password-2025"}
+EMPTY_USER = {"username": "newcomer", "email": "newcomer@example.com", "password": "newcomer-password-2025"}
+# Goals for the sample user: name, target, months from now.
+GOALS = [("Emergency fund", "1,50,000", 8), ("Goa trip", "60,000", 4)]
+SECTIONS = ("goals", "recurring")
 
 # Landing-page crops: name -> (first, last) element of one dashboard component. Each crop runs from
 # the top of the first to the bottom of the last, with a thin margin of page. "overview" (the hero) is
@@ -101,21 +108,47 @@ def settle(page) -> None:
     page.wait_for_timeout(300)
 
 
-def sign_up(context) -> None:
+def sign_up(context, user=USER, statement: Path | None = None) -> None:
+    """Sign up, then load the sample data, or import and save `statement` instead."""
     page = context.new_page()
     page.goto(f"{BASE}/register")
     for field in ("username", "email", "password"):
-        page.fill(f"input[name={field}]", USER[field])
-    page.fill("input[name=confirm_password]", USER["password"])
+        page.fill(f"input[name={field}]", user[field])
+    page.fill("input[name=confirm_password]", user["password"])
     page.click("button[type=submit]")
     page.wait_for_load_state("networkidle")
     if "/login" in page.url:
-        page.fill("input[name=username]", USER["username"])
-        page.fill("input[name=password]", USER["password"])
+        page.fill("input[name=username]", user["username"])
+        page.fill("input[name=password]", user["password"])
         page.click("button[type=submit]")
         page.wait_for_load_state("networkidle")
-    page.click("#demoForm button")
+    if statement is None:
+        page.click("#demoForm button")
+    else:
+        page.goto(f"{BASE}/upload")
+        page.set_input_files("input[type=file]", str(statement))
+        page.click("form.form button[type=submit]")
+        page.wait_for_load_state("networkidle")
+        page.click("form.review-form button[type=submit]")
     settle(page)
+    page.close()
+
+
+def add_goals_and_dismiss(context) -> None:
+    """Give the sample user two goals and dismiss its smallest recurring payment, so the fold shows."""
+    page = context.new_page()
+    today = date.today()
+    for name, target, months in GOALS:
+        index = today.year * 12 + today.month - 1 + months
+        page.goto(f"{BASE}/goals/new")
+        page.fill("#goal-name", name)
+        page.fill("#goal-target", target)
+        page.fill("#goal-target_date", date(index // 12, index % 12 + 1, 1).isoformat())
+        page.click("form.form button[type=submit]")
+        page.wait_for_load_state("networkidle")
+    page.locator("#recurring tbody tr").last.locator("button").click()
+    page.wait_for_load_state("networkidle")
+    page.goto(f"{BASE}/dashboard")  # shows, and so clears, the messages from the steps above
     page.close()
 
 
@@ -151,9 +184,19 @@ def main() -> None:
                     browser = p.chromium.launch(channel="chrome")
                 except Exception:  # no Google Chrome installed: Playwright's own Chromium (`playwright install chromium`)
                     browser = p.chromium.launch()
+                review_csv = Path(tmp) / "statement-october.csv"
+                review_csv.write_text(REVIEW_CSV, encoding="utf-8")
+                columns_csv = Path(tmp) / "account-statement-october.csv"
+                columns_csv.write_text(COLUMNS_CSV, encoding="utf-8")
                 signup = browser.new_context()
                 sign_up(signup)
+                add_goals_and_dismiss(signup)
                 storage = signup.storage_state()
+                signup.close()
+                # One month of a made-up statement: no goals yet and too little history for a recurring payment.
+                signup = browser.new_context()
+                sign_up(signup, EMPTY_USER, review_csv)
+                empty_storage = signup.storage_state()
                 signup.close()
 
                 for theme in THEMES:
@@ -176,12 +219,18 @@ def main() -> None:
                             save_crop(page, img_dir / f"{name}{suffix}-{theme}.jpg", first, last)
                         context.close()
 
-                review_csv = Path(tmp) / "statement-october.csv"
-                review_csv.write_text(REVIEW_CSV, encoding="utf-8")
-                columns_csv = Path(tmp) / "account-statement-october.csv"
-                columns_csv.write_text(COLUMNS_CSV, encoding="utf-8")
                 for theme in THEMES:
                     for width, height in WIDTHS.items():
+                        # The goals and recurring sections on their own, filled and empty.
+                        for suffix, state in (("", storage), ("-empty", empty_storage)):
+                            context = themed_context(browser, theme, width, height, 1, state)
+                            page = context.new_page()
+                            page.goto(f"{BASE}/dashboard")
+                            settle(page)
+                            page.add_style_tag(content=".tabbar, .mobile-bar { position: static; }")
+                            for section in SECTIONS:
+                                page.locator(f"#{section}").screenshot(path=shots_dir / f"{section}{suffix}-{width}-{theme}.png")
+                            context.close()
                         # The review step only exists after an upload; nothing is saved until Save.
                         context = themed_context(browser, theme, width, height, 1, storage)
                         page = context.new_page()
@@ -238,7 +287,7 @@ def main() -> None:
                 browser.close()
         finally:
             server.shutdown()
-    print(f"Saved {(len(CROPS) + 1) * len(THEMES) * 2} crops to {img_dir} and {(len(PAGES) + 3) * len(WIDTHS) * len(THEMES)} pages to {shots_dir}")
+    print(f"Saved {(len(CROPS) + 1) * len(THEMES) * 2} crops to {img_dir} and {(len(PAGES) + 3 + 2 * len(SECTIONS)) * len(WIDTHS) * len(THEMES)} pages to {shots_dir}")
 
 
 if __name__ == "__main__":

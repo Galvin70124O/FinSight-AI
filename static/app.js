@@ -48,7 +48,7 @@ document.addEventListener('DOMContentLoaded', () => {
       });
     }, { rootMargin: '-35% 0px -55% 0px' });
     // Sections without their own nav item light up the nearest one.
-    const groups = { top: 'top', brief: 'spending', cashflow: 'spending', categories: 'spending', spending: 'spending', health: 'health', unusual: 'transactions', transactions: 'transactions' };
+    const groups = { top: 'top', brief: 'spending', cashflow: 'spending', categories: 'spending', spending: 'spending', health: 'health', goals: 'goals', recurring: 'recurring', unusual: 'transactions', transactions: 'transactions' };
     Object.entries(groups).forEach(([id, group]) => {
       const el = document.getElementById(id);
       if (!el) return;

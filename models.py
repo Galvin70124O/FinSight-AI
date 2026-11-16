@@ -120,7 +120,7 @@ def get_user_transactions(db, user_id: int):
     """Fetch transactions for a user sorted by most recent first."""
     return db.execute(
         """
-        SELECT id, user_id, date, category, amount, type, description, source_file, created_at
+        SELECT id, user_id, date, category, amount, type, description, source_file, created_at, merchant_key
         FROM transactions
         WHERE user_id = ?
         ORDER BY date DESC, id DESC
@@ -311,9 +311,76 @@ def restore_categories(db, user_id: int, previous: dict[str, list[int]], merchan
     return restored
 
 
+GOAL_COLUMNS = "id, name, target_amount, target_date"
+
+
+def get_goals(db, user_id: int) -> list[dict[str, Any]]:
+    """A user's goals, soonest target date first."""
+    rows = db.execute(f"SELECT {GOAL_COLUMNS} FROM goals WHERE user_id = ? ORDER BY target_date, id", (user_id,))
+    return [dict(row) for row in rows.fetchall()]
+
+
+def get_goal(db, user_id: int, goal_id: int) -> dict[str, Any] | None:
+    """One goal, only if it belongs to this user."""
+    row = db.execute(f"SELECT {GOAL_COLUMNS} FROM goals WHERE id = ? AND user_id = ?", (goal_id, user_id)).fetchone()
+    return dict(row) if row is not None else None
+
+
+def create_goal(db, user_id: int, name: str, target_amount: float, target_date: str) -> int:
+    row = db.execute(
+        "INSERT INTO goals (user_id, name, target_amount, target_date) VALUES (?, ?, ?, ?) RETURNING id",
+        (user_id, name, target_amount, target_date),
+    ).fetchone()
+    db.commit()
+    return row[0]
+
+
+def update_goal(db, user_id: int, goal_id: int, name: str, target_amount: float, target_date: str) -> bool:
+    """False when there is no such goal for this user."""
+    changed = db.execute(
+        "UPDATE goals SET name = ?, target_amount = ?, target_date = ? WHERE id = ? AND user_id = ?",
+        (name, target_amount, target_date, goal_id, user_id),
+    ).rowcount
+    db.commit()
+    return changed > 0
+
+
+def delete_goal(db, user_id: int, goal_id: int) -> dict[str, Any] | None:
+    """Delete one of this user's goals and return what it held, so it can be put back; None if there was none."""
+    row = db.execute(
+        "DELETE FROM goals WHERE id = ? AND user_id = ? RETURNING name, target_amount, target_date", (goal_id, user_id)
+    ).fetchone()
+    db.commit()
+    return dict(row) if row is not None else None
+
+
+def get_dismissed(db, user_id: int) -> set[tuple[str, int, int]]:
+    """(payee, period in days, typical amount in paise) of every recurring payment this user dismissed."""
+    rows = db.execute("SELECT payee, period_days, amount_paise FROM recurring_dismissals WHERE user_id = ?",
+                      (user_id,)).fetchall()
+    return {(row["payee"], row["period_days"], row["amount_paise"]) for row in rows}
+
+
+def dismiss_recurring(db, user_id: int, payee: str, period_days: int, amount_paise: int) -> None:
+    db.execute(
+        "INSERT INTO recurring_dismissals (user_id, payee, period_days, amount_paise) VALUES (?, ?, ?, ?) "
+        "ON CONFLICT DO NOTHING",
+        (user_id, payee, period_days, amount_paise),
+    )
+    db.commit()
+
+
+def restore_recurring(db, user_id: int, payee: str, period_days: int, amount_paise: int) -> None:
+    db.execute("DELETE FROM recurring_dismissals WHERE user_id = ? AND payee = ? AND period_days = ? AND amount_paise = ?",
+               (user_id, payee, period_days, amount_paise))
+    db.commit()
+
+
 def delete_user(db, user_id: int) -> None:
     """Delete a user and everything stored for them (transactions, insights, category corrections, statement
-    column mappings) in one commit."""
+    column mappings, savings goals, dismissed recurring payments) in one commit."""
+    db.execute("DELETE FROM goals WHERE user_id = ?", (user_id,))
+    db.execute("DELETE FROM recurring_dismissals WHERE user_id = ?", (user_id,))
     db.execute("DELETE FROM import_tokens WHERE user_id = ?", (user_id,))
     db.execute("DELETE FROM category_overrides WHERE user_id = ?", (user_id,))
     db.execute("DELETE FROM column_mappings WHERE user_id = ?", (user_id,))

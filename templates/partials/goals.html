@@ -1,0 +1,59 @@
+{# Savings goals: each with what it needs a month and when it could be reached, plus a deleted goal's Undo. #}
+{% from '_macros.html' import icon, flashes_at %}
+{% set rate = goals.rate %}
+<section class="section" id="goals" data-section="Savings goals" aria-labelledby="goalsTitle">
+  <div class="section-head">
+    <div>
+      <h2 class="section-title" id="goalsTitle">Savings goals</h2>
+      <p class="sub">{% if rate.average is not none and rate.average < 0 %}You spend about <strong class="num is-neg">{{ (rate.average|abs)|inr(0) }}</strong> more than you earn in an average month, over {{ rate.months|plural('full month') }}.{% elif rate.average is not none %}You save about <strong class="num">{{ rate.average|inr(0) }}</strong> a month on average, over {{ rate.months|plural('full month') }}.{% else %}What you're saving for, and when your own pace could get you there.{% endif %}</p>
+      {{ flashes_at('goals') }}
+      {% if undo_toast %}
+      <form method="post" action="{{ undo_toast.url }}" class="flash success undo-row">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="undo" value="{{ undo_toast.token }}">
+        {{ icon('check-circle') }}<span role="status">{{ undo_toast.message }}</span>
+        <button class="text-btn" type="submit">Undo</button>
+      </form>
+      {% endif %}
+    </div>
+    {% if goals.goals %}
+    <div class="page-actions">
+      {% if goals.full %}<p class="sub">That's the most goals FinSight keeps. Delete one to add another.</p>
+      {% else %}<a class="btn btn-secondary" href="{{ url_for('goals.new_goal') }}">Add a goal</a>{% endif %}
+    </div>
+    {% endif %}
+  </div>
+  {% if goals.goals %}
+  <ul class="goal-list">
+    {% for goal in goals.goals %}{% set plan = goal.plan %}
+    <li class="goal">
+      <div class="goal-main">
+        <h3 class="goal-name">{{ goal.name }}</h3>
+        <p class="goal-target"><span class="num">{{ goal.target_amount|inr(0) }}</span> by {{ goal.target_date|day }}</p>
+      </div>
+      <div class="goal-plan">
+        {% if plan.monthly_needed is not none %}
+        <p><strong class="num">{{ plan.monthly_needed|inr(0) }}</strong> a month to get there on time.</p>
+        {% else %}
+        <p>The target month has passed. Change the date to plan again.</p>
+        {% endif %}
+        <p class="sub">{{ plan.eta }}</p>
+      </div>
+      <div class="goal-actions">
+        <a class="text-btn" href="{{ url_for('goals.edit_goal', goal_id=goal.id) }}">Change<span class="sr-only"> {{ goal.name }}</span></a>
+        <form method="post" action="{{ url_for('goals.remove_goal', goal_id=goal.id) }}" class="inline-form">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button class="text-btn is-quiet" type="submit">Delete<span class="sr-only"> {{ goal.name }}</span></button>
+        </form>
+      </div>
+    </li>
+    {% endfor %}
+  </ul>
+  <p class="table-foot">Each date assumes all your savings go to that goal. With more than one goal, they share what you save.</p>
+  {% else %}
+  <div class="section-empty">
+    <p>No savings goals yet. Add one, such as an emergency fund or a trip, and FinSight works out what it needs each month and when your savings could reach it.</p>
+    <div class="page-actions"><a class="btn btn-primary" href="{{ url_for('goals.new_goal') }}">Add a goal</a></div>
+  </div>
+  {% endif %}
+</section>

@@ -56,6 +56,8 @@
           <a class="nav-link{% if on_dash %} active{% endif %}" href="{{ dash }}#top" data-spy="top">{{ icon('home') }}<span>Overview</span></a>
           <a class="nav-link" href="{{ dash }}#spending" data-spy="spending">{{ icon('chart') }}<span>Spending</span></a>
           <a class="nav-link" href="{{ dash }}#health" data-spy="health">{{ icon('pulse') }}<span>Health score</span></a>
+          <a class="nav-link" href="{{ dash }}#goals" data-spy="goals">{{ icon('target') }}<span>Savings goals</span></a>
+          <a class="nav-link" href="{{ dash }}#recurring" data-spy="recurring">{{ icon('repeat') }}<span>Recurring</span></a>
           <a class="nav-link" href="{{ dash }}#transactions" data-spy="transactions">{{ icon('list') }}<span>Transactions</span></a>
           <a class="nav-link{% if request.endpoint == 'main.upload' %} active{% endif %}" href="{{ url_for('main.upload') }}">{{ icon('upload') }}<span>Import a statement</span></a>
           <a class="nav-link{% if request.endpoint == 'main.categories' %} active{% endif %}" href="{{ url_for('main.categories') }}">{{ icon('tag') }}<span>Categories</span></a>
@@ -147,6 +149,9 @@
         {'group': 'Go to', 'label': 'Overview', 'href': url_for('main.dashboard')},
         {'group': 'Go to', 'label': 'Import a statement', 'href': url_for('main.upload')},
         {'group': 'Go to', 'label': 'Categories', 'href': url_for('main.categories')},
+        {'group': 'Go to', 'label': 'Savings goals', 'href': url_for('main.dashboard') ~ '#goals'},
+        {'group': 'Go to', 'label': 'Recurring payments', 'href': url_for('main.dashboard') ~ '#recurring'},
+        {'group': 'Actions', 'label': 'Add a savings goal', 'href': url_for('goals.new_goal')},
         {'group': 'Actions', 'label': 'Switch light / dark theme', 'action': 'theme'},
         {'group': 'Actions', 'label': 'Log out', 'action': 'logout'},
       ]|tojson }}
