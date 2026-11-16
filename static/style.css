@@ -133,6 +133,9 @@ svg { flex: none; }
 .form { display: grid; gap: var(--s4); }
 .field { display: grid; gap: 6px; font-size: 14px; font-weight: 500; }
 .field-hint { color: var(--muted); font-size: 13px; font-weight: 400; }
+.field-error { display: flex; align-items: flex-start; gap: var(--s2); color: var(--bad); font-size: 14px; font-weight: 400; }
+.field-error .icon { flex: none; margin-top: 2px; }
+.input[aria-invalid="true"] { border-color: var(--bad); }
 .input {
   width: 100%; min-height: 44px; padding: 0 var(--s3);
   border: 1px solid var(--line-strong); border-radius: var(--r-sm);
@@ -347,7 +350,8 @@ svg { flex: none; }
 .legal-links a { display: inline-flex; align-items: center; min-height: 32px; color: var(--ink-2); }
 
 /* ---------- Import ---------- */
-.import { max-width: 640px; }
+.import, .goal-page { max-width: 640px; }
+.goal-page > .flash { margin-bottom: var(--s4); }
 .dropzone {
   position: relative; display: grid; justify-items: center; gap: var(--s2);
   padding: var(--s10) var(--s6); border: 1px dashed var(--line-strong); border-radius: var(--r-md);

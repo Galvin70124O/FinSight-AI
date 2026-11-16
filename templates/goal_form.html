@@ -1,0 +1,38 @@
+{% extends 'base.html' %}
+{% from '_macros.html' import icon %}
+{% set title = 'Change ' ~ goal.name if goal else 'Add a savings goal' %}
+{% block title %}{{ title }} · FinSight AI{% endblock %}
+{% block description %}A savings goal: what you're saving for, how much, and by when. FinSight works out the monthly amount it needs.{% endblock %}
+{% block content %}
+<section class="goal-page" aria-labelledby="pageTitle">
+  <header class="page-head">
+    <div>
+      <h1 class="page-title" id="pageTitle">{{ title }}</h1>
+      <p class="sub">FinSight works out what it needs each month, and when your own savings pace could reach it.</p>
+    </div>
+  </header>
+  {% if errors.form %}
+  <div class="flash danger" role="alert">{{ icon('alert') }}<span>{{ errors.form }}</span></div>
+  {% endif %}
+  <form method="post" class="form" action="{{ url_for('goals.edit_goal', goal_id=goal.id) if goal else url_for('goals.new_goal') }}" novalidate>
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    {% for key, label, attrs, hint in [
+      ('name', 'What are you saving for?', 'type="text" maxlength="60" autocomplete="off"', 'Such as Emergency fund or Goa trip.'),
+      ('target', 'Target amount (₹)', 'type="text" inputmode="decimal" autocomplete="off"', 'In rupees, such as 1,50,000.'),
+      ('target_date', 'Target date', 'type="date"', 'At least a month from now.'),
+    ] %}
+    <div class="field">
+      <label for="goal-{{ key }}">{{ label }}</label>
+      <input class="input" id="goal-{{ key }}" name="{{ key }}" value="{{ values.get(key, '') }}" {{ attrs|safe }} required
+             aria-describedby="goal-{{ key }}-hint{{ ' goal-' ~ key ~ '-error' if errors[key] }}"{{ ' aria-invalid=true' if errors[key] }}{{ ' autofocus' if errors[key] and errors|first == key }}>
+      <p class="field-hint" id="goal-{{ key }}-hint">{{ hint }}</p>
+      {% if errors[key] %}<p class="field-error" id="goal-{{ key }}-error">{{ icon('alert') }}<span>{{ errors[key] }}</span></p>{% endif %}
+    </div>
+    {% endfor %}
+    <div class="form-actions">
+      <a class="btn btn-secondary" href="{{ url_for('main.dashboard') }}#goals">Cancel</a>
+      <button class="btn btn-primary" type="submit">{{ 'Save changes' if goal else 'Add goal' }}</button>
+    </div>
+  </form>
+</section>
+{% endblock %}
