@@ -209,6 +209,9 @@
   {% endif %}
 </section>
 
+{% include 'partials/goals.html' %}
+{% include 'partials/recurring.html' %}
+
 <section class="section" id="unusual" data-section="Unusual transactions" aria-labelledby="unusualTitle">
   <div class="section-head">
     <div>
@@ -297,6 +300,7 @@
 </section>
 
 {% else %}
+{% if goals.goals or undo_toast %}{% include 'partials/goals.html' %}{% endif %}
 <section class="empty-state" aria-labelledby="emptyTitle">
   <h2 id="emptyTitle">No transactions yet</h2>
   <p>Upload a statement from your bank (CSV or Excel), or a CSV from your expense app, to see your balance, where your money goes and a forecast for next month. Want to look around first? Load 8 months of sample transactions; you can upload your own later.</p>

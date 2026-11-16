@@ -352,6 +352,38 @@ svg { flex: none; }
 /* ---------- Import ---------- */
 .import, .goal-page { max-width: 640px; }
 .goal-page > .flash { margin-bottom: var(--s4); }
+
+/* ---------- Savings goals and recurring payments ---------- */
+.inline-form { display: inline; }
+.text-btn {
+  display: inline-flex; align-items: center; min-height: 32px; padding: 0 var(--s1); border: 0; background: none;
+  color: var(--accent); font: inherit; font-size: 14px; font-weight: 500; cursor: pointer;
+  transition: transform 100ms ease-out;
+}
+.text-btn:active { transform: scale(0.97); }
+.text-btn.is-quiet { color: var(--ink-2); }  /* Delete has Undo, so it needn't shout in every row */
+.cell-sub-inline { display: none; }
+.section-empty { display: grid; gap: var(--s2); max-width: 60ch; }
+.section-empty > p:first-child { color: var(--ink-2); }
+.section-empty .page-actions { margin-top: var(--s2); }
+.section-head .flash { margin-top: var(--s3); }
+.undo-row { align-items: center; }
+.undo-row .text-btn { margin-left: auto; }
+.payee { display: block; max-width: 32ch; overflow-wrap: anywhere; }
+.cell-sub-always { display: block; margin-top: 2px; color: var(--muted); font-size: 13px; }
+.recurring-table td { vertical-align: middle; }
+.fold-list li { display: flex; flex-wrap: wrap; align-items: center; gap: 0 var(--s3); min-height: 44px; padding: var(--s1) 0; border-bottom: 1px solid var(--line); font-size: 15px; }
+.fold-list .inline-form { margin-left: auto; }
+.goal-list { border-top: 1px solid var(--line); }
+.goal {
+  display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr) auto; align-items: start; gap: var(--s2) var(--s8);
+  padding: var(--s4) 0; border-bottom: 1px solid var(--line);
+}
+.goal-name { font-size: 16px; font-weight: 500; overflow-wrap: anywhere; }
+.goal-target { margin-top: 2px; color: var(--muted); font-size: 14px; }
+.goal-plan { color: var(--ink-2); font-size: 15px; }
+.goal-plan .sub { margin-top: 2px; font-size: 14px; }
+.goal-actions { display: flex; gap: var(--s2); }
 .dropzone {
   position: relative; display: grid; justify-items: center; gap: var(--s2);
   padding: var(--s10) var(--s6); border: 1px dashed var(--line-strong); border-radius: var(--r-md);
@@ -435,14 +467,14 @@ svg { flex: none; }
 .map-samples li { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .map-row .select { width: 100%; }
 .map-list .map-row:last-child { border-bottom: 0; }  /* the action bar's own rule follows */
-.map-blank { border-top: 1px solid var(--line); }
-.map-blank summary {
+.map-blank, .fold { border-top: 1px solid var(--line); }
+.map-blank summary, .fold summary {
   display: flex; flex-wrap: wrap; align-items: center; gap: 0 var(--s2); min-height: 44px; padding: var(--s2) 0;
   color: var(--muted); font-size: 14px; cursor: pointer;
 }
-.map-show, .map-hide { color: var(--accent); font-weight: 500; }
-.map-blank[open] .map-show, .map-blank:not([open]) .map-hide { display: none; }
-.map-blank[open] summary { border-bottom: 1px solid var(--line); }
+.map-show, .map-hide, .fold-show, .fold-hide { color: var(--accent); font-weight: 500; }
+.map-blank[open] .map-show, .map-blank:not([open]) .map-hide, .fold[open] .fold-show, .fold:not([open]) .fold-hide { display: none; }
+.map-blank[open] summary, .fold[open] summary { border-bottom: 1px solid var(--line); }
 /* A column left as "Not needed" steps back, so the few in use stand out in a wide file. */
 .map-row:has(option[value="ignore"]:checked) .map-name b { color: var(--ink-2); font-weight: 400; }
 
@@ -527,7 +559,7 @@ body.palette-open { overflow: hidden; }
 /* ---------- Touch and pointer ---------- */
 /* Controls fire on tap without the double-tap wait, and a long press does not select their label. */
 button, a, select, summary, [role="button"] { touch-action: manipulation; }
-button, .btn, .chip, .seg-btn, .tab, .nav-link, summary { -webkit-user-select: none; user-select: none; }
+button, .btn, .chip, .seg-btn, .tab, .nav-link, summary, .text-btn { -webkit-user-select: none; user-select: none; }
 
 /* Hover styles only for a mouse or trackpad, so a tap never leaves a control stuck in its hover look. */
 @media (hover: hover) and (pointer: fine) {
@@ -538,12 +570,13 @@ button, .btn, .chip, .seg-btn, .tab, .nav-link, summary { -webkit-user-select: n
   .footer-inner a:hover { color: var(--ink); }
   .nav-link:hover { background: var(--surface-2); color: var(--ink); }
   .btn-danger:hover { background: color-mix(in srgb, var(--bad) 10%, transparent); }
-  .m-toggle:hover, .tx-edit summary:hover, .m-rows summary:hover, .map-blank summary:hover :is(.map-show, .map-hide) { text-decoration: underline; text-underline-offset: 3px; }
+  .text-btn.is-quiet:hover { color: var(--bad); }
+  .m-toggle:hover, .tx-edit summary:hover, .m-rows summary:hover, .map-blank summary:hover :is(.map-show, .map-hide), .fold summary:hover :is(.fold-show, .fold-hide), .text-btn:hover { text-decoration: underline; text-underline-offset: 3px; }
 }
 
 /* Fingers need 44px targets and 16px fields (iOS zooms into anything smaller). */
 @media (pointer: coarse) {
-  .btn, .seg-btn, .chip, .select, .search-trigger, .skip-link, .m-rows summary, .m-remember, .tx-edit summary, .m-toggle, .toast-undo, .map-choice { min-height: 44px; }
+  .btn, .seg-btn, .chip, .select, .search-trigger, .skip-link, .m-rows summary, .m-remember, .tx-edit summary, .m-toggle, .toast-undo, .map-choice, .text-btn { min-height: 44px; }
   .chip { min-width: 44px; }
   .icon-button { width: 44px; height: 44px; }
   .select, .input { font-size: 16px; }
@@ -625,6 +658,9 @@ button, .btn, .chip, .seg-btn, .tab, .nav-link, summary { -webkit-user-select: n
   .review-actions .form-actions { flex: 1; }
   .review-actions .btn-primary { flex: 1; }
   .cell-sub { display: block; margin-top: 2px; color: var(--muted); font-size: 13px; overflow-wrap: anywhere; }
+  .cell-sub-inline { display: inline; }
+  .goal { grid-template-columns: minmax(0, 1fr); gap: var(--s2); }
+  .goal-actions { margin-left: calc(-1 * var(--s1)); }
   .desc-sm { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 }
 

@@ -4,8 +4,8 @@ from __future__ import annotations
 from flask import Blueprint, abort, flash, redirect, request, session, url_for
 
 from database import get_db
-from ml.recurring import PERIODS
-from models import dismiss_recurring, restore_recurring
+from ml.recurring import PERIODS, find_recurring, is_dismissed, paise
+from models import dismiss_recurring, get_dismissed, restore_recurring
 
 recurring_bp = Blueprint("recurring", __name__, url_prefix="/recurring")
 
@@ -16,6 +16,20 @@ PAYEE_MAX = 200
 def _signed_in():
     from blueprints.main import require_login  # imported here: main imports this module's section helper
     return require_login()
+
+
+def recurring_section(db, user_id: int, transactions) -> dict:
+    """What the dashboard's recurring section shows: each series with the (payee, period, paise) its button posts.
+    A dismissed one carries the stored values, not its current amount, so Restore matches exactly after a price change."""
+    dismissed = get_dismissed(db, user_id)
+    shown, hidden = [], []
+    for series in find_recurring(transactions):
+        stored = next((d for d in dismissed if is_dismissed(series, {d})), None)
+        if stored is None:
+            shown.append({"series": series, "key": (series.payee, series.period_days, paise(series.amount))})
+        else:
+            hidden.append({"series": series, "key": stored})
+    return {"shown": shown, "dismissed": hidden}
 
 
 def _series() -> tuple[str, int, int]:

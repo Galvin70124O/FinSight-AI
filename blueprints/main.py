@@ -8,12 +8,15 @@ import re
 import secrets
 import zlib
 from collections import Counter
+from datetime import date
 
 import pandas as pd
 from flask import Blueprint, abort, current_app, flash, get_flashed_messages, get_template_attribute, jsonify, redirect, render_template, request, session, url_for
 from itsdangerous import BadSignature, URLSafeTimedSerializer
 from werkzeug.utils import secure_filename
 
+from blueprints.goals import goals_section
+from blueprints.recurring import recurring_section
 from database import get_db
 from ml import statement_parser
 from ml.categorise import CATEGORIES, UNCATEGORISED, categorise, looks_like_person
@@ -117,8 +120,14 @@ def dashboard():
         insights = refresh_insights(db, session["user_id"])
     payload = build_dashboard_payload(df, insights)
     own_categories = _own_categories(db, session["user_id"])
+    # Goals show even before any import: one added from the command menu must not vanish.
+    sections = {"goals": goals_section(db, session["user_id"], df, date.today())}
+    if transactions:
+        sections["recurring"] = recurring_section(db, session["user_id"], df)
+    undo_toast = session.pop("undo_toast", None)  # a deleted goal's Undo, offered once
 
-    return render_template("dashboard.html", payload=payload, transactions=transactions, categories=CATEGORIES, own_categories=own_categories)
+    return render_template("dashboard.html", payload=payload, transactions=transactions, categories=CATEGORIES,
+                           own_categories=own_categories, undo_toast=undo_toast, **sections)
 
 
 @main_bp.route("/demo-data", methods=["POST"])

@@ -1,0 +1,65 @@
+{# Recurring payments: shown, each with Dismiss; the dismissed ones folded away below, each with Restore. #}
+{% from '_macros.html' import icon, flashes_at %}
+{% macro series_form(action, key, label, cls) -%}
+<form method="post" action="{{ url_for(action) }}" class="inline-form">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <input type="hidden" name="payee" value="{{ key[0] }}">
+  <input type="hidden" name="period_days" value="{{ key[1] }}">
+  <input type="hidden" name="amount_paise" value="{{ key[2] }}">
+  <button class="{{ cls }}" type="submit">{{ caller() }}<span class="sr-only"> {{ label }}</span></button>
+</form>
+{%- endmacro %}
+{% set shown, dismissed = recurring.shown, recurring.dismissed %}
+<section class="section" id="recurring" data-section="Recurring payments" aria-labelledby="recurringTitle">
+  <div class="section-head">
+    <div>
+      <h2 class="section-title" id="recurringTitle">Recurring payments</h2>
+      <p class="sub">{% if shown %}{{ shown|length|plural('payment') }} that repeat{{ 's' if shown|length == 1 }}, about <strong class="num">{{ shown|sum(attribute='series.yearly_cost')|inr(0) }}</strong> a year.{% else %}The same payee and amount at a steady gap, three times or more.{% endif %}</p>
+      {{ flashes_at('recurring') }}
+    </div>
+  </div>
+  {% if shown %}
+  <div class="table-wrap">
+    <table class="data-table recurring-table">
+      <thead><tr><th scope="col">Payee</th><th scope="col" class="hide-sm">Last paid</th><th scope="col" class="hide-sm">Next expected</th><th scope="col" class="r">Amount</th><th scope="col" class="r hide-sm">Per year</th><th scope="col"><span class="sr-only">Dismiss</span></th></tr></thead>
+      <tbody>
+        {% for item in shown %}{% set s = item.series %}
+        <tr>
+          <td>
+            <span class="payee" title="{{ s.payee }}">{{ s.payee }}</span>
+            <span class="cell-sub cell-sub-always">{{ s.frequency }}<span class="hide-sm"> · {{ s.payments }} payments</span><span class="cell-sub-inline"> · {{ s.yearly_cost|inr(0) }} a year</span></span>
+            <span class="cell-sub">Last paid {{ s.last_paid|day }} · next {{ s.next_expected|day }}</span>
+          </td>
+          <td class="num muted hide-sm nowrap">{{ s.last_paid|day }}</td>
+          <td class="num muted hide-sm nowrap">{{ s.next_expected|day }}</td>
+          <td class="r"><span class="amount">{{ s.amount|inr }}</span></td>
+          <td class="r muted hide-sm">{{ s.yearly_cost|inr(0) }}</td>
+          <td class="r">{% call series_form('recurring.dismiss', item.key, s.payee, 'text-btn') %}Dismiss{% endcall %}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% elif dismissed %}
+  <p class="empty">You dismissed every recurring payment FinSight found. Restore one below if it was a mistake.</p>
+  {% else %}
+  <div class="section-empty">
+    <p>No recurring payments found yet. A subscription, rent or EMI shows up here after three payments at a steady gap.</p>
+    <p class="sub">Import a few months of statements so there's enough history. <a class="link" href="{{ url_for('main.upload') }}">Import a statement</a></p>
+  </div>
+  {% endif %}
+  {% if dismissed %}
+  <details class="fold">
+    <summary>{{ dismissed|length }} dismissed · <span class="fold-show">Show</span><span class="fold-hide">Hide</span></summary>
+    <ul class="fold-list">
+      {% for item in dismissed %}{% set s = item.series %}
+      <li>
+        <span class="payee" title="{{ s.payee }}">{{ s.payee }}</span>
+        <span class="muted">{{ s.frequency }} · {{ s.amount|inr }}</span>
+        {% call series_form('recurring.restore', item.key, s.payee, 'text-btn') %}Restore{% endcall %}
+      </li>
+      {% endfor %}
+    </ul>
+  </details>
+  {% endif %}
+</section>
