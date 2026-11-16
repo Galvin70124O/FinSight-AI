@@ -43,8 +43,9 @@ To refresh them (and the pictures on the landing page), see
   DENY`, `nosniff` and a same-origin referrer policy. An unexpected error shows
   a plain error page with no details.
 - **Delete your account** on the import page: removes the account, every
-  transaction, the cached insights, your category corrections and your saved
-  column choices at once, after a password check.
+  transaction, the cached insights, your category corrections, your saved
+  column choices, your savings goals and the recurring payments you dismissed
+  at once, after a password check.
 - **Bank statements as downloaded**: CSV, .xlsx or .xls, read in memory and
   never stored on disk (2 MB limit, with advice to split bigger files). When
   FinSight can't tell which column is which, it asks once and remembers (see
@@ -70,6 +71,14 @@ To refresh them (and the pictures on the landing page), see
   and month ("Jan 2025"), so different years never merge.
 - Unusual-transaction list (the newest 10, with a count of the rest).
 - Financial health score with a breakdown of what each part added and cost.
+- **Recurring payments**: the same payee at about the same amount and a steady
+  gap (weekly to yearly), three times or more, with when it was last paid, when
+  it's next expected and what it costs a year. Dismiss one that isn't really
+  recurring; it folds away under "N dismissed · Show", where Restore brings it
+  back.
+- **Savings goals**: a name, a target and a date. Each goal shows what it needs
+  a month and when your own average savings could reach it, assuming all your
+  savings go to that goal. Deleting a goal offers Undo for 10 minutes, once.
 - Plain-language [Privacy](templates/privacy.html) and
   [Terms](templates/terms.html) pages, linked from every footer.
 
@@ -331,10 +340,10 @@ would save.
 app.py               Application factory, CSRF, error handlers (404, 413)
 config.py            Settings from environment variables
 database.py          SQLite / Postgres connection and schema
-models.py            Users, transactions, cached insights, category corrections, account deletion
+models.py            Users, transactions, cached insights, category corrections, goals, dismissals, account deletion
 utils.py             CSV cleaning, dashboard numbers, chart specs, ₹ formatting
-blueprints/          Routes (auth, overview, import, sample data, privacy, terms)
-ml/                  Forecast, anomaly detection, health score, categories (rules + model)
+blueprints/          Routes (auth, overview, import, sample data, goals, recurring, privacy, terms)
+ml/                  Forecast, anomaly detection, health score, categories (rules + model), recurring payments, goals
 templates/           Pages (Jinja)
 static/style.css     The design system: tokens first, then components
 static/app.js        Theme, charts, filters, command palette
