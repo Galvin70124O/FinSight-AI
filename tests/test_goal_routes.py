@@ -1,11 +1,29 @@
-"""Goal routes: add, change, delete and a single-use Undo, each only on the signed-in user's own goals."""
+"""Goal routes: add, change, delete and a single-use Undo, each only on the signed-in user's own goals.
+Run on SQLite and on embedded Postgres (the live site's database)."""
 from datetime import date
 
+import pytest
+
 import blueprints.goals
-from conftest import csrf_token, register_and_login
+from conftest import csrf_token, own_connection, sign_in
 from models import get_goals
 
 NEXT_YEAR = f"{date.today().year + 1}-06-01"
+
+
+@pytest.fixture
+def app(engine_app):
+    return engine_app
+
+
+@pytest.fixture
+def db(app):
+    yield from own_connection(app)
+
+
+@pytest.fixture
+def logged_in(client, db):
+    return sign_in(client, db)
 
 
 def add(client, name="Goa trip", target="60,000", when=NEXT_YEAR):
@@ -81,7 +99,7 @@ def test_an_expired_undo_is_too_late(client, db, logged_in, monkeypatch):
 
 def test_another_users_undo_is_refused(app, db):
     asha, ravi = app.test_client(), app.test_client()
-    asha_id, ravi_id = register_and_login(asha, "asha"), register_and_login(ravi, "ravi")
+    asha_id, ravi_id = sign_in(asha, db), sign_in(ravi, db)
     add(asha)
     token = delete(asha, get_goals(db, asha_id)[0]["id"])
     undo(ravi, token)
@@ -103,8 +121,8 @@ def test_goal_changes_without_a_csrf_token_are_refused(client, db, logged_in):
 
 def test_another_users_goal_is_not_found(app, db):
     asha, ravi = app.test_client(), app.test_client()
-    asha_id = register_and_login(asha, "asha")
-    register_and_login(ravi, "ravi")
+    asha_id = sign_in(asha, db)
+    sign_in(ravi, db)
     add(asha)
     [goal] = get_goals(db, asha_id)
     token = csrf_token(ravi, "/goals/new")

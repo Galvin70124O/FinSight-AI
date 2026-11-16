@@ -1,6 +1,24 @@
-"""Recurring routes: dismiss and restore, only ever on the signed-in user's own list."""
-from conftest import csrf_token, register_and_login
+"""Recurring routes: dismiss and restore, only ever on the signed-in user's own list.
+Run on SQLite and on embedded Postgres (the live site's database)."""
+import pytest
+
+from conftest import csrf_token, own_connection, sign_in
 from models import get_dismissed
+
+
+@pytest.fixture
+def app(engine_app):
+    return engine_app
+
+
+@pytest.fixture
+def db(app):
+    yield from own_connection(app)
+
+
+@pytest.fixture
+def logged_in(client, db):
+    return sign_in(client, db)
 
 NETFLIX = {"payee": "NETFLIX", "period_days": "30", "amount_paise": "64900"}
 
@@ -41,7 +59,7 @@ def test_dismiss_and_restore_without_a_csrf_token_are_refused(client, db, logged
 
 def test_one_users_dismissals_are_out_of_another_users_reach(app, db):
     asha, ravi = app.test_client(), app.test_client()
-    asha_id, ravi_id = register_and_login(asha, "asha"), register_and_login(ravi, "ravi")
+    asha_id, ravi_id = sign_in(asha, db), sign_in(ravi, db)
     post(asha, "/recurring/dismiss", NETFLIX)
     assert get_dismissed(db, ravi_id) == set()
     post(ravi, "/recurring/restore", NETFLIX)  # Ravi can't undo Asha's choice

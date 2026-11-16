@@ -4,6 +4,7 @@ import re
 import sqlite3
 import sys
 import tempfile
+import uuid
 from pathlib import Path
 
 import pytest
@@ -74,6 +75,32 @@ def user_id(db):
     from models import create_user
 
     return create_user(db, "asha", "asha@example.com", "secret123")
+
+
+def own_connection(app):
+    """A connection kept out of flask.g, on either engine, for a `db` fixture: the test's requests open their own,
+    so they never share it (or a cached CSRF token). Use as `yield from own_connection(app)`."""
+    from flask import g
+
+    from database import get_db
+
+    with app.app_context():
+        conn = get_db()
+        g.pop("db")  # close_db only closes what is in g, so this one outlives the context
+    yield conn
+    conn.close()
+
+
+def sign_in(client, db) -> int:
+    """A new user with a unique name, signed in through the session: the embedded Postgres is shared by every
+    test in a file, and signing up through /register would also count towards the per-address sign-up limit."""
+    from models import create_user
+
+    name = f"u{uuid.uuid4().hex[:12]}"
+    user_id = create_user(db, name, f"{name}@example.com", "correct-horse-battery")
+    with client.session_transaction() as session:
+        session["user_id"], session["username"] = user_id, name
+    return user_id
 
 
 def csrf_token(client, path):
